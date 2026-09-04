@@ -210,7 +210,7 @@ public sealed class RegisterCommand
 
                 return new BaseResult<RegistrationResponseDto>(
                     HttpStatusCode.Conflict,
-                    "A database conflict occurred. Please try again.");
+                    "An error occurred. Please try again.");
             }
             catch (Exception ex)
             {

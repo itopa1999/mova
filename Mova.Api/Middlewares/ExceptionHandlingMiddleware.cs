@@ -124,7 +124,7 @@ public class ExceptionHandlingMiddleware
         if (exception.GetType().Name == "DbUpdateException" || 
             exception.GetType().Name == "DbUpdateConcurrencyException")
         {
-            return (HttpStatusCode.Conflict, "A database conflict occurred. Please try again.");
+            return (HttpStatusCode.Conflict, "An error occurred. Please try again.");
         }
 
         // Handle TimeoutException

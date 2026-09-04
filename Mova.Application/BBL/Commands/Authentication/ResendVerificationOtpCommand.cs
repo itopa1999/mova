@@ -163,7 +163,7 @@ public sealed class ResendVerificationOtpCommand
 
                 return new BaseResult<ResendVerificationOtpResponseDto>(
                     HttpStatusCode.Conflict,
-                    "A database conflict occurred. Please try again.");
+                    "An error occurred. Please try again.");
             }
             catch (Exception ex)
             {

@@ -165,7 +165,7 @@ public sealed class VerifyPasswordTokenCommand
 
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.Conflict,
-                    "A database conflict occurred. Please try again.");
+                    "An error occurred. Please try again.");
             }
             catch (Exception ex)
             {

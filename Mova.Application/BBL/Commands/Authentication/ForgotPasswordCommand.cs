@@ -163,7 +163,7 @@ public sealed class ForgotPasswordCommand
 
                 return new BaseResult<ForgotPasswordResponseDto>(
                     HttpStatusCode.Conflict,
-                    "A database conflict occurred. Please try again.");
+                    "An error occurred. Please try again.");
             }
             catch (Exception ex)
             {

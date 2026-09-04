@@ -268,7 +268,7 @@ public sealed class VerifyAccountCommand
 
                 return new BaseResult<VerifyAccountResponseDto>(
                     HttpStatusCode.Conflict,
-                    "A database conflict occurred. Please try again.");
+                    "An error occurred. Please try again.");
             }
             catch (Exception ex)
             {
