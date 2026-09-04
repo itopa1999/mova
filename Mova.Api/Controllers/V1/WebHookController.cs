@@ -24,19 +24,38 @@ public class WebHookController(
     public async Task<IActionResult> PaystackWebHook(
         CancellationToken cancellationToken)
     {
-        Request.EnableBuffering();
-
-        using var reader = new StreamReader(Request.Body);
-
-        var rawBody = await reader.ReadToEndAsync(cancellationToken);
-
-        Request.Body.Position = 0;
+        using var bodyStream = new MemoryStream();
+        await Request.Body.CopyToAsync(bodyStream, cancellationToken);
 
         var signature = Request.Headers["x-paystack-signature"].FirstOrDefault();
 
         var command = new PaystackWebHookCommand.Command
         {
-            RawBody = rawBody,
+            RawBody = bodyStream.ToArray(),
+            Signature = signature
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
+
+    [HttpPost("flutterwave")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> FlutterwaveWebHook(
+        CancellationToken cancellationToken)
+    {
+        using var bodyStream = new MemoryStream();
+        await Request.Body.CopyToAsync(bodyStream, cancellationToken);
+
+        var signature = Request.Headers["flutterwave-signature"].FirstOrDefault();
+
+        var command = new FlutterwaveWebHookCommand.Command
+        {
+            RawBody = bodyStream.ToArray(),
             Signature = signature
         };
 

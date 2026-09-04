@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -30,6 +31,8 @@ public class SchedulePreviewService : ISchedulePreviewService
             FrequencyType = frequencyType,
             SampleReleaseDates = new List<ReleaseDatePreview>()
         };
+
+        frequencyConfig = FrequencyConfigHelper.NormalizeConfigJson(frequencyConfig);
 
         // 1. Validate basic inputs
         if (targetAmount <= 0)
@@ -93,6 +96,7 @@ public class SchedulePreviewService : ISchedulePreviewService
         {
             PropertyNameCaseInsensitive = true
         };
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         
         // 2. ONCE specific validations
         if (frequencyType == ReleaseFrequency.Once)
@@ -397,11 +401,13 @@ public class SchedulePreviewService : ISchedulePreviewService
                 regularReleaseAmount,
                 finalReleaseAmount,
                 totalReleases,
-                maxReleases);
+                totalReleases);
 
             result.FirstReleaseDate = releaseDates.FirstOrDefault()?.Date ?? startDate;
             result.ComputedEndDate = releaseDates.LastOrDefault()?.Date ?? startDate;
-            result.SampleReleaseDates = releaseDates;
+            result.SampleReleaseDates = releaseDates
+                .Take(maxReleases)
+                .ToList();
 
             // Calculate time to reach target
             if (result.ComputedEndDate != default && startDate != default)

@@ -11,6 +11,7 @@ using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Notification;
 using Mova.Infrastructure.Notification.Email;
 using Mova.Infrastructure.Payment;
+using Mova.Infrastructure.Payment.Flutterwave;
 using Mova.Infrastructure.Payment.Paystack;
 using Mova.Infrastructure.Persistence;
 using Mova.Infrastructure.Security;
@@ -43,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<ISchedulePreviewService, SchedulePreviewService>();
         services.AddScoped<IWalletRuleValidator, WalletRuleValidator>();
         services.AddScoped<IPaystackService, PaystackService>();
+        services.AddScoped<IFlutterwaveService, FlutterwaveService>();
         services.AddNotificationServices(configuration);
         services.AddSingleton<TemplateRenderer>();
         

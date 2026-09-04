@@ -53,7 +53,6 @@ public sealed class ChangePinCommand
                 "ChangeTransactionPin",
                 ("UserId", request.UserPublicId));
 
-            // 1. Validate input
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
                 op.Fail("UserPublicId is required.");
@@ -118,7 +117,6 @@ public sealed class ChangePinCommand
                     "New PIN cannot be the same as current PIN.");
             }
 
-            // 2. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -131,7 +129,6 @@ public sealed class ChangePinCommand
                     "User not found.");
             }
 
-            // 3. Check if user has a PIN
             var hasPin = await _transactionPinService.HasPinAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -144,7 +141,6 @@ public sealed class ChangePinCommand
                     "Transaction PIN has not been set.");
             }
 
-            // 4. Verify current PIN
             var isCurrentPinValid = await _transactionPinService.VerifyPinAsync(
                 request.UserPublicId,
                 request.CurrentPin,
@@ -158,7 +154,6 @@ public sealed class ChangePinCommand
                     "Invalid current PIN.");
             }
 
-            // 5. Change PIN
             try
             {
                 await _transactionPinService.ChangePinAsync(
@@ -177,14 +172,14 @@ public sealed class ChangePinCommand
                 op.Fail($"Invalid PIN format: {argEx.Message}", argEx);
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
-                    argEx.Message);
+                    "The PIN format is invalid.");
             }
             catch (InvalidOperationException invEx)
             {
                 op.Fail($"PIN operation error: {invEx.Message}", invEx);
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
-                    invEx.Message);
+                    "The PIN operation could not be completed.");
             }
             catch (Exception ex)
             {

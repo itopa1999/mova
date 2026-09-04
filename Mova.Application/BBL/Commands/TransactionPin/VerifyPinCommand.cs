@@ -48,7 +48,6 @@ public sealed class VerifyPinCommand
                 "VerifyTransactionPin",
                 ("UserId", request.UserPublicId));
 
-            // 1. Validate input
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
                 op.Fail("UserPublicId is required.");
@@ -81,7 +80,6 @@ public sealed class VerifyPinCommand
                     "PIN must contain only digits.");
             }
 
-            // 2. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -94,7 +92,6 @@ public sealed class VerifyPinCommand
                     "User not found.");
             }
 
-            // 3. Check if user has a PIN
             try
             {
                 var hasPin = await _transactionPinService.HasPinAsync(
@@ -109,7 +106,6 @@ public sealed class VerifyPinCommand
                         "Transaction PIN has not been set.");
                 }
 
-                // 4. Verify PIN
                 var isValid = await _transactionPinService.VerifyPinAsync(
                     request.UserPublicId,
                     request.Pin,
@@ -134,14 +130,14 @@ public sealed class VerifyPinCommand
                 op.Fail($"Invalid PIN format: {argEx.Message}", argEx);
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
-                    argEx.Message);
+                    "The PIN format is invalid.");
             }
             catch (InvalidOperationException invEx)
             {
                 op.Fail($"PIN operation error: {invEx.Message}", invEx);
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
-                    invEx.Message);
+                    "The PIN operation could not be completed.");
             }
             catch (Exception ex)
             {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Service;
@@ -10,7 +11,19 @@ namespace Mova.Infrastructure.Service;
 
 public class WalletRuleValidator : IWalletRuleValidator
 {
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+
     private readonly IUnitOfWork _unitOfWork;
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        return options;
+    }
 
     public WalletRuleValidator(IUnitOfWork unitOfWork)
     {
@@ -63,6 +76,8 @@ public class WalletRuleValidator : IWalletRuleValidator
             result.AddError("Frequency configuration is required.");
             return result;
         }
+
+        configJson = FrequencyConfigHelper.NormalizeConfigJson(configJson);
 
         try
         {
@@ -159,9 +174,12 @@ public class WalletRuleValidator : IWalletRuleValidator
 
         try
         {
-            var obj1 = JsonSerializer.Deserialize<JsonElement>(config1);
-            var obj2 = JsonSerializer.Deserialize<JsonElement>(config2);
-            return JsonSerializer.Serialize(obj1) == JsonSerializer.Serialize(obj2);
+            var obj1 = JsonSerializer.Deserialize<JsonElement>(config1, JsonOptions);
+            var obj2 = JsonSerializer.Deserialize<JsonElement>(config2, JsonOptions);
+            return string.Equals(
+                JsonSerializer.Serialize(obj1),
+                JsonSerializer.Serialize(obj2),
+                StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
@@ -175,7 +193,7 @@ public class WalletRuleValidator : IWalletRuleValidator
 
     private void ValidateOnceConfig(string configJson, ValidationResult result)
     {
-        var config = JsonSerializer.Deserialize<OnceConfig>(configJson);
+        var config = JsonSerializer.Deserialize<OnceConfig>(configJson, JsonOptions);
 
         if (config == null)
         {
@@ -195,7 +213,7 @@ public class WalletRuleValidator : IWalletRuleValidator
 
     private void ValidateDailyConfig(string configJson, ValidationResult result)
     {
-        var config = JsonSerializer.Deserialize<DailyConfig>(configJson);
+        var config = JsonSerializer.Deserialize<DailyConfig>(configJson, JsonOptions);
 
         if (config == null)
         {
@@ -241,7 +259,7 @@ public class WalletRuleValidator : IWalletRuleValidator
     {
         Console.WriteLine($"[DEBUG] ValidateWeeklyConfig - Input JSON: {configJson}");
 
-        var config = JsonSerializer.Deserialize<WeeklyConfig>(configJson);
+        var config = JsonSerializer.Deserialize<WeeklyConfig>(configJson, JsonOptions);
 
         if (config == null)
         {
@@ -278,7 +296,7 @@ public class WalletRuleValidator : IWalletRuleValidator
 
     private void ValidateMonthlyConfig(string configJson, ValidationResult result)
     {
-        var config = JsonSerializer.Deserialize<MonthlyConfig>(configJson);
+        var config = JsonSerializer.Deserialize<MonthlyConfig>(configJson, JsonOptions);
 
         if (config == null)
         {
@@ -312,7 +330,7 @@ public class WalletRuleValidator : IWalletRuleValidator
 
     private void ValidateQuarterlyConfig(string configJson, ValidationResult result)
     {
-        var config = JsonSerializer.Deserialize<QuarterlyConfig>(configJson);
+        var config = JsonSerializer.Deserialize<QuarterlyConfig>(configJson, JsonOptions);
 
         if (config == null)
         {
@@ -374,7 +392,7 @@ public class WalletRuleValidator : IWalletRuleValidator
 
     private void ValidateYearlyConfig(string configJson, ValidationResult result)
     {
-        var config = JsonSerializer.Deserialize<YearlyConfig>(configJson);
+        var config = JsonSerializer.Deserialize<YearlyConfig>(configJson, JsonOptions);
 
         if (config == null)
         {
@@ -440,7 +458,7 @@ public class WalletRuleValidator : IWalletRuleValidator
     }
     private void ValidateCustomConfig(string configJson, ValidationResult result)
     {
-        var config = JsonSerializer.Deserialize<CustomConfig>(configJson);
+        var config = JsonSerializer.Deserialize<CustomConfig>(configJson, JsonOptions);
 
         if (config == null)
         {

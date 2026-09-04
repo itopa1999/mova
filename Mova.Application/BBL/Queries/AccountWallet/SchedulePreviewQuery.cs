@@ -60,7 +60,6 @@ public sealed class SchedulePreviewQuery
         {
             try
             {
-                // Generate preview
                 var preview = await _previewService.PreviewScheduleAsync(
                     request.TargetAmount,
                     request.ReleaseAmount,
@@ -70,7 +69,6 @@ public sealed class SchedulePreviewQuery
                     request.MaxReleases,
                     cancellationToken);
 
-                // Build response
                 var response = new SchedulePreviewResponseDto
                 {
                     IsValid = preview.IsSuccess && preview.Errors.Count == 0,
@@ -90,7 +88,6 @@ public sealed class SchedulePreviewQuery
                     Warnings = preview.Warnings
                 };
 
-                // Map sample release dates
                 foreach (var date in preview.SampleReleaseDates)
                 {
                     response.SampleReleaseDates.Add(new ReleaseDatePreviewDto

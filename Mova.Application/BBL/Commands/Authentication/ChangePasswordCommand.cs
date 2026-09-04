@@ -52,7 +52,6 @@ public sealed class ChangePasswordCommand
                 "ChangePassword",
                 ("UserId", request.UserPublicId));
 
-            // 1. Validate input
             if (request.NewPassword != request.ConfirmPassword)
             {
                 op.Fail("New password and confirmation password do not match.");
@@ -69,7 +68,6 @@ public sealed class ChangePasswordCommand
                     "New password cannot be the same as the old password.");
             }
 
-            // 2. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -82,12 +80,10 @@ public sealed class ChangePasswordCommand
                     "User not found.");
             }
 
-            // 3. Begin transaction
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 4. Change password
                 var (success, errorMessage) = await _identityService.ChangePasswordAsync(
                     user.Id,
                     request.OldPassword,
@@ -100,7 +96,6 @@ public sealed class ChangePasswordCommand
                     return new BaseResult(HttpStatusCode.BadRequest, errorMessage);
                 }
 
-                // 5. Revoke all refresh tokens
                 var refreshTokens = await _unitOfWork.Query<RefreshToken>()
                     .Where(rt => rt.UserPublicId == user.PublicId && rt.RevokedAt == null)
                     .ToListAsync(cancellationToken);
@@ -112,10 +107,8 @@ public sealed class ChangePasswordCommand
                     _unitOfWork.Update(token);
                 }
 
-                // 6. Save changes
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 7. Commit transaction
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
                 op.Success($"Password changed successfully for user {user.PublicId}");
@@ -126,7 +119,6 @@ public sealed class ChangePasswordCommand
             }
             catch (DbUpdateException dbEx)
             {
-                // ✅ Rollback immediately on database error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Database error while changing password: {dbEx.Message}", dbEx);
 
@@ -136,7 +128,6 @@ public sealed class ChangePasswordCommand
             }
             catch (Exception ex)
             {
-                // ✅ Rollback immediately on any error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Password change failed with exception: {ex.Message}", ex);
 

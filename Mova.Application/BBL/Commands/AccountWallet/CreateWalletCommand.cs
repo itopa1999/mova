@@ -64,7 +64,6 @@ public sealed class CreateWalletCommand
                 "CreateWallet",
                 ("UserId", request.UserPublicId));
 
-            // 1. Validate basic inputs
             if (string.IsNullOrWhiteSpace(request.Name))
             {
                 op.Fail("Wallet name is required.");
@@ -113,7 +112,6 @@ public sealed class CreateWalletCommand
                     "Frequency configuration is required.");
             }
 
-            // 2. Check for existing wallet with same name
             var existingWallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => 
@@ -130,7 +128,6 @@ public sealed class CreateWalletCommand
                     "A wallet with this name already exists.");
             }
 
-            // 3. Preview the schedule to validate and get computed end date
             var previewResult = await _schedulePreviewService.PreviewScheduleAsync(
                 request.TargetAmount,
                 request.AmountToBeReleased,
@@ -140,7 +137,6 @@ public sealed class CreateWalletCommand
                 1,
                 cancellationToken);
 
-            // 4. Check if preview failed
             if (!previewResult.IsSuccess)
             {
                 op.Fail($"Schedule preview failed: {string.Join(", ", previewResult.Errors)}");
@@ -154,11 +150,9 @@ public sealed class CreateWalletCommand
                     errorMessage);
             }
 
-            // 5. Use computed end date from preview
             var computedEndDate = previewResult.ComputedEndDate;
             var finalEndDate = computedEndDate;
 
-            // 6. Validate end date
             if (finalEndDate <= request.StartDate)
             {
                 op.Fail("End date must be after start date.");
@@ -167,7 +161,6 @@ public sealed class CreateWalletCommand
                     "End date must be after start date.");
             }
 
-            // 7. Create the wallet
             var targetMoney = Money.FromNaira(request.TargetAmount);
             var releaseMoney = Money.FromNaira(request.AmountToBeReleased);
 
@@ -175,7 +168,21 @@ public sealed class CreateWalletCommand
 
             try
             {
-                // Create Wallet
+                var balanceDebited = await _identityService.DebitBalanceAsync(
+                    request.UserPublicId,
+                    request.TargetAmount,
+                    cancellationToken);
+
+                if (!balanceDebited)
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    op.Fail("Insufficient account balance or user account not found.");
+
+                    return new BaseResult(
+                        HttpStatusCode.BadRequest,
+                        "Insufficient account balance.");
+                }
+
                 var wallet = new Wallet
                 {
                     UserPublicId = request.UserPublicId,
@@ -193,7 +200,6 @@ public sealed class CreateWalletCommand
                 await _unitOfWork.AddAsync(wallet, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // Create Wallet Rule
                 var rule = new WalletRule
                 {
                     WalletId = wallet.Id,
@@ -210,14 +216,13 @@ public sealed class CreateWalletCommand
                 var scheduledReleases = new List<ScheduledRelease>();
                 var firstReleaseDate = previewResult.FirstReleaseDate;
 
-                // Get the full list of release dates from preview
                 var fullPreviewResult = await _schedulePreviewService.PreviewScheduleAsync(
                     request.TargetAmount,
                     request.AmountToBeReleased,
                     request.Frequency,
                     request.FrequencyConfig,
                     request.StartDate,
-                    999, // Get all releases
+                    999,
                     cancellationToken);
 
                 if (fullPreviewResult.IsSuccess && fullPreviewResult.SampleReleaseDates.Any())
@@ -236,7 +241,6 @@ public sealed class CreateWalletCommand
                         scheduledReleases.Add(scheduledRelease);
                     }
 
-                    // Add all scheduled releases to the database
                     foreach (var scheduledRelease in scheduledReleases)
                     {
                         await _unitOfWork.AddAsync(scheduledRelease, cancellationToken);

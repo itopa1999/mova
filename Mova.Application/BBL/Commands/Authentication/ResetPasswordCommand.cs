@@ -44,7 +44,6 @@ public sealed class ResetPasswordCommand
                 "ResetPassword",
                 ("UserPublicId", request.UserPublicId));
 
-            // 1. Validate input
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
                 op.Fail("UserPublicId is required.");
@@ -69,7 +68,6 @@ public sealed class ResetPasswordCommand
                     "Password must be at least 8 characters.");
             }
 
-            // 2. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -82,7 +80,6 @@ public sealed class ResetPasswordCommand
                     "User not found.");
             }
 
-            // 3. Reset password
             var (success, errorMessage) = await _identityService.ResetPasswordAsync(
                 user.Id,
                 request.NewPassword);
@@ -95,12 +92,10 @@ public sealed class ResetPasswordCommand
                     errorMessage);
             }
 
-            // 4. Begin transaction
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 5. Revoke all refresh tokens
                 var refreshTokens = await _unitOfWork.Query<RefreshToken>()
                     .Where(rt => rt.UserPublicId == user.PublicId && rt.RevokedAt == null)
                     .ToListAsync(cancellationToken);
@@ -112,10 +107,8 @@ public sealed class ResetPasswordCommand
                     _unitOfWork.Update(token);
                 }
 
-                // 6. Save changes
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 7. Commit transaction
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
                 op.Success($"Password reset successfully for user {request.UserPublicId}");
@@ -126,7 +119,6 @@ public sealed class ResetPasswordCommand
             }
             catch (DbUpdateException dbEx)
             {
-                // Rollback immediately on database error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Database error while revoking tokens for user {request.UserPublicId}: {dbEx.Message}", dbEx);
 
@@ -136,7 +128,6 @@ public sealed class ResetPasswordCommand
             }
             catch (Exception ex)
             {
-                // Rollback immediately on any error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Password reset failed with exception for user {request.UserPublicId}: {ex.Message}", ex);
 

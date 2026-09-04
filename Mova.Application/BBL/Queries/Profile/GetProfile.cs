@@ -35,7 +35,6 @@ public sealed class GetProfile
             Query request,
             CancellationToken cancellationToken)
         {
-            // 1. Validate request
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
                 return new BaseResult<GetProfileDto>(
@@ -44,12 +43,10 @@ public sealed class GetProfile
                     default);
             }
 
-            // 2. Get user from identity service
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
 
-            // 3. Check if user exists
             if (user == null)
             {
                 return new BaseResult<GetProfileDto>(
@@ -58,7 +55,6 @@ public sealed class GetProfile
                     default);
             }
 
-            // 4. Map to DTO
             var profile = new GetProfileDto
             {
                 FirstName = user.FirstName ?? string.Empty,
@@ -69,7 +65,6 @@ public sealed class GetProfile
                 Phone = user.PhoneNumber ?? string.Empty
             };
 
-            // 5. Return success
             return new BaseResult<GetProfileDto>(
                 HttpStatusCode.OK,
                 "Profile retrieved successfully.",

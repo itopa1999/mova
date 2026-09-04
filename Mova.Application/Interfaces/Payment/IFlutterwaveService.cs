@@ -1,6 +1,6 @@
 namespace Mova.Application.Interfaces.Payment;
 
-public interface IPaystackService
+public interface IFlutterwaveService
 {
     Task<bool> VerifyWebhookSignatureAsync(
         byte[] rawBody,

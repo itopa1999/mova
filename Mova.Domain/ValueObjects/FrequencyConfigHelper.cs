@@ -1,10 +1,52 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using Mova.Domain.Enums;
 
 namespace Mova.Domain.ValueObjects;
 
 public static class FrequencyConfigHelper
 {
+    public static string NormalizeConfigJson(string json)
+    {
+        JsonNode? node;
+
+        try
+        {
+            node = JsonNode.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return json;
+        }
+
+        if (node is not JsonObject config)
+            return json;
+
+        var normalized = new JsonObject();
+
+        foreach (var property in config)
+        {
+            var propertyName = property.Key.ToLowerInvariant() switch
+            {
+                "type" => "type",
+                "time" => "time",
+                "oncedate" => "onceDate",
+                "daysofweek" => "daysOfWeek",
+                "datesofmonth" => "datesOfMonth",
+                "islastdayofmonth" => "isLastDayOfMonth",
+                "months" => "months",
+                "daysofmonth" => "daysOfMonth",
+                "intervaldays" => "intervalDays",
+                _ => property.Key
+            };
+
+            normalized[propertyName] = property.Value?.DeepClone();
+        }
+
+        return normalized.ToJsonString();
+    }
+
     // Serialize config to JSON
     public static string SerializeConfig(FrequencyConfigBase config)
     {
@@ -17,10 +59,13 @@ public static class FrequencyConfigHelper
     // Deserialize JSON to specific config type
     public static FrequencyConfigBase DeserializeConfig(string json, ReleaseFrequency type)
     {
+        json = NormalizeConfigJson(json);
+
         var options = new JsonSerializerOptions
         {
-            PropertyNameCaseInsensitive = true 
+            PropertyNameCaseInsensitive = true
         };
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 
         return type switch
         {

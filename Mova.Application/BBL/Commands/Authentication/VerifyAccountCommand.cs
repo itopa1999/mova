@@ -88,7 +88,6 @@ public sealed class VerifyAccountCommand
                 ("Identifier", identifier ?? "unknown"),
                 ("Platform", request.Platform));
 
-            // 1. Validate platform
             if (!ValidPlatforms.Contains(request.Platform))
             {
                 op.Fail($"Invalid platform: {request.Platform}");
@@ -97,7 +96,6 @@ public sealed class VerifyAccountCommand
                     "Invalid platform specified.");
             }
 
-            // 2. Validate email
             if (string.IsNullOrWhiteSpace(request.Email))
             {
                 op.Fail("No email provided.");
@@ -106,7 +104,6 @@ public sealed class VerifyAccountCommand
                     "Email must be provided.");
             }
 
-            // 3. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.Email,
                 cancellationToken);
@@ -119,12 +116,10 @@ public sealed class VerifyAccountCommand
                     "User not found.");
             }
 
-            // 4. Begin transaction
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 5. Get OTP verification
                 var otpVerification = await _unitOfWork.Query<OtpVerification>()
                     .Where(x => x.UserPublicId == user.PublicId
                                 && x.Purpose == OtpPurpose.AccountVerification.ToString()
@@ -141,7 +136,6 @@ public sealed class VerifyAccountCommand
                         "Invalid OTP. Please request a new one.");
                 }
 
-                // 6. Validate OTP
                 if (otpVerification.OtpCode != request.OtpCode)
                 {
                     op.Fail($"Invalid OTP code provided for user {user.PublicId}");
@@ -169,7 +163,6 @@ public sealed class VerifyAccountCommand
                         "This OTP has already been used.");
                 }
 
-                // 7. Mark account as verified
                 var (markSuccess, markError) = await _identityService.MarkEmailAndPhoneAsVerifiedAsync(user.Id);
                 if (!markSuccess)
                 {
@@ -180,12 +173,10 @@ public sealed class VerifyAccountCommand
                         markError);
                 }
 
-                // 8. Mark OTP as used
                 otpVerification.IsUsed = true;
                 otpVerification.UsedAt = DateTimeOffset.UtcNow;
                 _unitOfWork.Update(otpVerification);
 
-                // 9. Create virtual account
                 var accountNumber = GenerateDummyAccountNumber();
                 var virtualAccount = new VirtualAccount
                 {
@@ -202,13 +193,10 @@ public sealed class VerifyAccountCommand
 
                 await _unitOfWork.AddAsync(virtualAccount, cancellationToken);
 
-                // 10. Save changes
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 11. Commit transaction
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                // 12. Send welcome email (don't fail on email error)
                 try
                 {
                     await _emailService.SendWelcomeEmailAsync(
@@ -221,7 +209,6 @@ public sealed class VerifyAccountCommand
                     op.Fail($"Failed to send welcome email: {emailEx.Message}", emailEx);
                 }
 
-                // 13. Generate tokens
                 var roles = await _identityService.GetRolesAsync(user.Id);
 
                 var accessToken = _jwtTokenGenerator.GenerateToken(
@@ -262,7 +249,6 @@ public sealed class VerifyAccountCommand
             }
             catch (DbUpdateException dbEx)
             {
-                // Rollback immediately on database error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Database error during account verification for user {user?.PublicId ?? "unknown"}: {dbEx.Message}", dbEx);
 
@@ -272,7 +258,6 @@ public sealed class VerifyAccountCommand
             }
             catch (Exception ex)
             {
-                // Rollback immediately on any error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Account verification failed for user {user?.PublicId ?? "unknown"}: {ex.Message}", ex);
 

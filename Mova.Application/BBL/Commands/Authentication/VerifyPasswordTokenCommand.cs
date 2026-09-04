@@ -51,7 +51,6 @@ public sealed class VerifyPasswordTokenCommand
                 "VerifyPasswordToken",
                 ("UserPublicId", request.UserPublicId));
 
-            // 1. Validate input
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
                 op.Fail("UserPublicId is required.");
@@ -76,7 +75,6 @@ public sealed class VerifyPasswordTokenCommand
                     "Token must be exactly 6 characters.");
             }
 
-            // 2. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -89,7 +87,6 @@ public sealed class VerifyPasswordTokenCommand
                     "User not found.");
             }
 
-            // 3. Get OTP verification
             var otpVerification = await _unitOfWork.Query<OtpVerification>()
                 .Where(x => x.UserPublicId == user.PublicId
                             && x.Purpose == OtpPurpose.PasswordReset.ToString()
@@ -105,7 +102,6 @@ public sealed class VerifyPasswordTokenCommand
                     "Invalid OTP. Please request a new one.");
             }
 
-            // 4. Validate OTP
             if (otpVerification.OtpCode != request.Token)
             {
                 op.Fail($"Invalid OTP code for user {request.UserPublicId}");
@@ -130,20 +126,16 @@ public sealed class VerifyPasswordTokenCommand
                     "This OTP has already been used.");
             }
 
-            // 5. Begin transaction
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 6. Mark OTP as used
                 otpVerification.IsUsed = true;
                 otpVerification.UsedAt = DateTimeOffset.UtcNow;
                 _unitOfWork.Update(otpVerification);
 
-                // 7. Save changes
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 8. Commit transaction
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
                 op.Success($"Password reset OTP verified for user {request.UserPublicId}");
@@ -159,7 +151,6 @@ public sealed class VerifyPasswordTokenCommand
             }
             catch (DbUpdateException dbEx)
             {
-                // Rollback immediately on database error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Database error while verifying OTP for user {request.UserPublicId}: {dbEx.Message}", dbEx);
 
@@ -169,7 +160,6 @@ public sealed class VerifyPasswordTokenCommand
             }
             catch (Exception ex)
             {
-                // Rollback immediately on any error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"OTP verification failed for user {request.UserPublicId}: {ex.Message}", ex);
 

@@ -77,7 +77,6 @@ public sealed class RegisterCommand
                 ("Email", request.Email),
                 ("Phone", request.PhoneNumber));
 
-            // 1. Format name
             var firstName = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(
                 request.FirstName.Trim().ToLower()
             );
@@ -86,7 +85,6 @@ public sealed class RegisterCommand
                 request.LastName.Trim().ToLower()
             );
 
-            // 2. Normalize email and phone
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
             var normalizedPhoneNumber = ExtensionHelpers.Normalize(request.PhoneNumber);
 
@@ -98,7 +96,6 @@ public sealed class RegisterCommand
                     "Please provide a valid Nigerian phone number.");
             }
 
-            // 3. Check if email exists
             var emailExists = await _identityService.EmailExistsAsync(
                 normalizedEmail,
                 cancellationToken: cancellationToken);
@@ -111,7 +108,6 @@ public sealed class RegisterCommand
                     "Email is already in use.");
             }
 
-            // 4. Check if phone exists
             var phoneExists = await _identityService.PhoneExistsAsync(
                 normalizedPhoneNumber,
                 cancellationToken: cancellationToken);
@@ -124,12 +120,10 @@ public sealed class RegisterCommand
                     "Phone number is already in use.");
             }
 
-            // 5. Begin transaction
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 6. Create user
                 var (success, errorMessage, userPublicId, userId) = await _identityService.CreateUserAsync(
                     firstName,
                     lastName,
@@ -146,7 +140,6 @@ public sealed class RegisterCommand
                         errorMessage);
                 }
 
-                // 7. Assign role
                 var (roleSuccess, roleError) = await _identityService.AddToRoleAsync(userId, Roles.Customer);
                 if (!roleSuccess)
                 {
@@ -157,7 +150,6 @@ public sealed class RegisterCommand
                         roleError);
                 }
 
-                // 8. Generate OTP
                 var otpCode = _otpService.GenerateOtp();
 
                 var otp = new OtpVerification
@@ -173,10 +165,8 @@ public sealed class RegisterCommand
                 await _unitOfWork.AddAsync(otp, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 9. Commit transaction
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                // 10. Send OTP via email and SMS (don't fail on send errors)
                 try
                 {
                     await Task.WhenAll(
@@ -185,7 +175,6 @@ public sealed class RegisterCommand
                 }
                 catch (Exception sendEx)
                 {
-                    // Log but don't fail - user is created, OTP is saved
                     op.Fail($"OTP sending failed (but user created): {sendEx.Message}", sendEx);
                 }
 

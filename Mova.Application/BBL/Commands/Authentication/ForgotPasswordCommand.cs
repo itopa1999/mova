@@ -62,7 +62,6 @@ public sealed class ForgotPasswordCommand
                 "ForgotPassword",
                 ("Identifier", identifier ?? "unknown"));
 
-            // 1. Validate email
             if (string.IsNullOrWhiteSpace(request.Email))
             {
                 op.Fail("No email provided.");
@@ -71,12 +70,10 @@ public sealed class ForgotPasswordCommand
                     "Email must be provided.");
             }
 
-            // 2. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.Email,
                 cancellationToken);
 
-            // 3. User not found - return generic response for security
             if (user == null)
             {
                 op.Fail("User not found (identifier provided but not in system).");
@@ -90,7 +87,6 @@ public sealed class ForgotPasswordCommand
                     });
             }
 
-            // 4. Check if account is verified
             if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
             {
                 op.Fail($"User account is not verified. UserId: {user.PublicId}");
@@ -99,12 +95,10 @@ public sealed class ForgotPasswordCommand
                     "User account is not verified. Please verify your account first.");
             }
 
-            // 5. Begin transaction
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 6. Generate OTP
                 var otpCode = _otpService.GenerateOtp();
                 var otp = new OtpVerification
                 {
@@ -116,21 +110,17 @@ public sealed class ForgotPasswordCommand
                     IsUsed = false
                 };
 
-                // 7. Save OTP
                 await _unitOfWork.AddAsync(otp, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 8. Commit transaction before sending emails
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                // 9. Send OTP via email and SMS (fire and forget - don't block on failures)
                 try
                 {
                     await _emailService.SendForgotPasswordOtpAsync(user.Email, otpCode, cancellationToken);
                 }
                 catch (Exception emailEx)
                 {
-                    // Log email failure but don't fail the operation
                     op.Fail($"Failed to send email OTP: {emailEx.Message}", emailEx);
                 }
 
@@ -140,7 +130,6 @@ public sealed class ForgotPasswordCommand
                 }
                 catch (Exception smsEx)
                 {
-                    // Log SMS failure but don't fail the operation
                     op.Fail($"Failed to send SMS OTP: {smsEx.Message}", smsEx);
                 }
 
@@ -157,7 +146,6 @@ public sealed class ForgotPasswordCommand
             }
             catch (DbUpdateException dbEx)
             {
-                // Rollback immediately on database error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Database error while saving OTP for user {user?.PublicId ?? "unknown"}: {dbEx.Message}", dbEx);
 
@@ -167,7 +155,6 @@ public sealed class ForgotPasswordCommand
             }
             catch (Exception ex)
             {
-                // Rollback immediately on any error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Forgot password failed for user {user?.PublicId ?? "unknown"}: {ex.Message}", ex);
 

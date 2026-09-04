@@ -62,7 +62,6 @@ public sealed class ResendVerificationOtpCommand
                 "ResendVerificationOtp",
                 ("Identifier", identifier ?? "unknown"));
 
-            // 1. Validate email
             if (string.IsNullOrWhiteSpace(request.Email))
             {
                 op.Fail("No email provided.");
@@ -71,7 +70,6 @@ public sealed class ResendVerificationOtpCommand
                     "Email must be provided.");
             }
 
-            // 2. Get user
             var user = await _identityService.GetByIdentifierAsync(
                 request.Email,
                 cancellationToken);
@@ -84,7 +82,6 @@ public sealed class ResendVerificationOtpCommand
                     "User not found.");
             }
 
-            // 3. Check if account is already verified
             var isVerified = await _identityService.IsAccountVerifiedAsync(user.Id);
             if (isVerified)
             {
@@ -94,12 +91,10 @@ public sealed class ResendVerificationOtpCommand
                     "Account is already verified.");
             }
 
-            // 4. Begin transaction
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // 5. Generate OTP
                 var otpCode = _otpService.GenerateOtp();
 
                 var otp = new OtpVerification
@@ -111,14 +106,11 @@ public sealed class ResendVerificationOtpCommand
                     IsUsed = false
                 };
 
-                // 6. Save OTP
                 await _unitOfWork.AddAsync(otp, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // 7. Commit transaction
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                // 8. Send OTP via email and SMS (don't fail on send errors)
                 try
                 {
                     await _emailService.SendOtpAsync(
@@ -157,7 +149,6 @@ public sealed class ResendVerificationOtpCommand
             }
             catch (DbUpdateException dbEx)
             {
-                // Rollback immediately on database error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Database error while resending OTP for user {user.PublicId}: {dbEx.Message}", dbEx);
 
@@ -167,7 +158,6 @@ public sealed class ResendVerificationOtpCommand
             }
             catch (Exception ex)
             {
-                // Rollback immediately on any error
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                 op.Fail($"Resend OTP failed for user {user.PublicId}: {ex.Message}", ex);
 

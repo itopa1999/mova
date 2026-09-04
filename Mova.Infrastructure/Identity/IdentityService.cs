@@ -247,4 +247,22 @@ public sealed class IdentityService : IIdentityService
 
         return true;
     }
+
+    public async Task<bool> DebitBalanceAsync(
+        string userPublicId,
+        decimal amount,
+        CancellationToken cancellationToken)
+    {
+        if (amount <= 0)
+            return false;
+
+        var user = await _context.Users
+            .FirstOrDefaultAsync(x => x.PublicId == userPublicId, cancellationToken);
+
+        if (user == null || user.Balance.ToDecimal() < amount)
+            return false;
+
+        user.Balance = Money.FromNaira(user.Balance.ToDecimal() - amount);
+        return true;
+    }
 }
