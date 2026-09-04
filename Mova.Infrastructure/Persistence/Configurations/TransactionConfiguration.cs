@@ -16,10 +16,12 @@ public class TransactionConfiguration
         builder.Property(x => x.WalletId);
 
         builder.Property(x => x.Type)
-            .IsRequired();
+            .IsRequired()
+            .HasConversion<int>();
 
         builder.Property(x => x.Status)
-            .IsRequired();
+            .IsRequired()
+            .HasConversion<int>();
 
         builder.Property(x => x.Reference)
             .HasMaxLength(100);

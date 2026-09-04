@@ -24,7 +24,8 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .HasMaxLength(500);
 
         builder.Property(x => x.Status)
-            .IsRequired();
+            .IsRequired()
+            .HasConversion<int>();
 
         builder.Property(x => x.CompletedAt);
 

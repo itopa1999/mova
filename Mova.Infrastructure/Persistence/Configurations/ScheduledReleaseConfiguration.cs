@@ -23,7 +23,8 @@ public class ScheduledReleaseConfiguration
             .IsRequired();
 
         builder.Property(x => x.Status)
-            .IsRequired();
+            .IsRequired()
+            .HasConversion<int>();
 
         builder.Property(x => x.ReleasedAt);
 

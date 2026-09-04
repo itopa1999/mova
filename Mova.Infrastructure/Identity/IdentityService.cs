@@ -191,8 +191,10 @@ public sealed class IdentityService : IIdentityService
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null) return (false, "User not found.");
 
-        var validateResult = await _userManager.PasswordValidators
-            .FirstOrDefault()?.ValidateAsync(_userManager, user, newPassword);
+        var passwordValidator = _userManager.PasswordValidators.FirstOrDefault();
+        var validateResult = passwordValidator is null
+            ? null
+            : await passwordValidator.ValidateAsync(_userManager, user, newPassword);
         if (validateResult is not null && !validateResult.Succeeded)
         {
             var errors = string.Join(", ", validateResult.Errors.Select(e => e.Description));
@@ -237,7 +239,9 @@ public sealed class IdentityService : IIdentityService
             return false;
 
         var user = await _context.Users
-            .FirstOrDefaultAsync(x => x.PublicId == UserPublicId);
+            .FirstOrDefaultAsync(
+                x => x.PublicId == UserPublicId,
+                cancellationToken);
 
         if (user == null)
             return false;

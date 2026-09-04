@@ -15,7 +15,8 @@ public class WalletRuleConfiguration : IEntityTypeConfiguration<WalletRule>
         builder.Property(x => x.WalletId) 
             .IsRequired(); 
         builder.Property(x => x.Frequency) 
-            .IsRequired(); 
+            .IsRequired()
+            .HasConversion<int>();
             
         builder.Property(x => x.StartDate)
             .IsRequired(); 

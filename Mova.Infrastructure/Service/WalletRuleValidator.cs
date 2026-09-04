@@ -257,24 +257,16 @@ public class WalletRuleValidator : IWalletRuleValidator
 
     private void ValidateWeeklyConfig(string configJson, ValidationResult result)
     {
-        Console.WriteLine($"[DEBUG] ValidateWeeklyConfig - Input JSON: {configJson}");
-
         var config = JsonSerializer.Deserialize<WeeklyConfig>(configJson, JsonOptions);
 
         if (config == null)
         {
-            Console.WriteLine($"[DEBUG] ValidateWeeklyConfig - Config is NULL");
             result.AddError("Invalid Weekly configuration.");
             return;
         }
 
-        Console.WriteLine($"[DEBUG] ValidateWeeklyConfig - Deserialized Type: {config.Type}");
-        Console.WriteLine($"[DEBUG] ValidateWeeklyConfig - DaysOfWeek Count: {config.DaysOfWeek?.Count ?? 0}");
-        Console.WriteLine($"[DEBUG] ValidateWeeklyConfig - DaysOfWeek: {string.Join(", ", config.DaysOfWeek ?? new List<int>())}");
-
         if (config.DaysOfWeek == null || config.DaysOfWeek.Count == 0)
         {
-            Console.WriteLine($"[DEBUG] ValidateWeeklyConfig - DaysOfWeek is NULL or EMPTY");
             result.AddError("At least one day of the week must be selected for weekly schedule.");
             return;
         }

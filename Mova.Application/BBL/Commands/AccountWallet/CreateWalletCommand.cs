@@ -80,6 +80,8 @@ public sealed class CreateWalletCommand
                     "Wallet name cannot exceed 150 characters.");
             }
 
+            var walletName = request.Name.Trim();
+
             if (request.TargetAmount <= 0)
             {
                 op.Fail("Target amount must be greater than zero.");
@@ -112,11 +114,14 @@ public sealed class CreateWalletCommand
                     "Frequency configuration is required.");
             }
 
+            var normalizedFrequencyConfig =
+                FrequencyConfigHelper.NormalizeConfigJson(request.FrequencyConfig);
+
             var existingWallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => 
                     x.UserPublicId == request.UserPublicId && 
-                    x.Name.Equals(request.Name, StringComparison.CurrentCultureIgnoreCase) &&
+                    x.Name.ToLower() == walletName.ToLower() &&
                     x.Status == WalletStatus.Active,
                     cancellationToken);
 
@@ -132,7 +137,7 @@ public sealed class CreateWalletCommand
                 request.TargetAmount,
                 request.AmountToBeReleased,
                 request.Frequency,
-                request.FrequencyConfig,
+                normalizedFrequencyConfig,
                 request.StartDate,
                 1,
                 cancellationToken);
@@ -186,7 +191,7 @@ public sealed class CreateWalletCommand
                 var wallet = new Wallet
                 {
                     UserPublicId = request.UserPublicId,
-                    Name = request.Name.Trim(),
+                    Name = walletName,
                     Description = string.IsNullOrWhiteSpace(request.Description)
                         ? null
                         : request.Description.Trim(),
@@ -205,7 +210,7 @@ public sealed class CreateWalletCommand
                     WalletId = wallet.Id,
                     Amount = releaseMoney,
                     Frequency = request.Frequency,
-                    FrequencyConfig = request.FrequencyConfig,
+                    FrequencyConfig = normalizedFrequencyConfig,
                     StartDate = request.StartDate,
                     EndDate = finalEndDate,
                 };
@@ -214,18 +219,22 @@ public sealed class CreateWalletCommand
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 var scheduledReleases = new List<ScheduledRelease>();
-                var firstReleaseDate = previewResult.FirstReleaseDate;
 
                 var fullPreviewResult = await _schedulePreviewService.PreviewScheduleAsync(
                     request.TargetAmount,
                     request.AmountToBeReleased,
                     request.Frequency,
-                    request.FrequencyConfig,
+                    normalizedFrequencyConfig,
                     request.StartDate,
-                    999,
+                    previewResult.TotalReleases,
                     cancellationToken);
 
-                if (fullPreviewResult.IsSuccess && fullPreviewResult.SampleReleaseDates.Any())
+                if (!fullPreviewResult.IsSuccess)
+                {
+                    throw new InvalidOperationException("Unable to generate the wallet release schedule.");
+                }
+
+                if (fullPreviewResult.SampleReleaseDates.Any())
                 {
                     foreach (var releasePreview in fullPreviewResult.SampleReleaseDates)
                     {

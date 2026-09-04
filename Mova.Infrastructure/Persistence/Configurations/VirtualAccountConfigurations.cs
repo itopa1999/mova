@@ -19,7 +19,8 @@ public class VirtualAccountConfiguration : IEntityTypeConfiguration<VirtualAccou
 
         builder.Property(x => x.Provider)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion<int>();
 
         builder.Property(x => x.ProviderCustomerId)
             .HasMaxLength(150);
@@ -47,7 +48,8 @@ public class VirtualAccountConfiguration : IEntityTypeConfiguration<VirtualAccou
         builder.Property(x => x.Status)
             .IsRequired()
             .HasMaxLength(30)
-            .HasDefaultValue(VirtualAccountStatus.Active);
+            .HasDefaultValue(VirtualAccountStatus.Active)
+            .HasConversion<int>();
 
         builder.Property(x => x.CreatedAt)
             .IsRequired();
