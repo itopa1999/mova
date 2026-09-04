@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOVA – OTP</title>
+    <style>
+        /* Reset and base styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #F4F7F5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            max-width: 560px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(15, 81, 50, 0.10), 0 8px 20px rgba(0,0,0,0.04);
+            overflow: hidden;
+            border: 1px solid #D9EAE0;
+        }
+        /* Header – MOVA green gradient with dummy image + brand side by side */
+        .header {
+            background: linear-gradient(145deg, #0F5132 0%, #198754 100%);
+            padding: 24px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            border-bottom: 4px solid #D9EAE0;
+            flex-wrap: wrap;
+        }
+        .header .brand-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            overflow: hidden;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.15);
+            padding: 0;
+        }
+        .header .brand-icon img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .header .brand-name {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+        }
+        /* Body */
+        .body {
+            padding: 35px 30px 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #172B22;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .greeting span {
+            color: #198754;
+        }
+        .message {
+            color: #46574F;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        /* OTP Box */
+        .otp-box {
+            background: #F1F8F4;
+            border-radius: 14px;
+            padding: 22px 20px;
+            text-align: center;
+            border: 1px solid #D9EAE0;
+            margin: 25px 0;
+        }
+        .otp-code {
+            font-size: 44px;
+            font-weight: 700;
+            letter-spacing: 12px;
+            color: #0F5132;
+            font-family: 'Inter', monospace;
+            background: #ffffff;
+            padding: 12px 16px;
+            border-radius: 12px;
+            display: inline-block;
+            box-shadow: 0 2px 8px rgba(15, 81, 50, 0.06);
+            border: 1px solid #D9EAE0;
+            min-width: 200px;
+        }
+        .expiry-note {
+            margin-top: 16px;
+            color: #46574F;
+            font-size: 15px;
+        }
+        .expiry-note strong {
+            color: #198754;
+            font-weight: 600;
+        }
+        .divider {
+            height: 1px;
+            background: #D9EAE0;
+            margin: 30px 0 25px;
+        }
+        .footer-note {
+            color: #46574F;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+        .footer-note a {
+            color: #198754;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .footer-note a:hover {
+            text-decoration: underline;
+        }
+        .signature {
+            margin-top: 20px;
+            color: #46574F;
+            font-size: 15px;
+        }
+        .signature strong {
+            color: #0F5132;
+        }
+        /* Footer bottom removed as requested */
+        @media (max-width: 480px) {
+            body { padding: 20px 10px; }
+            .otp-code { font-size: 32px; letter-spacing: 8px; min-width: 150px; }
+            .header { padding: 20px 16px; gap: 10px; }
+            .header .brand-icon { width: 36px; height: 36px; }
+            .header .brand-name { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- HEADER with dummy image + MOVA side by side -->
+    <div class="header">
+        <div class="brand-icon">
+            <img src="https://placehold.co/44x44/198754/FFFFFF/png?text=M" alt="MOVA">
+        </div>
+        <div class="brand-name">MOVA</div>
+    </div>
+
+    <!-- BODY -->
+    <div class="body">
+
+        <p class="greeting">
+            Hello <span>{{Name}}</span>,
+        </p>
+
+        <p class="message">
+            Use the one‑time password below to complete your secure transaction or login.
+        </p>
+
+        <!-- OTP CODE -->
+        <div class="otp-box">
+            <div class="otp-code">{{OTP}}</div>
+            <div class="expiry-note">
+                ⏱️ This code expires in <strong>{{Expiry}}</strong>
+            </div>
+        </div>
+
+        <p class="footer-note">
+            🔒 If you didn’t request this code, please ignore this email or
+            <a href="#">contact support</a>.
+        </p>
+
+        <div class="divider"></div>
+
+        <div class="signature">
+            Regards,<br>
+            <strong>MOVA Security Team</strong>
+        </div>
+
+    </div>
+
+    <!-- FOOTER REMOVED -->
+
+</div>
+
+</body>
+</html>

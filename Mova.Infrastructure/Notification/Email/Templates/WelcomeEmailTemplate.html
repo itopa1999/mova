@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to MOVA</title>
+    <style>
+        /* Reset and base styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #F4F7F5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            max-width: 560px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(15, 81, 50, 0.10), 0 8px 20px rgba(0,0,0,0.04);
+            overflow: hidden;
+            border: 1px solid #D9EAE0;
+        }
+        /* Header – MOVA green gradient with dummy image + brand side by side */
+        .header {
+            background: linear-gradient(145deg, #0F5132 0%, #198754 100%);
+            padding: 24px 30px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 4px solid #D9EAE0;
+        }
+        .header .brand-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .header .brand-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            overflow: hidden;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.15);
+            padding: 0;
+        }
+        .header .brand-icon img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .header .brand-name {
+            font-size: 30px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+        }
+        /* Body */
+        .body {
+            padding: 35px 30px 30px;
+        }
+        .greeting {
+            font-size: 20px;
+            color: #172B22;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .greeting span {
+            color: #198754;
+        }
+        .sub-greeting {
+            font-size: 16px;
+            color: #46574F;
+            margin-bottom: 20px;
+            font-weight: 400;
+        }
+        .message {
+            color: #46574F;
+            font-size: 16px;
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+        /* Features Grid – two columns */
+        .features-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 25px 0;
+        }
+        .feature-card {
+            background: #F1F8F4;
+            border-radius: 12px;
+            padding: 16px 14px;
+            text-align: center;
+            border: 1px solid #D9EAE0;
+        }
+        .feature-card .icon {
+            font-size: 24px;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .feature-card .label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0F5132;
+            margin-bottom: 4px;
+        }
+        .feature-card .desc {
+            font-size: 12px;
+            color: #46574F;
+            line-height: 1.4;
+        }
+        /* CTA Button */
+        .cta-container {
+            text-align: center;
+            margin: 30px 0 25px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(145deg, #0F5132 0%, #198754 100%);
+            color: #ffffff;
+            text-decoration: none;
+            padding: 14px 40px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(25, 135, 84, 0.30);
+            transition: all 0.2s ease;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(25, 135, 84, 0.40);
+        }
+        .divider {
+            height: 1px;
+            background: #D9EAE0;
+            margin: 30px 0 25px;
+        }
+        .closing-line {
+            font-size: 16px;
+            color: #172B22;
+            font-weight: 500;
+            margin: 20px 0 10px;
+            text-align: center;
+        }
+        .signature {
+            margin-top: 20px;
+            color: #46574F;
+            font-size: 15px;
+            text-align: left;
+        }
+        .signature strong {
+            color: #0F5132;
+        }
+        /* No support note, no footer */
+        @media (max-width: 480px) {
+            body { padding: 20px 10px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .header .brand-name { font-size: 24px; }
+            .header .brand-icon { width: 40px; height: 40px; }
+            .cta-button { padding: 12px 28px; font-size: 15px; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- HEADER with dummy image + MOVA side by side -->
+    <div class="header">
+        <div class="brand-row">
+            <div class="brand-icon">
+                <img src="https://placehold.co/48x48/198754/FFFFFF/png?text=M" alt="MOVA">
+            </div>
+            <div class="brand-name">MOVA</div>
+        </div>
+    </div>
+
+    <!-- BODY -->
+    <div class="body">
+
+        <p class="greeting">
+            Congratulations, <span>{{FirstName}}</span>! 👋
+        </p>
+
+        <p class="sub-greeting">
+            Your MOVA account is ready.
+        </p>
+
+        <p class="message">
+            MOVA helps you take control of your money by giving every naira a purpose and helping you stay disciplined with your spending.
+        </p>
+
+        <p style="font-weight:600; color:#0F5132; font-size:17px; margin-top:10px;">What you can do with MOVA:</p>
+
+        <!-- Features as cards, two per row -->
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="icon">🎯</span>
+                <div class="label">Give Your Money a Purpose</div>
+                <div class="desc">Create dedicated wallets for the things that matter to you.</div>
+            </div>
+            <div class="feature-card">
+                <span class="icon">🔒</span>
+                <div class="label">Protect Your Money</div>
+                <div class="desc">Keep money reserved for its intended purpose and reduce unnecessary spending.</div>
+            </div>
+            <div class="feature-card">
+                <span class="icon">📅</span>
+                <div class="label">Control Your Releases</div>
+                <div class="desc">Decide when and how much money becomes available to you.</div>
+            </div>
+            <div class="feature-card">
+                <span class="icon">📊</span>
+                <div class="label">Stay in Control</div>
+                <div class="desc">Track your money and understand where it is going.</div>
+            </div>
+        </div>
+
+        <!-- CTA Button -->
+        <div class="cta-container">
+            <a href="https://your-frontend-url.com/dashboard" class="cta-button">
+                Get Started
+            </a>
+        </div>
+
+        <p style="text-align:center; color:#46574F; font-size:15px; margin-bottom:5px;">
+            Complete your profile, secure your account, and create your first purpose-based wallet.
+        </p>
+
+        <div class="closing-line">
+            Your money. Your purpose. Your control.
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Signature – Best Regards, Mova Team -->
+        <div class="signature">
+            Best Regards,<br>
+            <strong>Mova Team</strong>
+        </div>
+
+        <!-- Support note removed entirely -->
+
+    </div>
+
+    <!-- FOOTER COMPLETELY REMOVED (no copyright, no links) -->
+
+</div>
+
+</body>
+</html>
