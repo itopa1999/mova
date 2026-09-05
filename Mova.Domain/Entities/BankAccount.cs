@@ -22,6 +22,10 @@ public class BankAccount : BaseEntity
     public DateTimeOffset? VerifiedAt { get; set; }
     public string? VerificationMessage { get; set; }
 
+    public bool ConsentGiven { get; set; }
+    public DateTimeOffset? ConsentGivenAt { get; set; }
+    public string? ConsentVersion { get; set; }
+
     public string? Institution { get; set; }
     public string? Currency { get; set; } = "NGN";
 }

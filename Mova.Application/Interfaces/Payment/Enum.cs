@@ -8,3 +8,9 @@ public class BankDto
     public string? Ussd { get; set; }
     public string? Logo { get; set; }
 }
+
+public sealed class ResolveBankAccountResponse
+{
+    public string AccountNumber { get; set; } = string.Empty;
+    public string AccountName { get; set; } = string.Empty;
+}

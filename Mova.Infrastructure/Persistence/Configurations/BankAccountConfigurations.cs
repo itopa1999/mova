@@ -54,6 +54,15 @@ public class BankAccountConfiguration
         builder.Property(x => x.VerificationMessage)
             .HasMaxLength(500);
 
+        builder.Property(x => x.ConsentGiven)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(x => x.ConsentGivenAt);
+
+        builder.Property(x => x.ConsentVersion)
+            .HasMaxLength(50);
+
         // Metadata
         builder.Property(x => x.Institution)
             .HasMaxLength(100);

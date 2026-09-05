@@ -3,8 +3,7 @@ using MediatR;
 using Mova.Application.Interfaces.Payment;
 using Mova.Shared.Common;
 
-namespace Mova.Application.BBL.MovaAPIs;
-
+namespace Mova.Application.BBL.Queries.BanksAccount;
 public sealed class GetBanks
 {
     public sealed class Query : IRequest<BaseResult<GetBanksDto>>

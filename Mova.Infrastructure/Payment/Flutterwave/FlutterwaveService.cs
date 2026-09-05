@@ -14,14 +14,14 @@ public sealed class FlutterwaveService(
         byte[] rawBody,
         string signature)
     {
-        if (string.IsNullOrWhiteSpace(_settings.SecretHash)
+        if (string.IsNullOrWhiteSpace(_settings.SecretKey)
             || string.IsNullOrWhiteSpace(signature))
         {
             return Task.FromResult(false);
         }
 
         using var hmac = new HMACSHA256(
-            Encoding.UTF8.GetBytes(_settings.SecretHash));
+            Encoding.UTF8.GetBytes(_settings.SecretKey));
 
         var expectedSignature = Convert.ToBase64String(
             hmac.ComputeHash(rawBody));

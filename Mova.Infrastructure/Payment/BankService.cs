@@ -68,7 +68,7 @@ public sealed class BankService : IBankService
     {
         var banks = await _externalApiClient.GetAsync<List<BankData>>(
             _externalApiSettings.NigerianBanksUrl,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (banks is null || banks.Count == 0)
             return;
