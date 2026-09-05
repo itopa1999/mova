@@ -227,6 +227,7 @@ public sealed class FlutterwaveWebHookCommand
                 var transaction = new Transaction
                 {
                     WalletId = null,
+                    Title = "Account Deposit",
                     Amount = Money.FromNaira(data.Amount),
                     Type = TransactionType.Deposit,
                     Status = TransactionStatus.Completed,

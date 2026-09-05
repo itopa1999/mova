@@ -240,6 +240,31 @@ public sealed class CreateWalletCommand
                 await _unitOfWork.AddAsync(wallet, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+                var walletTransaction = new Transaction
+                {
+                    WalletId = wallet.Id,
+                    Title = "Wallet Created",
+                    Amount = targetMoney,
+                    Type = TransactionType.Deposit,
+                    Status = TransactionStatus.Completed,
+                    Reference = $"wallet-created:{wallet.Id}",
+                    CompletedAt = DateTimeOffset.UtcNow
+                };
+
+                await _unitOfWork.AddAsync(walletTransaction, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                var ledgerEntry = new LedgerEntry
+                {
+                    WalletId = wallet.Id,
+                    TransactionId = walletTransaction.Id,
+                    Amount = targetMoney,
+                    IsCredit = true
+                };
+
+                await _unitOfWork.AddAsync(ledgerEntry, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
                 var rule = new WalletRule
                 {
                     WalletId = wallet.Id,

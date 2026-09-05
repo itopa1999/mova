@@ -23,6 +23,11 @@ public class TransactionConfiguration
             .IsRequired()
             .HasConversion<int>();
 
+        builder.Property(x => x.Title)
+            .IsRequired()
+            .HasDefaultValue(string.Empty);
+
+
         builder.Property(x => x.Reference)
             .HasMaxLength(100);
 

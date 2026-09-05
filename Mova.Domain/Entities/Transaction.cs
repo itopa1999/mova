@@ -9,6 +9,8 @@ namespace Mova.Domain.Entities;
 public class Transaction : BaseEntity
 {
     public long? WalletId { get; set; }
+    
+    public string? Title {get; set; }
 
     public Money Amount { get; set; }
 

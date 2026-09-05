@@ -117,6 +117,7 @@ public sealed class ProcessScheduledReleasesJob
         var releaseTransaction = new Transaction
         {
             WalletId = wallet.Id,
+            Title = "Schedule Released",
             Amount = scheduledRelease.Amount,
             Type = TransactionType.Release,
             Status = TransactionStatus.Completed,

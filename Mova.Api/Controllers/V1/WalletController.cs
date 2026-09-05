@@ -9,6 +9,8 @@ using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Shared.Common;
 using static Mova.Application.BBL.Commands.AccountWallet.AddFundsCommand;
 using static Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
+using static Mova.Application.BBL.Queries.AccountWallet.GetWalletActivities;
+using static Mova.Application.BBL.Queries.AccountWallet.GetWalletAnalytics;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletSchedulePreviewQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.WalletDetails;
 using static Mova.Application.BBL.Queries.SchedulePreview.SchedulePreviewQuery;
@@ -115,6 +117,42 @@ public class WalletController(
                 UserPublicId = UserPublicId ?? string.Empty
             },
             cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("wallets/{walletId:long}/activities")]
+    [ProducesResponseType(typeof(BaseResult<WalletActivityDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetWalletActivities(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetWalletActivities.Query
+        {
+            WalletId = walletId,
+            UserPublicId = UserPublicId
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("analytics")]
+    [ProducesResponseType(typeof(BaseResult<WalletAnalyticsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetWalletAnalytics(
+        [FromQuery] DateTime? date,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetWalletAnalytics.Query
+        {
+            UserPublicId = UserPublicId,
+            Date = date
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
     }

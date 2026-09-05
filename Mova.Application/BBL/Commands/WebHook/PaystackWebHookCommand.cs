@@ -282,6 +282,7 @@ public sealed class PaystackWebHookCommand
                 var transaction = new Transaction
                 {
                     WalletId = null,
+                    Title = "Account Deposit",
                     Amount = Money.FromNaira(amount),
                     Type = TransactionType.Deposit,
                     Status = TransactionStatus.Completed,
