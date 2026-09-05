@@ -165,15 +165,39 @@ public sealed class CreateWalletCommand
                     errorMessage);
             }
 
-            var computedEndDate = previewResult.ComputedEndDate;
-            var finalEndDate = computedEndDate;
-
-            if (finalEndDate <= request.StartDate)
+            // Calculate the final date with the same service used by the release job. The
+            // preview service's sampled dates are not suitable for this value because only
+            // one sample is requested above.
+            var ruleForEndDate = new WalletRule
             {
-                op.Fail("End date must be after start date.");
+                Amount = Money.FromNaira(request.AmountToBeReleased),
+                Frequency = request.Frequency,
+                FrequencyConfig = normalizedFrequencyConfig,
+                StartDate = request.StartDate
+            };
+            var cursor = request.StartDate.AddTicks(-1);
+            DateTimeOffset? finalEndDate = null;
+
+            for (var releaseNumber = 0; releaseNumber < previewResult.TotalReleases; releaseNumber++)
+            {
+                var nextRelease = await _walletRuleService.GetNextReleaseAsync(
+                    ruleForEndDate,
+                    cursor,
+                    cancellationToken);
+
+                if (nextRelease is null)
+                    break;
+
+                finalEndDate = nextRelease.ScheduledFor;
+                cursor = nextRelease.ScheduledFor;
+            }
+
+            if (finalEndDate is null)
+            {
+                op.Fail("Unable to calculate the final release date.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "End date must be after start date.");
+                    "Unable to calculate the final release date.");
             }
 
             var targetMoney = Money.FromNaira(request.TargetAmount);
@@ -223,7 +247,7 @@ public sealed class CreateWalletCommand
                     Frequency = request.Frequency,
                     FrequencyConfig = normalizedFrequencyConfig,
                     StartDate = request.StartDate,
-                    EndDate = finalEndDate,
+                    EndDate = finalEndDate.Value,
                 };
 
                 await _unitOfWork.AddAsync(rule, cancellationToken);

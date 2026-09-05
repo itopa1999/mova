@@ -33,7 +33,10 @@ public sealed class WalletRuleService : IWalletRuleService
             _ => null
         };
 
-        if (nextDate is null || (rule.EndDate is not null && nextDate > rule.EndDate))
+        // Wallet completion is governed by the remaining locked balance. Do not use EndDate
+        // as a hard stop: older wallets may have an end date calculated from a truncated
+        // schedule preview, which would otherwise skip their final remainder release.
+        if (nextDate is null)
             return Task.FromResult<NextWalletRelease?>(null);
 
         return Task.FromResult<NextWalletRelease?>(new NextWalletRelease
