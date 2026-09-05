@@ -72,6 +72,21 @@ public sealed class ApplicationDbContext
             }
         }
 
+        // PostgreSQL's `timestamp with time zone` stores an instant in UTC. Npgsql rejects
+        // DateTimeOffset values with a non-zero offset, so normalize all tracked timestamps
+        // at the persistence boundary (including schedule dates supplied by the client).
+        foreach (var entry in ChangeTracker.Entries()
+                     .Where(x => x.State is EntityState.Added or EntityState.Modified))
+        {
+            foreach (var property in entry.Properties)
+            {
+                if (property.CurrentValue is DateTimeOffset value && value.Offset != TimeSpan.Zero)
+                {
+                    property.CurrentValue = value.ToUniversalTime();
+                }
+            }
+        }
+
         return await base.SaveChangesAsync(
             cancellationToken);
     }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -18,6 +19,7 @@ public sealed class WalletRuleService : IWalletRuleService
         {
             PropertyNameCaseInsensitive = true
         };
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 
         var nextDate = rule.Frequency switch
         {

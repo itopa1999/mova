@@ -226,6 +226,88 @@ Wallet available:     NGN 0
 
 The debit and wallet creation happen inside one database transaction. If wallet creation fails, the balance debit is rolled back.
 
+### Wallet behavior rules
+
+A wallet separates money by purpose and lifecycle:
+
+```text
+LockedAmount       Money waiting for a future scheduled release
+AvailableAmount    Money released in the current release window
+UnusedAmount       Money from older release windows that was not withdrawn
+FundedAmount       Total money originally funded into the wallet
+TotalReleasedAmount Cumulative money currently released from locked funds
+TotalWithdrawnAmount Cumulative money withdrawn by the user
+```
+
+The wallet's total money is not lost when it moves between these fields. The fields describe where the money currently belongs.
+
+#### Example: NGN 30,000 released by NGN 7,000
+
+When the wallet is created:
+
+```text
+FundedAmount:          NGN 30,000
+LockedAmount:          NGN 30,000
+AvailableAmount:       NGN 0
+UnusedAmount:          NGN 0
+TotalReleasedAmount:   NGN 0
+```
+
+Only the first release is stored initially. The release job creates the next release after each successful release.
+
+The release sequence is:
+
+```text
+Release 1: NGN 7,000
+Release 2: NGN 7,000
+Release 3: NGN 7,000
+Release 4: NGN 7,000
+Release 5: NGN 2,000
+Total:     NGN 30,000
+```
+
+When a release is processed, the amount is removed from `LockedAmount` and placed in `AvailableAmount`.
+
+If the previous `AvailableAmount` was not withdrawn before the next release, it is moved to `UnusedAmount` before the new release becomes available:
+
+```text
+Before next release:
+AvailableAmount: NGN 7,000
+UnusedAmount:    NGN 0
+LockedAmount:    NGN 23,000
+
+After the next NGN 7,000 release:
+AvailableAmount: NGN 7,000
+UnusedAmount:    NGN 7,000
+LockedAmount:    NGN 16,000
+```
+
+The final remainder is not discarded. When only NGN 2,000 remains locked, the next scheduled release is created for NGN 2,000 even though the rule amount is NGN 7,000. Once `TotalReleasedAmount` reaches `TargetAmount`, no additional release is scheduled.
+
+#### Moving unused money back to locked funds
+
+An authenticated user can move all unused money back into the locked balance:
+
+```text
+POST /api/v1/wallet/{walletId}/relock-unused
+```
+
+For example:
+
+```text
+Before:
+UnusedAmount:          NGN 7,000
+LockedAmount:          NGN 0
+TotalReleasedAmount:   NGN 28,000
+
+After:
+UnusedAmount:          NGN 0
+LockedAmount:          NGN 7,000
+TotalReleasedAmount:   NGN 21,000
+```
+
+The operation is transactional. It does not change the user's main account balance or `FundedAmount`. If the wallet has no unused money, the request is rejected. If the next scheduled release is missing, the operation creates one without duplicating an existing pending release.
+
 ## 7. Wallet Creation
 
 Endpoint:

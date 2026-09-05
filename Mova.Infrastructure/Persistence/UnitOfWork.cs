@@ -68,12 +68,21 @@ public sealed class UnitOfWork : IUnitOfWork
     {
         if (_transaction is not null)
         {
-            await _transaction.RollbackAsync(
-                cancellationToken);
-
-            await _transaction.DisposeAsync();
-
+            var transaction = _transaction;
             _transaction = null;
+
+            try
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+            catch (ObjectDisposedException)
+            {
+                // A failed database command can already have disposed the underlying transaction.
+            }
+            finally
+            {
+                await transaction.DisposeAsync();
+            }
         }
     }
 }
