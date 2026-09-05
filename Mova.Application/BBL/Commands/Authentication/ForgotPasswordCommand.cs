@@ -33,23 +33,20 @@ public sealed class ForgotPasswordCommand
         private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOtpService _otpService;
-        private readonly IEmailService _emailService;
-        private readonly ISmsService _smsService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IIdentityService identityService,
             IUnitOfWork unitOfWork,
             IOtpService otpService,
-            IEmailService emailService,
-            ISmsService smsService,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
             _otpService = otpService;
-            _emailService = emailService;
-            _smsService = smsService;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -115,23 +112,10 @@ public sealed class ForgotPasswordCommand
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                try
-                {
-                    await _emailService.SendForgotPasswordOtpAsync(user.Email, otpCode, cancellationToken);
-                }
-                catch (Exception emailEx)
-                {
-                    op.Fail($"Failed to send email OTP: {emailEx.Message}", emailEx);
-                }
-
-                try
-                {
-                    await _smsService.SendOtpAsync(user.PhoneNumber, otpCode, cancellationToken);
-                }
-                catch (Exception smsEx)
-                {
-                    op.Fail($"Failed to send SMS OTP: {smsEx.Message}", smsEx);
-                }
+                _notificationQueue.QueueForgotPasswordOtp(
+                    user.Email,
+                    user.PhoneNumber,
+                    otpCode);
 
                 op.Success($"OTP sent to user {user.PublicId} for password reset.");
 

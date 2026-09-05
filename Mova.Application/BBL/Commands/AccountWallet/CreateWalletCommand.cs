@@ -277,11 +277,6 @@ public sealed class CreateWalletCommand
 
                 op.Fail($"Error creating wallet: {ex.Message}");
 
-                _logger.LogError(
-                    ex,
-                    "Error creating wallet for user {UserPublicId}",
-                    request.UserPublicId);
-
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while creating the wallet.");

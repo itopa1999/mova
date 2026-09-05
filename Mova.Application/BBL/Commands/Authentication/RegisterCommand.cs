@@ -49,23 +49,20 @@ public sealed class RegisterCommand
         private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOtpService _otpService;
-        private readonly IEmailService _emailService;
-        private readonly ISmsService _smsService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IIdentityService identityService,
             IUnitOfWork unitOfWork,
             IOtpService otpService,
-            IEmailService emailService,
-            ISmsService smsService,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
             _otpService = otpService;
-            _emailService = emailService;
-            _smsService = smsService;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -167,16 +164,11 @@ public sealed class RegisterCommand
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                try
-                {
-                    await Task.WhenAll(
-                        _emailService.SendOtpAsync(firstName, request.Email, otpCode, cancellationToken),
-                        _smsService.SendOtpAsync(request.PhoneNumber ?? string.Empty, otpCode, cancellationToken));
-                }
-                catch (Exception sendEx)
-                {
-                    op.Fail($"OTP sending failed (but user created): {sendEx.Message}", sendEx);
-                }
+                _notificationQueue.QueueOtpDelivery(
+                    firstName,
+                    request.Email,
+                    request.PhoneNumber,
+                    otpCode);
 
                 op.Success($"User {userPublicId} registered successfully.");
 

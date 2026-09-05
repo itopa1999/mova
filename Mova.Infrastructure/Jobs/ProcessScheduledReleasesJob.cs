@@ -5,6 +5,7 @@ using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Jobs;
 
@@ -27,6 +28,8 @@ public sealed class ProcessScheduledReleasesJob
     [DisableConcurrentExecution(300)]
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
+        using var op = OperationLogger.Start(_logger, "ProcessScheduledReleases");
+
         var releaseIds = await _context.ScheduledReleases
             .AsNoTracking()
             .Where(x => x.Status == ReleaseStatus.Scheduled
@@ -41,6 +44,8 @@ public sealed class ProcessScheduledReleasesJob
         {
             await ProcessReleaseAsync(releaseId, cancellationToken);
         }
+
+        op.Success($"Processed {releaseIds.Count} scheduled release(s).");
     }
 
     private async Task ProcessReleaseAsync(
@@ -133,10 +138,12 @@ public sealed class ProcessScheduledReleasesJob
         await _context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        _logger.LogInformation(
-            "Scheduled release {ScheduledReleaseId} processed for wallet {WalletId}",
-            scheduledRelease.Id,
-            wallet.Id);
+        using var op = OperationLogger.Start(
+            _logger,
+            "ProcessScheduledRelease",
+            ("ScheduledReleaseId", scheduledRelease.Id),
+            ("WalletId", wallet.Id));
+        op.Success("Scheduled release processed.");
     }
 
     private async Task EnsureNextScheduledReleaseAsync(
@@ -146,9 +153,11 @@ public sealed class ProcessScheduledReleasesJob
     {
         if (wallet.TotalReleasedAmount.MinorUnits >= wallet.TargetAmount.MinorUnits)
         {
-            _logger.LogInformation(
-                "Target amount reached for wallet {WalletId}. No more releases will be scheduled.",
-                wallet.Id);
+            using var op = OperationLogger.Start(
+                _logger,
+                "EnsureNextScheduledRelease",
+                ("WalletId", wallet.Id));
+            op.Success("Target amount reached. No more releases will be scheduled.");
             return;
         }
 

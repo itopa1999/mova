@@ -44,7 +44,7 @@ public sealed class VerifyAccountCommand
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
         private readonly ILogger<Handler> _logger;
-        private readonly IEmailService _emailService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly IJwtTokenGenerator _jwtTokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
 
@@ -66,14 +66,14 @@ public sealed class VerifyAccountCommand
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
             ILogger<Handler> logger,
-            IEmailService emailService,
+            INotificationQueue notificationQueue,
             IJwtTokenGenerator jwtTokenGenerator,
             IRefreshTokenService refreshTokenService)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
             _logger = logger;
-            _emailService = emailService;
+            _notificationQueue = notificationQueue;
             _jwtTokenGenerator = jwtTokenGenerator;
             _refreshTokenService = refreshTokenService;
         }
@@ -197,17 +197,9 @@ public sealed class VerifyAccountCommand
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                try
-                {
-                    await _emailService.SendWelcomeEmailAsync(
-                        user.FirstName ?? "Customer",
-                        user.Email,
-                        cancellationToken);
-                }
-                catch (Exception emailEx)
-                {
-                    op.Fail($"Failed to send welcome email: {emailEx.Message}", emailEx);
-                }
+                _notificationQueue.QueueWelcomeEmail(
+                    user.FirstName ?? "Customer",
+                    user.Email);
 
                 var roles = await _identityService.GetRolesAsync(user.Id);
 
