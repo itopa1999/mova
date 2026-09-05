@@ -8,14 +8,16 @@ using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Shared.Common;
 using static Mova.Application.BBL.Commands.AccountWallet.AddFundsCommand;
+using static Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletSchedulePreviewQuery;
+using static Mova.Application.BBL.Queries.AccountWallet.WalletDetails;
 using static Mova.Application.BBL.Queries.SchedulePreview.SchedulePreviewQuery;
 
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize]
-[Route("api/v1/wallet")]
+[Route("api/v1/wallets")]
 [ApiExplorerSettings(GroupName = "v1")]
 public class WalletController(
     IMediator mediator) : BaseController
@@ -75,6 +77,39 @@ public class WalletController(
     {
         var result = await _mediator.Send(
             new GetWalletSchedulePreviewQuery.Query
+            {
+                WalletId = walletId,
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(BaseResult<GetAllWalletsResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetAllWallets([FromQuery] int page = 1, [FromQuery]int pageSize = 10, CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(
+            new GetAllWallets.Query
+            {
+                Page = page,
+                PageSize = pageSize,
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("{walletId:long}/details")]
+    [ProducesResponseType(typeof(BaseResult<WalletDetailsResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetWalletDetails(long walletId, CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new WalletDetails.Query
             {
                 WalletId = walletId,
                 UserPublicId = UserPublicId ?? string.Empty

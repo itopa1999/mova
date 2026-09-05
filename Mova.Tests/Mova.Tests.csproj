@@ -14,6 +14,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +25,7 @@
     <ProjectReference Include="..\Mova.Domain\Mova.Domain.csproj" />
     <ProjectReference Include="..\Mova.Application\Mova.Application.csproj" />
     <ProjectReference Include="..\Mova.Shared\Mova.Shared.csproj" />
+    <ProjectReference Include="..\Mova.Infrastructure\Mova.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

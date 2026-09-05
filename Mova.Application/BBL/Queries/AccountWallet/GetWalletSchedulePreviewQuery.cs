@@ -9,8 +9,6 @@ using Mova.Domain.Enums;
 using Mova.Shared.Common;
 
 namespace Mova.Application.BBL.Queries.AccountWallet;
-
-/// <summary>Returns the complete release timeline for one wallet, including projected future releases.</summary>
 public sealed class GetWalletSchedulePreviewQuery
 {
     public sealed class Query : IRequest<BaseResult<GetWalletSchedulePreviewResponseDto>>
@@ -87,9 +85,12 @@ public sealed class GetWalletSchedulePreviewQuery
             var storedReleases = await _unitOfWork.Query<ScheduledRelease>()
                 .AsNoTracking()
                 .Where(x => x.WalletId == wallet.Id)
+                .ToListAsync(cancellationToken);
+
+            storedReleases = storedReleases
                 .OrderBy(x => x.ScheduledFor)
                 .ThenBy(x => x.Id)
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             var response = new GetWalletSchedulePreviewResponseDto
             {

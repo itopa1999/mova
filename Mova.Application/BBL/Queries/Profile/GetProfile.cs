@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json.Serialization;
 using MediatR;
 using Mova.Application.Interfaces.Identity;
 using Mova.Shared.Common;
@@ -9,6 +10,7 @@ public sealed class GetProfile
 {
     public sealed class Query : IRequest<BaseResult<GetProfileDto>>
     {
+        [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
     }
 
