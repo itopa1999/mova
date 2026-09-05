@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Hangfire;
 using Mova.Api.Configurations;
 using Mova.Api.Middlewares;
 using Mova.Shared.Common;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
 using Mova.Application;
 using Mova.Infrastructure;
+using Mova.Infrastructure.Jobs;
 
 namespace Mova.Api;
 
@@ -176,6 +178,16 @@ public class Startup(IConfiguration configuration)
     // Configure middleware pipeline
     public void Configure(WebApplication app)
     {
+        var recurringJobManager = app.Services
+            .GetRequiredService<IRecurringJobManager>();
+
+        // recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
+        //     "process-scheduled-releases",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.Minutely);
+
+        app.UseHangfireDashboard("/hangfire");
+
         app.UseMiddleware<SwaggerAuthMiddleware>();
 
         app.UseSwagger();

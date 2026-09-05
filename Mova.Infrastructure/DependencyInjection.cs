@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
@@ -31,6 +33,19 @@ public static class DependencyInjection
         services.AddIdentityServices(configuration);
         services.AddJwtAuthentication(configuration);
         services.AddPaymentServices(configuration);
+
+        var postgresConnectionString = configuration.GetConnectionString("Postgres")
+            ?? throw new InvalidOperationException("Postgres connection string is missing.");
+
+        services.AddHangfire(configuration => configuration
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UsePostgreSqlStorage(
+                options => options.UseNpgsqlConnection(postgresConnectionString),
+                new PostgreSqlStorageOptions()));
+
+        services.AddHangfireServer();
 
         var redisConnectionString = configuration.GetConnectionString("Redis")
             ?? throw new InvalidOperationException("The Redis connection string is not configured.");
