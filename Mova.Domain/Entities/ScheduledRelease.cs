@@ -18,5 +18,7 @@ public class ScheduledRelease : BaseEntity
 
     public ReleaseStatus Status { get; set; }
 
+    public int FailedAttempts { get; set; }
+
     public DateTimeOffset? ReleasedAt { get; set; }
 }

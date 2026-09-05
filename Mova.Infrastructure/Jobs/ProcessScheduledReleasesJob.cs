@@ -1,6 +1,7 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
@@ -11,13 +12,16 @@ public sealed class ProcessScheduledReleasesJob
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<ProcessScheduledReleasesJob> _logger;
+    private readonly IWalletRuleService _walletRuleService;
 
     public ProcessScheduledReleasesJob(
         ApplicationDbContext context,
-        ILogger<ProcessScheduledReleasesJob> logger)
+        ILogger<ProcessScheduledReleasesJob> logger,
+        IWalletRuleService walletRuleService)
     {
         _context = context;
         _logger = logger;
+        _walletRuleService = walletRuleService;
     }
 
     [DisableConcurrentExecution(300)]
@@ -62,7 +66,7 @@ public sealed class ProcessScheduledReleasesJob
 
         if (wallet is null || wallet.Status is WalletStatus.Closed or WalletStatus.Paused)
         {
-            scheduledRelease.Status = ReleaseStatus.Failed;
+            MarkFailure(scheduledRelease);
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return;
@@ -70,7 +74,7 @@ public sealed class ProcessScheduledReleasesJob
 
         if (wallet.LockedAmount.MinorUnits < scheduledRelease.Amount.MinorUnits)
         {
-            scheduledRelease.Status = ReleaseStatus.Failed;
+            MarkFailure(scheduledRelease);
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return;
@@ -121,6 +125,11 @@ public sealed class ProcessScheduledReleasesJob
         scheduledRelease.Status = ReleaseStatus.Released;
         scheduledRelease.ReleasedAt = DateTimeOffset.UtcNow;
 
+        await EnsureNextScheduledReleaseAsync(
+            wallet,
+            scheduledRelease,
+            cancellationToken);
+
         await _context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -128,5 +137,62 @@ public sealed class ProcessScheduledReleasesJob
             "Scheduled release {ScheduledReleaseId} processed for wallet {WalletId}",
             scheduledRelease.Id,
             wallet.Id);
+    }
+
+    private async Task EnsureNextScheduledReleaseAsync(
+        Wallet wallet,
+        ScheduledRelease processedRelease,
+        CancellationToken cancellationToken)
+    {
+        if (wallet.TotalReleasedAmount.MinorUnits >= wallet.TargetAmount.MinorUnits)
+        {
+            _logger.LogInformation(
+                "Target amount reached for wallet {WalletId}. No more releases will be scheduled.",
+                wallet.Id);
+            return;
+        }
+
+        var walletRule = await _context.Set<WalletRule>()
+            .FirstOrDefaultAsync(x => x.Id == processedRelease.WalletRuleId, cancellationToken);
+
+        if (walletRule is null)
+            return;
+
+        var nextRelease = await _walletRuleService.GetNextReleaseAsync(
+            walletRule,
+            processedRelease.ScheduledFor,
+            cancellationToken);
+
+        if (nextRelease is null)
+            return;
+
+        var alreadyScheduled = await _context.ScheduledReleases
+            .AnyAsync(
+                x => x.WalletRuleId == walletRule.Id
+                     && x.ScheduledFor == nextRelease.ScheduledFor
+                     && x.Status != ReleaseStatus.Cancelled,
+                cancellationToken);
+
+        if (alreadyScheduled)
+            return;
+
+        await _context.ScheduledReleases.AddAsync(
+            new ScheduledRelease
+            {
+                WalletId = wallet.Id,
+                WalletRuleId = walletRule.Id,
+                Amount = nextRelease.Amount,
+                ScheduledFor = nextRelease.ScheduledFor,
+                Status = ReleaseStatus.Scheduled
+            },
+            cancellationToken);
+    }
+
+    private static void MarkFailure(ScheduledRelease scheduledRelease)
+    {
+        scheduledRelease.FailedAttempts++;
+        scheduledRelease.Status = scheduledRelease.FailedAttempts >= 3
+            ? ReleaseStatus.Failed
+            : ReleaseStatus.Scheduled;
     }
 }

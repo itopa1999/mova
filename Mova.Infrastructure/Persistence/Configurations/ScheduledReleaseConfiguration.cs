@@ -26,6 +26,10 @@ public class ScheduledReleaseConfiguration
             .IsRequired()
             .HasConversion<int>();
 
+        builder.Property(x => x.FailedAttempts)
+            .IsRequired()
+            .HasDefaultValue(0);
+
         builder.Property(x => x.ReleasedAt);
 
         builder.ComplexProperty(

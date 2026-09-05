@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<ITransactionPinService, TransactionPinService>();
         services.AddScoped<ISchedulePreviewService, SchedulePreviewService>();
+        services.AddScoped<IWalletRuleService, WalletRuleService>();
         services.AddScoped<IWalletRuleValidator, WalletRuleValidator>();
         services.AddScoped<IPaystackService, PaystackService>();
         services.AddScoped<IFlutterwaveService, FlutterwaveService>();

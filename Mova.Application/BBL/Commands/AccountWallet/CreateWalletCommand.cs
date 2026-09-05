@@ -16,7 +16,7 @@ namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class CreateWalletCommand
 {
-    public sealed class Command : IRequest<BaseResult>
+    public sealed class Command : IRequest<BaseResult<CreateWalletResponseDto>>
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
@@ -36,26 +36,36 @@ public sealed class CreateWalletCommand
         public DateTimeOffset StartDate { get; set; }
     }
 
-    public sealed class Handler : IRequestHandler<Command, BaseResult>
+    public sealed class CreateWalletResponseDto
+    {
+        public long WalletId { get; init; }
+
+        public DateTimeOffset FirstReleaseDate { get; init; }
+    }
+
+    public sealed class Handler : IRequestHandler<Command, BaseResult<CreateWalletResponseDto>>
     {
         private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
         private readonly ISchedulePreviewService _schedulePreviewService;
+        private readonly IWalletRuleService _walletRuleService;
 
         public Handler(
             IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
-            ISchedulePreviewService schedulePreviewService)
+            ISchedulePreviewService schedulePreviewService,
+            IWalletRuleService walletRuleService)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
             _schedulePreviewService = schedulePreviewService;
+            _walletRuleService = walletRuleService;
         }
 
-        public async Task<BaseResult> Handle(
+        public async Task<BaseResult<CreateWalletResponseDto>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
@@ -67,7 +77,7 @@ public sealed class CreateWalletCommand
             if (string.IsNullOrWhiteSpace(request.Name))
             {
                 op.Fail("Wallet name is required.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Wallet name is required.");
             }
@@ -75,7 +85,7 @@ public sealed class CreateWalletCommand
             if (request.Name.Length > 150)
             {
                 op.Fail("Wallet name is too long.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Wallet name cannot exceed 150 characters.");
             }
@@ -85,7 +95,7 @@ public sealed class CreateWalletCommand
             if (request.TargetAmount <= 0)
             {
                 op.Fail("Target amount must be greater than zero.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Target amount must be greater than zero.");
             }
@@ -93,7 +103,7 @@ public sealed class CreateWalletCommand
             if (request.AmountToBeReleased <= 0)
             {
                 op.Fail("Release amount must be greater than zero.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Release amount must be greater than zero.");
             }
@@ -101,7 +111,7 @@ public sealed class CreateWalletCommand
             if (request.AmountToBeReleased > request.TargetAmount)
             {
                 op.Fail("Release amount cannot exceed target amount.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     $"Release amount (₦{request.AmountToBeReleased:N0}) cannot exceed target amount (₦{request.TargetAmount:N0}).");
             }
@@ -109,7 +119,7 @@ public sealed class CreateWalletCommand
             if (string.IsNullOrWhiteSpace(request.FrequencyConfig))
             {
                 op.Fail("Frequency configuration is required.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Frequency configuration is required.");
             }
@@ -128,7 +138,7 @@ public sealed class CreateWalletCommand
             if (existingWallet != null)
             {
                 op.Fail("Wallet name already exists.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "A wallet with this name already exists.");
             }
@@ -150,7 +160,7 @@ public sealed class CreateWalletCommand
                     ? string.Join(" | ", previewResult.Errors) 
                     : "Invalid schedule configuration.";
 
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     errorMessage);
             }
@@ -161,7 +171,7 @@ public sealed class CreateWalletCommand
             if (finalEndDate <= request.StartDate)
             {
                 op.Fail("End date must be after start date.");
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "End date must be after start date.");
             }
@@ -183,7 +193,7 @@ public sealed class CreateWalletCommand
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
                     op.Fail("Insufficient account balance or user account not found.");
 
-                    return new BaseResult(
+                    return new BaseResult<CreateWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Insufficient account balance.");
                 }
@@ -218,53 +228,47 @@ public sealed class CreateWalletCommand
                 await _unitOfWork.AddAsync(rule, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                var scheduledReleases = new List<ScheduledRelease>();
-
-                var fullPreviewResult = await _schedulePreviewService.PreviewScheduleAsync(
-                    request.TargetAmount,
-                    request.AmountToBeReleased,
-                    request.Frequency,
-                    normalizedFrequencyConfig,
-                    request.StartDate,
-                    previewResult.TotalReleases,
+                var firstRelease = await _walletRuleService.GetNextReleaseAsync(
+                    rule,
+                    request.StartDate.AddTicks(-1),
                     cancellationToken);
 
-                if (!fullPreviewResult.IsSuccess)
+                if (firstRelease is null)
                 {
-                    throw new InvalidOperationException("Unable to generate the wallet release schedule.");
+                    throw new InvalidOperationException(
+                        "Unable to generate the first wallet release schedule.");
                 }
 
-                if (fullPreviewResult.SampleReleaseDates.Any())
+                var firstReleaseAmount = Math.Min(
+                    firstRelease.Amount.ToDecimal(),
+                    request.TargetAmount);
+
+                var scheduledRelease = new ScheduledRelease
                 {
-                    foreach (var releasePreview in fullPreviewResult.SampleReleaseDates)
-                    {
-                        var scheduledRelease = new ScheduledRelease
-                        {
-                            WalletId = wallet.Id,
-                            WalletRuleId = rule.Id,
-                            Amount = Money.FromNaira(releasePreview.Amount),
-                            ScheduledFor = releasePreview.Date,
-                            Status = ReleaseStatus.Scheduled,
-                            ReleasedAt = null
-                        };
-                        scheduledReleases.Add(scheduledRelease);
-                    }
+                    WalletId = wallet.Id,
+                    WalletRuleId = rule.Id,
+                    Amount = Money.FromNaira(firstReleaseAmount),
+                    ScheduledFor = firstRelease.ScheduledFor,
+                    Status = ReleaseStatus.Scheduled,
+                    ReleasedAt = null
+                };
 
-                    foreach (var scheduledRelease in scheduledReleases)
-                    {
-                        await _unitOfWork.AddAsync(scheduledRelease, cancellationToken);
-                    }
+                await _unitOfWork.AddAsync(scheduledRelease, cancellationToken);
 
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-                }
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                op.Success($"Wallet created successfully with {scheduledReleases.Count} scheduled releases. WalletId: {wallet.Id}");
+                op.Success($"Wallet created successfully with first release scheduled for {firstRelease.ScheduledFor:u}. WalletId: {wallet.Id}");
 
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.Created,
-                    $"Wallet created successfully with {scheduledReleases.Count} scheduled releases."
+                    "Wallet created successfully.",
+                    new CreateWalletResponseDto
+                    {
+                        WalletId = wallet.Id,
+                        FirstReleaseDate = firstRelease.ScheduledFor
+                    }
                     );
             }
             catch (Exception ex)
@@ -278,7 +282,7 @@ public sealed class CreateWalletCommand
                     "Error creating wallet for user {UserPublicId}",
                     request.UserPublicId);
 
-                return new BaseResult(
+                return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while creating the wallet.");
             }
