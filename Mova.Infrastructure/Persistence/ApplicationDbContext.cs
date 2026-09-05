@@ -25,6 +25,7 @@ public sealed class ApplicationDbContext
     public DbSet<OtpVerification> OtpVerifications => Set<OtpVerification>();
     public DbSet<VirtualAccount> VirtualAccounts => Set<VirtualAccount>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
+    public DbSet<Bank> Banks => Set<Bank>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

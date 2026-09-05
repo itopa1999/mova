@@ -2,7 +2,7 @@ namespace Mova.Application.Interfaces.Payment;
 
 public interface IBankService
 {
-    Task<List<BankDto>> GetAllBanksAsync();
+    Task<List<BankDto>> GetAllBanksAsync(string? name = null);
 
     Task<BankDto?> GetBankByCodeAsync(string code);
 

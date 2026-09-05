@@ -24,11 +24,19 @@ public sealed class BankService : IBankService
         _externalApiSettings = externalApiSettings.Value;
     }
 
-    public async Task<List<BankDto>> GetAllBanksAsync()
+    public async Task<List<BankDto>> GetAllBanksAsync(string? name = null)
     {
-        var banks = await _unitOfWork.Query<Bank>()
+        var query = _unitOfWork.Query<Bank>()
             .AsNoTracking()
-            .Where(b => b.IsActive)
+            .Where(b => b.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            query = query.Where(b =>
+                EF.Functions.ILike(b.Name, $"%{name.Trim()}%"));
+        }
+
+        var banks = await query
             .OrderBy(b => b.Name)
             .ToListAsync();
 

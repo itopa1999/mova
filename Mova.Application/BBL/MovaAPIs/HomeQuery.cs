@@ -2,14 +2,13 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 
-namespace Mova.Application.BBL.Queries.MovaQueries;
+namespace Mova.Application.BBL.MovaAPIs;
 
 public sealed class HomeQuery
 {
