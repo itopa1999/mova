@@ -206,6 +206,7 @@ public sealed class CreateWalletCommand
                         ? null
                         : request.Description.Trim(),
                     TargetAmount = targetMoney,
+                    FundedAmount = targetMoney,
                     AvailableAmount = Money.FromNaira(0),
                     LockedAmount = targetMoney,
                     UnusedAmount = Money.FromNaira(0),

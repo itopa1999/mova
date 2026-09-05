@@ -52,6 +52,11 @@ public sealed class ProcessScheduledReleasesJob
         long releaseId,
         CancellationToken cancellationToken)
     {
+        using var op = OperationLogger.Start(
+            _logger,
+            "ProcessScheduledRelease",
+            ("ScheduledReleaseId", releaseId));
+
         await using var transaction = await _context.Database
             .BeginTransactionAsync(cancellationToken);
 
@@ -77,12 +82,17 @@ public sealed class ProcessScheduledReleasesJob
             return;
         }
 
-        if (wallet.LockedAmount.MinorUnits < scheduledRelease.Amount.MinorUnits)
+        if (wallet.LockedAmount.MinorUnits <= 0)
         {
             MarkFailure(scheduledRelease);
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return;
+        }
+
+        if (wallet.LockedAmount.MinorUnits < scheduledRelease.Amount.MinorUnits)
+        {
+            scheduledRelease.Amount = wallet.LockedAmount;
         }
 
         var reference = $"scheduled-release:{scheduledRelease.Id}";
@@ -138,11 +148,6 @@ public sealed class ProcessScheduledReleasesJob
         await _context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        using var op = OperationLogger.Start(
-            _logger,
-            "ProcessScheduledRelease",
-            ("ScheduledReleaseId", scheduledRelease.Id),
-            ("WalletId", wallet.Id));
         op.Success("Scheduled release processed.");
     }
 
@@ -185,12 +190,16 @@ public sealed class ProcessScheduledReleasesJob
         if (alreadyScheduled)
             return;
 
+        var nextAmount = nextRelease.Amount.MinorUnits > wallet.LockedAmount.MinorUnits
+            ? wallet.LockedAmount
+            : nextRelease.Amount;
+
         await _context.ScheduledReleases.AddAsync(
             new ScheduledRelease
             {
                 WalletId = wallet.Id,
                 WalletRuleId = walletRule.Id,
-                Amount = nextRelease.Amount,
+                Amount = nextAmount,
                 ScheduledFor = nextRelease.ScheduledFor,
                 Status = ReleaseStatus.Scheduled
             },

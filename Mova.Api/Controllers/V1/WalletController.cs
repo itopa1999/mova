@@ -34,6 +34,26 @@ public class WalletController(
             result);
     }
 
+    [HttpPost("{walletId:long}/relock-unused")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> RelockUnusedFunds(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var command = new RelockUnusedFundsCommand.Command
+        {
+            WalletId = walletId,
+            UserPublicId = UserPublicId ?? string.Empty
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
+
     [HttpPost("preview")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(BaseResult<SchedulePreviewResponseDto>), (int)HttpStatusCode.OK)]
