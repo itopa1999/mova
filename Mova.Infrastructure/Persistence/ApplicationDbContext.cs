@@ -24,6 +24,7 @@ public sealed class ApplicationDbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<OtpVerification> OtpVerifications => Set<OtpVerification>();
     public DbSet<VirtualAccount> VirtualAccounts => Set<VirtualAccount>();
+    public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

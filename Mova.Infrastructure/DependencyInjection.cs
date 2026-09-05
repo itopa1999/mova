@@ -21,6 +21,8 @@ using Mova.Infrastructure.Service;
 using Mova.Infrastructure.Services;
 using Mova.Infrastructure.Services.Security;
 using StackExchange.Redis;
+using Mova.Infrastructure.ExternalAPI;
+using Mova.Application.Interfaces.ExternalAPI;
 
 namespace Mova.Infrastructure;
 
@@ -61,8 +63,14 @@ public static class DependencyInjection
         services.AddScoped<IWalletRuleValidator, WalletRuleValidator>();
         services.AddScoped<IPaystackService, PaystackService>();
         services.AddScoped<IFlutterwaveService, FlutterwaveService>();
+        services.AddScoped<IBankService, BankService>();
         services.AddNotificationServices(configuration);
         services.AddSingleton<TemplateRenderer>();
+
+        services.Configure<ExternalApiSettings>(
+            configuration.GetSection(ExternalApiSettings.SectionName));
+
+        services.AddHttpClient<IExternalApiClient, ExternalApiClient>();
         
         return services;
     }
