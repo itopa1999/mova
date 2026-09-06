@@ -23,6 +23,7 @@ using Mova.Infrastructure.Services.Security;
 using StackExchange.Redis;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Application.Interfaces.ExternalAPI;
+using Mova.Application.Interfaces.Services;
 
 namespace Mova.Infrastructure;
 
@@ -53,6 +54,7 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("The Redis connection string is not configured.");
         services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
 
+        services.AddHttpContextAccessor();
 
         services.AddScoped<ICacheService, RedisCacheService>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -71,6 +73,7 @@ public static class DependencyInjection
             configuration.GetSection(ExternalApiSettings.SectionName));
 
         services.AddHttpClient<IExternalApiClient, ExternalApiClient>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
         
         return services;
     }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Services;
 using Mova.Domain.Common;
 using Mova.Domain.Entities;
 using Mova.Infrastructure.Identity;
@@ -10,10 +11,13 @@ namespace Mova.Infrastructure.Persistence;
 public sealed class ApplicationDbContext
     : IdentityDbContext<User, IdentityRole<long>, long>
 {
+    private readonly ICurrentUserService _currentUser;
+
     public ApplicationDbContext(
-        DbContextOptions<ApplicationDbContext> options)
+        DbContextOptions<ApplicationDbContext> options, ICurrentUserService currentUser)
         : base(options)
     {
+        _currentUser = currentUser;
     }
 
     public DbSet<Wallet> Wallets => Set<Wallet>();
@@ -26,6 +30,7 @@ public sealed class ApplicationDbContext
     public DbSet<VirtualAccount> VirtualAccounts => Set<VirtualAccount>();
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<Bank> Banks => Set<Bank>();
+    public DbSet<Payout> Payouts => Set<Payout>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,6 +63,8 @@ public sealed class ApplicationDbContext
                     entry.Entity.ModifiedAt =
                         DateTimeOffset.UtcNow;
 
+                    entry.Entity.ModifiedBy = _currentUser.UserId.ToString();
+
                     break;
 
 
@@ -70,13 +77,12 @@ public sealed class ApplicationDbContext
                     entry.Entity.DeletedAt =
                         DateTimeOffset.UtcNow;
 
+                    entry.Entity.DeletedBy = _currentUser.UserId.ToString();
+
                     break;
             }
         }
 
-        // PostgreSQL's `timestamp with time zone` stores an instant in UTC. Npgsql rejects
-        // DateTimeOffset values with a non-zero offset, so normalize all tracked timestamps
-        // at the persistence boundary (including schedule dates supplied by the client).
         foreach (var entry in ChangeTracker.Entries()
                      .Where(x => x.State is EntityState.Added or EntityState.Modified))
         {
