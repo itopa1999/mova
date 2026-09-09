@@ -1,3 +1,5 @@
+using Mova.Shared.Constants;
+
 namespace Mova.Application.Interfaces.Notification;
 
 public interface INotificationQueue
@@ -6,7 +8,8 @@ public interface INotificationQueue
         string? firstName,
         string email,
         string? phoneNumber,
-        string otp);
+        string otp,
+        string purpose);
 
     void QueueForgotPasswordOtp(
         string email,

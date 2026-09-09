@@ -15,7 +15,7 @@ public sealed class LogoutCommand
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
-        public string RefreshToken { get; init; } = string.Empty;
+        public string RefreshToken { get; set; } = string.Empty;
     }
 
     public class Handler : IRequestHandler<Command, BaseResult>

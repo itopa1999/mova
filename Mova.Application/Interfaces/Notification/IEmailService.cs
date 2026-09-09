@@ -9,6 +9,7 @@ public interface IEmailService
         string firstName,
         string email,
         string otp,
+        string purpose,
         CancellationToken cancellationToken = default
     );
 

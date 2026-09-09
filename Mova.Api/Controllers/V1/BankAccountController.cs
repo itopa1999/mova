@@ -8,21 +8,22 @@ using Mova.Application.BBL.Queries.BanksAccount;
 using Mova.Shared.Common;
 using static Mova.Application.BBL.Commands.BanksAccount.AddBankAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.VerifyBankAccount;
+using static Mova.Application.BBL.Queries.BanksAccount.GetAllBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.GetBanks;
 
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize]
-[Route("api/v1/mova")]
+[Route("api/v1/bank-account")]
 [ApiExplorerSettings(GroupName = "v1")]
 public class BankAccountController(
     IMediator mediator) : BaseController
 {
     private readonly IMediator _mediator = mediator;
 
-        [HttpGet("banks")]
-    [ProducesResponseType(typeof(BaseResult<GetBanksDto>), (int)HttpStatusCode.OK)]
+    [HttpGet("banks")]
+    [ProducesResponseType(typeof(BaseResult<List<GetBanksDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetBanksDetailsData([FromQuery] string? name, CancellationToken cancellationToken)
     {
@@ -79,5 +80,21 @@ public class BankAccountController(
         return StatusCode(
             (int)result.StatusCode,
             result);
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(BaseResult<List<GetAllBankAccountDto>>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetBankAccounts(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetAllBankAccount.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
     }
 }

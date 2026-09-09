@@ -6,6 +6,7 @@ public sealed class SmsService : ISmsService
     public Task SendOtpAsync(
         string phoneNumber,
         string otp,
+        string purpose,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

@@ -66,7 +66,7 @@ public class Startup(IConfiguration configuration)
             options.AddPolicy("AllowSpecificOrigin",
                 policy =>
                 {
-                    policy.WithOrigins("https://localhost:3000", "https://yourdomain.com")
+                    policy.WithOrigins("https://localhost:3000", "http://localhost:5173")
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
@@ -149,17 +149,14 @@ public class Startup(IConfiguration configuration)
 
             options.CustomSchemaIds(type =>
             {
-                if (type.IsGenericType)
-                {
-                    var typeName = type.Name.Split('`')[0];
-                    var genericArgs = string.Join("_", type.GetGenericArguments().Select(t => t.Name));
-                    return $"{typeName}_{genericArgs}";
-                }
-                
-                if (type.IsNested)
-                    return $"{type.DeclaringType!.Name}.{type.Name}";
-                
-                return type.Name;
+                var fullName = type.FullName ?? type.Name;
+                return fullName
+                    .Replace("+", "_")
+                    .Replace("`", "_")
+                    .Replace("[", "_")
+                    .Replace("]", "")
+                    .Replace(",", "_")
+                    .Replace(" ", "_");
             });
 
         });
@@ -220,7 +217,7 @@ public class Startup(IConfiguration configuration)
 
         if (app.Environment.IsDevelopment())
         {
-            app.UseCors("AllowAllDev");
+            app.UseCors("AllowSpecificOrigin");
         }
         else
         {

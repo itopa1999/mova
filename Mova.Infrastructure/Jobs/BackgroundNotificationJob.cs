@@ -27,6 +27,7 @@ public sealed class BackgroundNotificationJob
         string email,
         string? phoneNumber,
         string otp,
+        string purpose,
         CancellationToken cancellationToken)
     {
         var failures = new List<Exception>();
@@ -37,6 +38,7 @@ public sealed class BackgroundNotificationJob
                 string.IsNullOrWhiteSpace(firstName) ? "Customer" : firstName,
                 email,
                 otp,
+                purpose,
                 cancellationToken);
         }
         catch (Exception exception)
@@ -46,19 +48,19 @@ public sealed class BackgroundNotificationJob
             op.Fail("Background OTP email failed.", exception);
         }
 
-        if (!string.IsNullOrWhiteSpace(phoneNumber))
-        {
-            try
-            {
-                await _smsService.SendOtpAsync(phoneNumber, otp, cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                failures.Add(exception);
-                using var op = OperationLogger.Start(_logger, "BackgroundOtpSms", ("PhoneNumber", phoneNumber));
-                op.Fail("Background OTP SMS failed.", exception);
-            }
-        }
+        // if (!string.IsNullOrWhiteSpace(phoneNumber))
+        // {
+        //     try
+        //     {
+        //         await _smsService.SendOtpAsync(phoneNumber, otp, cancellationToken);
+        //     }
+        //     catch (Exception exception)
+        //     {
+        //         failures.Add(exception);
+        //         using var op = OperationLogger.Start(_logger, "BackgroundOtpSms", ("PhoneNumber", phoneNumber));
+        //         op.Fail("Background OTP SMS failed.", exception);
+        //     }
+        // }
 
         if (failures.Count > 0)
             throw new AggregateException("One or more OTP notifications failed.", failures);
@@ -69,12 +71,14 @@ public sealed class BackgroundNotificationJob
         string? firstName,
         string email,
         string otp,
+        string purpose,
         CancellationToken cancellationToken)
     {
         return _emailService.SendOtpAsync(
             string.IsNullOrWhiteSpace(firstName) ? "Customer" : firstName,
             email,
             otp,
+            purpose,
             cancellationToken);
     }
 
@@ -82,9 +86,10 @@ public sealed class BackgroundNotificationJob
     public Task SendOtpSmsAsync(
         string phoneNumber,
         string otp,
+        string purpose,
         CancellationToken cancellationToken)
     {
-        return _smsService.SendOtpAsync(phoneNumber, otp, cancellationToken);
+        return _smsService.SendOtpAsync(phoneNumber, otp, purpose, cancellationToken);
     }
 
     [AutomaticRetry(Attempts = 3)]
@@ -119,19 +124,19 @@ public sealed class BackgroundNotificationJob
             op.Fail("Background password-reset email failed.", exception);
         }
 
-        if (!string.IsNullOrWhiteSpace(phoneNumber))
-        {
-            try
-            {
-                await _smsService.SendOtpAsync(phoneNumber, otp, cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                failures.Add(exception);
-                using var op = OperationLogger.Start(_logger, "BackgroundPasswordResetSms", ("PhoneNumber", phoneNumber));
-                op.Fail("Background password-reset SMS failed.", exception);
-            }
-        }
+        // if (!string.IsNullOrWhiteSpace(phoneNumber))
+        // {
+        //     try
+        //     {
+        //         await _smsService.SendOtpAsync(phoneNumber, otp, purpose, cancellationToken);
+        //     }
+        //     catch (Exception exception)
+        //     {
+        //         failures.Add(exception);
+        //         using var op = OperationLogger.Start(_logger, "BackgroundPasswordResetSms", ("PhoneNumber", phoneNumber));
+        //         op.Fail("Background password-reset SMS failed.", exception);
+        //     }
+        // }
 
         if (failures.Count > 0)
             throw new AggregateException("One or more password-reset notifications failed.", failures);

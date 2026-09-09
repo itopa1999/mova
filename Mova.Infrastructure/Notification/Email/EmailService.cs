@@ -6,6 +6,7 @@ using MimeKit;
 using Mova.Application.Common.Models;
 using Mova.Application.Interfaces.Notification;
 using Mova.Infrastructure.Notification.Email;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Notification;
@@ -31,15 +32,28 @@ public sealed class EmailService : IEmailService
         string name,
         string email,
         string otp,
+        string purpose,
         CancellationToken cancellationToken = default)
     {
+        var message = purpose switch
+        {
+            OtpPurpose.AccountVerification =>
+                "Use the one-time password below to verify your MOVA account.",
+
+            OtpPurpose.PasswordReset =>
+                "Use the one-time password below to reset your MOVA account password.",
+
+            _ =>
+                "Use the one-time password below to complete your request."
+        };
         var body = await _renderer.RenderAsync(
             "OtpEmailTemplate.html",
             new Dictionary<string, string>
             {
                 ["Name"] = name,
                 ["OTP"] = otp,
-                ["Expiry"] = "2 Minutes"
+                ["Expiry"] = "2 Minutes",
+                ["message"] = message
             }, cancellationToken);
 
         await SendEmailAsync(

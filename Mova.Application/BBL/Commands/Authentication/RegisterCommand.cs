@@ -13,6 +13,7 @@ using Mova.Shared.Logging;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Net;
+using System.Text.Json.Serialization;
 
 namespace Mova.Application.BBL.Commands.Authentication;
 
@@ -21,17 +22,22 @@ public sealed class RegisterCommand
     public class Command : IRequest<BaseResult<RegistrationResponseDto>>
     {
         [MinLength(3), MaxLength(100)]
+        [JsonPropertyName("firstname")]
         public string FirstName { get; init; } = string.Empty;
 
         [MinLength(3), MaxLength(100)]
+        [JsonPropertyName("lastname")]
         public string LastName { get; init; } = string.Empty;
 
         [EmailAddress, MaxLength(100)]
+        [JsonPropertyName("email")]
         public string Email { get; init; } = string.Empty;
 
+        [JsonPropertyName("phonenumber")]
         public string PhoneNumber { get; init; } = string.Empty;
 
         [MinLength(8)]
+        [JsonPropertyName("password")]
         public string Password { get; init; } = string.Empty;
     }
 
@@ -42,6 +48,8 @@ public sealed class RegisterCommand
         public string Phone { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Data { get; set; } = string.Empty;
+        public string NextStep { get; set; } = string.Empty;
+
     }
 
     public class Handler : IRequestHandler<Command, BaseResult<RegistrationResponseDto>>
@@ -168,7 +176,8 @@ public sealed class RegisterCommand
                     firstName,
                     request.Email,
                     request.PhoneNumber,
-                    otpCode);
+                    otpCode,
+                    otp.Purpose);
 
                 op.Success($"User {userPublicId} registered successfully.");
 
@@ -181,7 +190,8 @@ public sealed class RegisterCommand
                         Email = normalizedEmail,
                         Phone = normalizedPhoneNumber,
                         FullName = firstName,
-                        Data = "Account created. Please verify your email/phone with the OTP sent."
+                        Data = "Account created. Please verify your email/phone with the OTP sent.",
+                        NextStep = "Email Verification"
                     });
             }
             catch (DbUpdateException dbEx)

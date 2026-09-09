@@ -122,7 +122,7 @@ public class WalletController(
     }
 
     [HttpGet("wallets/{walletId:long}/activities")]
-    [ProducesResponseType(typeof(BaseResult<WalletActivityDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult<List<WalletActivityGroupDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetWalletActivities(
         long walletId,

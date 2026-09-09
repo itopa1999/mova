@@ -49,6 +49,15 @@ public class AuthenticationController(
     {
         var result = await _mediator.Send(command, cancellationToken);
 
+        if (result.IsSuccess &&
+            result.Data is not null &&
+            string.Equals(result.Data.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
+        {
+            SetAuthenticationCookies(
+                result.Data.AccessToken,
+                result.Data.RefreshToken);
+        }
+
         return StatusCode(
             (int)result.StatusCode,
             result);
@@ -132,10 +141,27 @@ public class AuthenticationController(
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> Logout(
-        [FromBody] LogoutCommand.Command command, CancellationToken cancellationToken)
+        [FromBody] LogoutCommand.Command command,
+        CancellationToken cancellationToken)
     {
         command.UserPublicId = UserPublicId;
+        if (string.IsNullOrWhiteSpace(command.RefreshToken))
+        {
+            var refreshTokenFromCookie = Request.Cookies["refresh_token"];
+
+            if (!string.IsNullOrWhiteSpace(refreshTokenFromCookie))
+            {
+                command.RefreshToken = refreshTokenFromCookie;
+            }
+        }
+
         var result = await _mediator.Send(command, cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            ClearAuthenticationCookies();
+        }
+
         return StatusCode(
             (int)result.StatusCode,
             result
@@ -143,24 +169,24 @@ public class AuthenticationController(
     }
 
 
-    [HttpPost("forget-password")]
-    [ProducesResponseType(typeof(BaseResult<ForgotPasswordResponseDto>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> ForgetPassword(
-        [FromBody] ForgotPasswordCommand.Command command, CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(command, cancellationToken);
-        return StatusCode(
-            (int)result.StatusCode,
-            result
-        );
-    }
+        [HttpPost("forgot-password")]
+        [ProducesResponseType(typeof(BaseResult<ForgotPasswordResponseDto>), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+        public async Task<IActionResult> ForgotPassword(
+            [FromBody] ForgotPasswordCommand.Command command, CancellationToken cancellationToken)
+        {
+            var result = await _mediator.Send(command, cancellationToken);
+            return StatusCode(
+                (int)result.StatusCode,
+                result
+            );
+        }
 
 
-    [HttpPost("verify-forget-password")]
+    [HttpPost("verify-forgot-password")]
     [ProducesResponseType(typeof(BaseResult<VerifyPasswordTokenResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> VerifyForgetPasswordToken(
+    public async Task<IActionResult> VerifyForgotPasswordToken(
         [FromBody] VerifyPasswordTokenCommand.Command command, CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(command, cancellationToken);
@@ -171,7 +197,7 @@ public class AuthenticationController(
     [HttpPost("reset-password")]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> ResetForgetPassword(
+    public async Task<IActionResult> ResetForgotPassword(
         [FromBody] ResetPasswordCommand.Command command, CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(command, cancellationToken);

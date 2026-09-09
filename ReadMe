@@ -602,3 +602,23 @@ POST /api/schedule/preview
 ---
 
 **Share this with your Frontend team! 🚀**
+
+
+                 MOVA
+                   │
+           ┌───────┴────────┐
+           │                │
+       MONEY IN          MONEY RULES
+           │                │
+     Virtual Account    Schedule
+           │            Milestone
+           ↓            Target
+        Wallet             │
+           │               ↓
+           └────────→ RELEASE
+                         │
+                         ↓
+                       PAYOUT
+                         │
+                         ↓
+                      BANK

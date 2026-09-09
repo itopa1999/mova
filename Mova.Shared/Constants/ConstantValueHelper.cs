@@ -14,7 +14,7 @@ public static class Roles
 
 public static class OtpPurpose
 {
-    public const string AccountVerification = "ACCOUNT_VERIF-CATION";
+    public const string AccountVerification = "ACCOUNT_VERIFICATION";
 
     public const string PasswordReset =
         "PASSWORD_RESET";

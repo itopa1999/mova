@@ -20,6 +20,7 @@ public sealed class ResendVerificationOtpCommand
     {
         [EmailAddress]
         public string Email { get; init; } = string.Empty;
+        public string Purpose { get; init; } = "account-verification"; // "account-verification" or "password-reset"
     }
 
     public class ResendVerificationOtpResponseDto
@@ -57,7 +58,8 @@ public sealed class ResendVerificationOtpCommand
             using var op = OperationLogger.Start(
                 _logger, 
                 "ResendVerificationOtp",
-                ("Identifier", identifier ?? "unknown"));
+                ("Identifier", identifier ?? "unknown"),
+                ("Purpose", request.Purpose));
 
             if (string.IsNullOrWhiteSpace(request.Email))
             {
@@ -79,26 +81,47 @@ public sealed class ResendVerificationOtpCommand
                     "User not found.");
             }
 
-            var isVerified = await _identityService.IsAccountVerifiedAsync(user.Id);
-            if (isVerified)
+            var otpPurpose = request.Purpose switch
             {
-                op.Fail($"Account already verified for user {user.PublicId}");
-                return new BaseResult<ResendVerificationOtpResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Account is already verified.");
+                "password-reset" => OtpPurpose.PasswordReset,
+                _ => OtpPurpose.AccountVerification
+            };
+
+            if (otpPurpose == OtpPurpose.AccountVerification)
+            {
+                var isVerified = await _identityService.IsAccountVerifiedAsync(user.Id);
+                if (isVerified)
+                {
+                    op.Fail($"Account already verified for user {user.PublicId}");
+                    return new BaseResult<ResendVerificationOtpResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "Account is already verified.");
+                }
             }
 
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
+                var existingOtps = await _unitOfWork.Query<OtpVerification>()
+                    .Where(o => o.UserPublicId == user.PublicId 
+                                && o.Purpose == otpPurpose 
+                                && !o.IsUsed)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var existingOtp in existingOtps)
+                {
+                    existingOtp.IsUsed = true;
+                    _unitOfWork.Update(existingOtp);
+                }
+
                 var otpCode = _otpService.GenerateOtp();
 
                 var otp = new OtpVerification
                 {
                     UserPublicId = user.PublicId,
                     OtpCode = otpCode,
-                    Purpose = OtpPurpose.AccountVerification,
+                    Purpose = otpPurpose,
                     ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
                     IsUsed = false
                 };
@@ -112,9 +135,16 @@ public sealed class ResendVerificationOtpCommand
                     user.FirstName,
                     user.Email,
                     user.PhoneNumber,
-                    otpCode);
+                    otpCode,
+                    otpPurpose);
 
-                op.Success($"OTP resent successfully for user {user.PublicId}");
+
+
+                var message = otpPurpose == OtpPurpose.AccountVerification 
+                    ? "A new verification OTP has been sent to your email and phone."
+                    : "A new password reset OTP has been sent to your email and phone.";
+
+                op.Success($"OTP resent successfully for user {user.PublicId} for purpose: {request.Purpose}");
 
                 return new BaseResult<ResendVerificationOtpResponseDto>(
                     HttpStatusCode.OK,

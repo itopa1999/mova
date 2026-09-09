@@ -16,13 +16,15 @@ public sealed class NotificationQueue : INotificationQueue
         string? firstName,
         string email,
         string? phoneNumber,
-        string otp)
+        string otp,
+        string purpose)
     {
         _backgroundJobClient.Enqueue<BackgroundNotificationJob>(
             job => job.SendOtpEmailAsync(
                 firstName,
                 email,
                 otp,
+                purpose,
                 CancellationToken.None));
 
         if (!string.IsNullOrWhiteSpace(phoneNumber))
@@ -31,6 +33,7 @@ public sealed class NotificationQueue : INotificationQueue
                 job => job.SendOtpSmsAsync(
                     phoneNumber,
                     otp,
+                    purpose,
                     CancellationToken.None));
         }
     }
@@ -55,13 +58,13 @@ public sealed class NotificationQueue : INotificationQueue
                 otp,
                 CancellationToken.None));
 
-        if (!string.IsNullOrWhiteSpace(phoneNumber))
-        {
-            _backgroundJobClient.Enqueue<BackgroundNotificationJob>(
-                job => job.SendOtpSmsAsync(
-                    phoneNumber,
-                    otp,
-                    CancellationToken.None));
-        }
+        // if (!string.IsNullOrWhiteSpace(phoneNumber))
+        // {
+        //     _backgroundJobClient.Enqueue<BackgroundNotificationJob>(
+        //         job => job.SendOtpSmsAsync(
+        //             phoneNumber,
+        //             otp,
+        //             CancellationToken.None));
+        // }
     }
 }
