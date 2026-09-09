@@ -11,6 +11,10 @@ public class Wallet : BaseEntity
 {
     public string UserPublicId { get; set; } = string.Empty;
 
+    public long CategoryId { get; set; }
+
+    public long? BankAccountId { get; set; }
+
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }
@@ -59,5 +63,9 @@ public class Wallet : BaseEntity
 
     public IReadOnlyCollection<LedgerEntry> LedgerEntries =>
         _ledgerEntries.AsReadOnly();
+
+    public WalletCategory Category { get; set; } = null!;
+
+    public BankAccount BankAccount { get; set; } = null!;
 
 }

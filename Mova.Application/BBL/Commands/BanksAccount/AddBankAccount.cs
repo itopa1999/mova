@@ -136,6 +136,7 @@ public sealed class AddBankAccount
                 AccountName = verifiedAccount.AccountName,
                 BankCode = bank.Code,
                 BankName = bank.Name,
+                BankImageUrl = bank.Logo,
                 Status = BankAccountStatus.Active,
                 IsDefault = !hasDefaultAccount,
                 VerifiedAt = DateTimeOffset.UtcNow,

@@ -8,6 +8,7 @@ namespace Mova.Domain.Entities;
 [Table("transactions")]
 public class Transaction : BaseEntity
 {
+    public string UserPublicId { get; set; } = string.Empty;
     public long? WalletId { get; set; }
     
     public string? Title {get; set; }

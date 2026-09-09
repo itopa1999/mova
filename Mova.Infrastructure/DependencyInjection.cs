@@ -24,6 +24,7 @@ using StackExchange.Redis;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Application.Interfaces.ExternalAPI;
 using Mova.Application.Interfaces.Services;
+using Mova.Infrastructure.Persistence.Seeding;
 
 namespace Mova.Infrastructure;
 
@@ -74,6 +75,8 @@ public static class DependencyInjection
 
         services.AddHttpClient<IExternalApiClient, ExternalApiClient>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        services.AddScoped<DatabaseSeeder>();
         
         return services;
     }

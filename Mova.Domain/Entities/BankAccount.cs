@@ -13,6 +13,7 @@ public class BankAccount : BaseEntity
     public string AccountName { get; set; } = string.Empty;
     public string BankCode { get; set; } = string.Empty;
     public string BankName { get; set; } = string.Empty;
+    public string BankImageUrl { get; set; } = string.Empty;
 
     public string? PaystackRecipientCode { get; set; }
 

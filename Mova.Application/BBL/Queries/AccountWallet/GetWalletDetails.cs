@@ -28,6 +28,9 @@ public sealed class WalletDetails
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
         public string Status { get; set; } = string.Empty;
+        public long CategoryId { get; set; }
+        public string CategoryName { get; set; } = string.Empty;
+        public string CategoryIcon { get; set; } = string.Empty;
 
         // Amounts
         public decimal TargetAmount { get; set; }
@@ -140,6 +143,7 @@ public sealed class WalletDetails
                     .Where(w => w.Id == request.WalletId 
                                 && w.UserPublicId == request.UserPublicId)
                     .Include(w => w.Rule)
+                    .Include(w => w.Category)
                     .Include(w => w.ScheduledReleases)
                     .FirstOrDefaultAsync(cancellationToken);
 
@@ -272,6 +276,10 @@ public sealed class WalletDetails
                     Name = wallet.Name,
                     Description = wallet.Description,
                     Status = wallet.Status.ToString(),
+
+                    CategoryId = wallet.CategoryId,
+                    CategoryName = wallet.Category?.Name ?? "Other",
+                    CategoryIcon = wallet.Category?.Icon ?? "FileText",
 
                     // Amounts
                     TargetAmount = wallet.TargetAmount.ToDecimal(),

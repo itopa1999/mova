@@ -19,10 +19,11 @@ public sealed class GetAllBankAccount
 
     public class GetAllBankAccountDto
     {
+        public long Id { get; set; }
         public string AccountNumber { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;
         public string BankName { get; set; } = string.Empty;
-        public bool IsDefault { get; set; }
+        public string BankImageUrl { get; set; } = string.Empty;
     }
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<List<GetAllBankAccountDto>>>
@@ -49,10 +50,11 @@ public sealed class GetAllBankAccount
                 .OrderByDescending(x => x.CreatedAt)
                 .Select(x => new GetAllBankAccountDto
                 {
+                    Id = x.Id,
                     AccountNumber = x.AccountNumber,
                     AccountName = x.AccountName,
                     BankName = x.BankName,
-                    IsDefault = x.IsDefault
+                    BankImageUrl = x.BankImageUrl
                 })
                 .ToListAsync(cancellationToken);
 

@@ -25,6 +25,10 @@ public sealed class CreateWalletCommand
 
         public string? Description { get; set; }
 
+        public long CategoryId { get; set; }
+
+        public long BankAccountId { get; set; }
+
         public decimal TargetAmount { get; set; }
 
         public ReleaseFrequency Frequency { get; set; }
@@ -143,6 +147,54 @@ public sealed class CreateWalletCommand
                     "A wallet with this name already exists.");
             }
 
+            var categoryExists = await _unitOfWork.Query<WalletCategory>()
+                    .AsNoTracking()
+                    .AnyAsync(
+                        x => x.Id == request.CategoryId,
+                        cancellationToken);
+
+            if (!categoryExists)
+            {
+                op.Fail("Invalid wallet category.");
+
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "The selected wallet category does not exist.");
+            }
+
+            var bankAccount = await _unitOfWork.Query<BankAccount>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.Id == request.BankAccountId && x.UserPublicId == request.UserPublicId,
+                    cancellationToken);
+
+            if (bankAccount == null)
+            {
+                op.Fail($"Bank account not found for user: {request.BankAccountId}");
+
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "The selected bank account does not exist or does not belong to you.");
+            }
+
+            if (!bankAccount.ConsentGiven)
+            {
+                op.Fail($"Consent not given for bank account: {request.BankAccountId}");
+
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "You have not given consent for this bank account. Please provide consent first.");
+            }
+
+            if (bankAccount.Status != BankAccountStatus.Active)
+            {
+                op.Fail($"Bank account is not active: {request.BankAccountId} - Status: {bankAccount.Status}");
+
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "The selected bank account is not active. Please verify your bank account first.");
+            }
+            
             var previewResult = await _schedulePreviewService.PreviewScheduleAsync(
                 request.TargetAmount,
                 request.AmountToBeReleased,
@@ -225,6 +277,7 @@ public sealed class CreateWalletCommand
                 var wallet = new Wallet
                 {
                     UserPublicId = request.UserPublicId,
+                    CategoryId = request.CategoryId,
                     Name = walletName,
                     Description = string.IsNullOrWhiteSpace(request.Description)
                         ? null
@@ -242,6 +295,7 @@ public sealed class CreateWalletCommand
 
                 var walletTransaction = new Transaction
                 {
+                    UserPublicId = request.UserPublicId,
                     WalletId = wallet.Id,
                     Title = "Wallet Created",
                     Amount = targetMoney,

@@ -1,6 +1,7 @@
 using DotNetEnv;
 using Mova.Api;
 using Mova.Infrastructure.Identity;
+using Mova.Infrastructure.Persistence.Seeding;
 
 var currentDirectory = Directory.GetCurrentDirectory();
 
@@ -34,6 +35,14 @@ startup.ConfigureServices(builder.Services);
 var app = builder.Build();
 
 await app.Services.SeedIdentityAsync();
+
+using (var scope = app.Services.CreateScope())
+{
+    var seeder = scope.ServiceProvider
+        .GetRequiredService<DatabaseSeeder>();
+
+    await seeder.SeedAsync();
+}
 
 startup.Configure(app);
 

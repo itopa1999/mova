@@ -32,6 +32,9 @@ public sealed class GetAllWallets
     {
         public long WalletId { get; init; }
         public string Name { get; set; } = string.Empty;
+        public long CategoryId { get; init; }
+        public string CategoryName { get; init; } = string.Empty;
+        public string CategoryIcon { get; init; } = string.Empty;
         public decimal TargetAmount { get; set; }
         public decimal LockedAmount { get; set; }
         public decimal ProgressPercentage { get; set; }
@@ -80,6 +83,7 @@ public sealed class GetAllWallets
             {
                 var query = _unitOfWork.Query<Wallet>()
                     .Where(w => w.UserPublicId == request.UserPublicId)
+                    .Include(w => w.Category)
                     .Include(w => w.Rule)
                     .Include(w => w.ScheduledReleases)
                     .AsQueryable();
@@ -142,6 +146,9 @@ public sealed class GetAllWallets
                     {
                         WalletId = w.Id,
                         Name = w.Name,
+                        CategoryId = w.CategoryId,
+                        CategoryName = w.Category?.Name ?? "Other",
+                        CategoryIcon = w.Category?.Icon ?? "FileText",
                         TargetAmount = w.TargetAmount.ToDecimal(),
                         LockedAmount = w.LockedAmount.ToDecimal(),
                         ProgressPercentage = progressPercentage,

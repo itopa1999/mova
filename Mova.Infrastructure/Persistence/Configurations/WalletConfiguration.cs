@@ -16,6 +16,13 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .IsRequired()
             .HasMaxLength(100);
 
+        builder.Property(x => x.CategoryId)
+            .IsRequired()
+            .HasDefaultValue(24);
+
+        builder.Property(x => x.BankAccountId)
+            .IsRequired(false);
+
         builder.Property(x => x.Name)
             .IsRequired()
             .HasMaxLength(150);

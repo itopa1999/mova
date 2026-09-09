@@ -41,7 +41,11 @@ public sealed class HomeQuery
 
     public sealed class Wallets
     {
+        public long Id { get; set; }
         public string WalletName { get; set; } = string.Empty;
+        public long CategoryId { get; set; }
+        public string CategoryName { get; set; } = string.Empty;
+        public string CategoryIcon { get; set; } = string.Empty;
         public decimal TargetAmount { get; set; }
     }
 
@@ -85,8 +89,9 @@ public sealed class HomeQuery
                 var wallets = await _unitOfWork.Query<Wallet>()
                     .Where(w => w.UserPublicId == request.UserPublicId 
                                 && w.Status == WalletStatus.Active)
+                    .Include(w => w.Category)
                     .OrderByDescending(w => w.CreatedAt)
-                    .Take(5)
+                    .Take(6)
                     .ToListAsync(cancellationToken);
 
                 var today = DateTimeOffset.UtcNow.Date;
@@ -119,7 +124,11 @@ public sealed class HomeQuery
 
                 var walletSummaries = wallets.Select(w => new Wallets
                 {
+                    Id = w.Id,
                     WalletName = w.Name,
+                    CategoryId = w.CategoryId,
+                    CategoryName = w.Category?.Name ?? "Other",
+                    CategoryIcon = w.Category?.Icon ?? "FileText",
                     TargetAmount = w.TargetAmount.ToDecimal()
                 }).ToList();
 

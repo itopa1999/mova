@@ -121,7 +121,7 @@ public class WalletController(
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpGet("wallets/{walletId:long}/activities")]
+    [HttpGet("{walletId:long}/activities")]
     [ProducesResponseType(typeof(BaseResult<List<WalletActivityGroupDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetWalletActivities(
@@ -155,6 +155,45 @@ public class WalletController(
         var result = await _mediator.Send(query, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("categories")]
+    [ProducesResponseType(typeof(BaseResult<List<GetWalletCategories.WalletCategoryDto>>),(int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetWalletCategories(
+        CancellationToken cancellationToken)
+    {
+        var query = new GetWalletCategories.Query();
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("{walletId:long}/bank-account")]
+    [ProducesResponseType(
+        typeof(BaseResult<GetWalletBankAccount.BankAccountDto>),
+        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(
+        typeof(BaseResult),
+        (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetWalletBankAccount(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetWalletBankAccount.Query
+        {
+            UserPublicId = UserPublicId,
+            WalletId = walletId
+        };
+
+        var result = await _mediator.Send(
+            query,
+            cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
     }
 
     [HttpPost("preview")]

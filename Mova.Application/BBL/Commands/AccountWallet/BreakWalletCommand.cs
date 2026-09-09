@@ -96,6 +96,7 @@ public sealed class BreakWalletCommand
 
                     var refundTransaction = new Transaction
                     {
+                        UserPublicId = request.UserPublicId,
                         WalletId = wallet.Id,
                         Title = "Wallet Broken",
                         Amount = amountToReturn,

@@ -91,6 +91,7 @@ public sealed class AddFundsCommand
                 var amount = Money.FromNaira(request.Amount);
                 var transaction = new Transaction
                 {
+                    UserPublicId = request.UserPublicId,
                     WalletId = null,
                     Title = "Manual Wallet Funding",
                     Amount = amount,

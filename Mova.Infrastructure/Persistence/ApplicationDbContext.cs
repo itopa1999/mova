@@ -31,6 +31,7 @@ public sealed class ApplicationDbContext
     public DbSet<BankAccount> BankAccounts => Set<BankAccount>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<Payout> Payouts => Set<Payout>();
+    public DbSet<WalletCategory> WalletCategories => Set<WalletCategory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
