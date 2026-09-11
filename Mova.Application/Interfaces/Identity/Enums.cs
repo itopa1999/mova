@@ -10,7 +10,8 @@ public sealed record UserIdentityDto(
     string LastName,
     string? Email,
     string? PhoneNumber,
-    Money Balance
+    Money Balance,
+    string TransactionPinHash
     )
 {
     public string FullName =>

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
 using Mova.Application.BBL.Commands.Authentication;
+using Mova.Application.BBL.Queries.Profile;
 using Mova.Infrastructure.Authentication.Jwt;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
@@ -15,6 +16,7 @@ using static Mova.Application.BBL.Commands.Authentication.RegisterCommand;
 using static Mova.Application.BBL.Commands.Authentication.ResendVerificationOtpCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyAccountCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyPasswordTokenCommand;
+using static Mova.Application.BBL.Queries.Profile.GetProfile;
 
 namespace Mova.Api.Controllers.V1;
 
@@ -268,5 +270,24 @@ public class AuthenticationController(
 
         Response.Cookies.Append("access_token", string.Empty, cookieOptions);
         Response.Cookies.Append("refresh_token", string.Empty, cookieOptions);
+    }
+
+    [HttpGet("profile")]
+    [Authorize]
+    [ProducesResponseType(typeof(BaseResult<GetProfileDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetProfile(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetProfile.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
     }
 }

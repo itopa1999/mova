@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mova.Api.Configurations;
 using Mova.Application.BBL.Commands.TransactionPin;
+using Mova.Application.BBL.Queries.TransactionPin;
 using Mova.Shared.Common;
 
 namespace Mova.Api.Controllers.V1;
@@ -53,6 +54,23 @@ public class TransactionPinController(
         command.UserPublicId = UserPublicId;
 
         var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+
+    }
+
+    [HttpGet("has-pin-setup")]
+    public async Task<IActionResult> CheckIfPinSet(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetIfPinIsSetQuery.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
 
         return StatusCode(
             (int)result.StatusCode,

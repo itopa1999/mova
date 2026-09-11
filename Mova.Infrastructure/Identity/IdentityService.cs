@@ -99,7 +99,8 @@ public sealed class IdentityService : IIdentityService
                 x.LastName,
                 x.Email,
                 x.PhoneNumber,
-                x.Balance))
+                x.Balance,
+                x.TransactionPinHash ?? string.Empty))
             .FirstOrDefaultAsync(cancellationToken);
     }
 

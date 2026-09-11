@@ -2,17 +2,22 @@ using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
 using Mova.Application.BBL.Commands.AccountWallet;
 using Mova.Application.BBL.Commands.BanksAccount;
 using Mova.Application.BBL.Queries.BanksAccount;
+using Mova.Infrastructure.ExternalAPI;
 using Mova.Shared.Common;
 using static Mova.Application.BBL.Commands.AccountWallet.LinkAccountToBank;
 using static Mova.Application.BBL.Commands.BanksAccount.AddBankAccount;
+using static Mova.Application.BBL.Commands.BanksAccount.FundAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.VerifyBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.DepositTransaction;
 using static Mova.Application.BBL.Queries.BanksAccount.GetAllBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.GetBanks;
+using static Mova.Application.BBL.Queries.BanksAccount.PaymentCallback;
 
 namespace Mova.Api.Controllers.V1;
 
@@ -21,9 +26,11 @@ namespace Mova.Api.Controllers.V1;
 [Route("api/v1/bank-account")]
 [ApiExplorerSettings(GroupName = "v1")]
 public class BankAccountController(
-    IMediator mediator) : BaseController
+    IMediator mediator,
+    IOptions<ExternalApiSettings> externalApiSettings) : BaseController
 {
     private readonly IMediator _mediator = mediator;
+    private readonly ExternalApiSettings _externalApiSettings = externalApiSettings.Value;
 
     [HttpGet("banks")]
     [ProducesResponseType(typeof(BaseResult<List<GetBanksDto>>), (int)HttpStatusCode.OK)]
@@ -132,14 +139,78 @@ public class BankAccountController(
     public async Task<IActionResult> GetUnassignedDepositTransactions(
         CancellationToken cancellationToken)
     {
-        var query = new DepositTransaction.Query();
-
         var result = await _mediator.Send(
-            query,
+            new DepositTransaction.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
             cancellationToken);
 
         return StatusCode(
             (int)result.StatusCode,
             result);
+    }
+
+    [HttpPost("fund-account")]
+    [ProducesResponseType(typeof(BaseResult<FundAccountDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> FundAccount(
+        [FromBody] FundAccount.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        var result = await _mediator.Send(command, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("payment/callback")]
+    [AllowAnonymous]
+    [ProducesResponseType((int)HttpStatusCode.Redirect)]
+    public async Task<IActionResult> PaymentCallback(
+        [FromQuery] string? reference,
+        [FromQuery(Name = "tx_ref")] string? txRef,
+        [FromQuery(Name = "paymentReference")] string? monnifyReference,
+        CancellationToken cancellationToken)
+    {
+        var paymentReference =
+        !string.IsNullOrWhiteSpace(reference)
+            ? reference
+            : !string.IsNullOrWhiteSpace(txRef)
+                ? txRef
+                : monnifyReference;
+
+        var result = await _mediator.Send(
+            new PaymentCallback.Query
+            {
+                Reference = paymentReference
+            },
+            cancellationToken);
+
+        var frontendUrl = _externalApiSettings.FrontendBaseUrl;
+
+        if (result.Data is null)
+        {
+            var failedRedirectUrl = QueryHelpers.AddQueryString(
+                $"{frontendUrl}/payment/confirmation",
+                new Dictionary<string, string?>
+                {
+                    ["reference"] = reference,
+                    ["status"] = "NotFound"
+                });
+
+            return Redirect(failedRedirectUrl);
+        }
+
+        var redirectUrl = QueryHelpers.AddQueryString(
+            $"{frontendUrl}/payment/confirmation",
+            new Dictionary<string, string?>
+            {
+                ["reference"] = result.Data.Reference,
+                ["amount"] = result.Data.Amount.ToString(),
+                ["createdAt"] = result.Data.CreatedAt?.ToString("O"),
+                ["status"] = result.Data.Status
+            });
+
+        return Redirect(redirectUrl);
     }
 }

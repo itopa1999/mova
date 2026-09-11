@@ -96,20 +96,20 @@ public sealed class CreateWalletCommand
 
             var walletName = request.Name.Trim();
 
-            if (request.TargetAmount <= 0)
+            if (request.TargetAmount < 2000)
             {
-                op.Fail("Target amount must be greater than zero.");
+                op.Fail("Target amount must be at least ₦2,000.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "Target amount must be greater than zero.");
+                    "Target amount must be at least ₦2,000.");
             }
 
-            if (request.AmountToBeReleased <= 0)
+            if (request.AmountToBeReleased < 100)
             {
                 op.Fail("Release amount must be greater than zero.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "Release amount must be greater than zero.");
+                    "Release amount must be at least ₦100");
             }
 
             if (request.AmountToBeReleased > request.TargetAmount)
@@ -278,6 +278,7 @@ public sealed class CreateWalletCommand
                 {
                     UserPublicId = request.UserPublicId,
                     CategoryId = request.CategoryId,
+                    BankAccountId = request.BankAccountId,
                     Name = walletName,
                     Description = string.IsNullOrWhiteSpace(request.Description)
                         ? null
@@ -287,7 +288,9 @@ public sealed class CreateWalletCommand
                     AvailableAmount = Money.FromNaira(0),
                     LockedAmount = targetMoney,
                     UnusedAmount = Money.FromNaira(0),
-                    Status = WalletStatus.Active,
+                    Status = request.BankAccountId <= 0
+                            ? WalletStatus.Paused
+                            : WalletStatus.Active,
                 };
 
                 await _unitOfWork.AddAsync(wallet, cancellationToken);

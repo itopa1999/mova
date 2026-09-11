@@ -14,3 +14,13 @@ public sealed class ResolveBankAccountResponse
     public string AccountNumber { get; set; } = string.Empty;
     public string AccountName { get; set; } = string.Empty;
 }
+
+
+public sealed class PaymentInitializationResultDto
+{
+    public bool Success { get; set; }
+
+    public string? Message { get; set; }
+
+    public string? AuthorizationUrl { get; set; }
+}

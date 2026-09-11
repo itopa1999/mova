@@ -7,7 +7,7 @@ using Mova.Application.BBL.Commands.AccountWallet;
 using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Shared.Common;
-using static Mova.Application.BBL.Commands.AccountWallet.AddFundsCommand;
+using static Mova.Application.BBL.Commands.AccountWallet.CreateWalletCommand;
 using static Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletActivities;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletAnalytics;
@@ -27,7 +27,7 @@ public class WalletController(
     private readonly IMediator _mediator = mediator;
 
     [HttpPost("create")]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult<CreateWalletResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateWallet([FromBody] CreateWalletCommand.Command command, CancellationToken cancellationToken)
     {
@@ -38,18 +38,6 @@ public class WalletController(
         return StatusCode(
             (int)result.StatusCode,
             result);
-    }
-
-    [HttpPost("add-funds")]
-    [ProducesResponseType(typeof(BaseResult<AddFundsCommandResponseDto>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> AddFunds(
-        [FromBody] AddFundsCommand.Command command,
-        CancellationToken cancellationToken)
-    {
-        command.UserPublicId = UserPublicId ?? string.Empty;
-        var result = await _mediator.Send(command, cancellationToken);
-        return StatusCode((int)result.StatusCode, result);
     }
 
     [HttpPost("{walletId:long}/relock-unused")]

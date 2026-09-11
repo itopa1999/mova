@@ -5,4 +5,10 @@ public interface IExternalApiClient
         string url,
         IDictionary<string, string>? headers = null,
         CancellationToken cancellationToken = default);
+
+    Task<TResponse?> PostAsync<TRequest, TResponse>(
+        string url,
+        TRequest payload,
+        IDictionary<string, string>? headers = null,
+        CancellationToken cancellationToken = default);
 }

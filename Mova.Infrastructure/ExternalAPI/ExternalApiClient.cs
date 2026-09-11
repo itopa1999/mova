@@ -33,17 +33,44 @@ public sealed class ExternalApiClient(
 
         var json = await response.Content.ReadAsStringAsync(
             cancellationToken);
-
-        Console.WriteLine("========================================");
-        Console.WriteLine("EXTERNAL API RESPONSE");
-        Console.WriteLine($"URL: {url}");
-        Console.WriteLine($"STATUS: {(int)response.StatusCode}");
-        Console.WriteLine(json);
-        Console.WriteLine("========================================");
-
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<T>(
+            cancellationToken);
+    }
+
+    public async Task<TResponse?> PostAsync<TRequest, TResponse>(
+        string url,
+        TRequest payload,
+        IDictionary<string, string>? headers = null,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            url)
+        {
+            Content = JsonContent.Create(payload)
+        };
+
+        if (headers is not null)
+        {
+            foreach (var header in headers)
+            {
+                request.Headers.TryAddWithoutValidation(
+                    header.Key,
+                    header.Value);
+            }
+        }
+
+        var response = await _httpClient.SendAsync(
+            request,
+            cancellationToken);
+
+        var json = await response.Content.ReadAsStringAsync(
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<TResponse>(
             cancellationToken);
     }
 }

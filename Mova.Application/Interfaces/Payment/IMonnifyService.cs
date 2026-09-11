@@ -1,11 +1,7 @@
 namespace Mova.Application.Interfaces.Payment;
 
-public interface IFlutterwaveService
+public interface IMonnifyService
 {
-    Task<bool> VerifyWebhookSignatureAsync(
-        byte[] rawBody,
-        string signature);
-
     Task<PaymentInitializationResultDto> InitializePaymentAsync(
         string email,
         decimal amount,

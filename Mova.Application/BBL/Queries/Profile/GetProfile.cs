@@ -22,6 +22,7 @@ public sealed class GetProfile
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
+        public bool HasPinSet { get; set; }
     }
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetProfileDto>>
@@ -64,7 +65,8 @@ public sealed class GetProfile
                 OtherName = user.OtherNames ?? string.Empty,
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
-                Phone = user.PhoneNumber ?? string.Empty
+                Phone = user.PhoneNumber ?? string.Empty,
+                HasPinSet=!string.IsNullOrWhiteSpace(user.TransactionPinHash)
             };
 
             return new BaseResult<GetProfileDto>(
