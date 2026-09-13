@@ -213,4 +213,23 @@ public class WalletController(
 
         return StatusCode((int)result.StatusCode, result);
     }
+
+    [HttpPut("{walletId:long}/toggle-status")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> ToggleWalletStatus(
+        [FromRoute] long walletId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new ToggleWalletStatusCommand.Command
+            {
+                UserPublicId = UserPublicId,
+                WalletId = walletId,
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
 }

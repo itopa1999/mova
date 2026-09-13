@@ -8,24 +8,28 @@ namespace Mova.Domain.Entities;
 [Table("payouts")]
 public class Payout : BaseEntity
 {
-    public string UserPublicId { get; private set; } = null!;
-    public string WalletId { get; private set; } = null!;
-    public string BankAccountId { get; private set; } = null!;
+    public string UserPublicId { get; set; } = null!;
+    public long WalletId { get; set; }
+    public long BankAccountId { get; set; }
 
-    public Money Amount { get; private set; }
-    public Money Fee { get; private set; }
-    public Money NetAmount { get; private set; }
+    public Money Amount { get; set; }
+    public Money Fee { get; set; }
+    public Money NetAmount { get; set; }
 
-    public string Reference { get; private set; } = null!;
-    public string? Provider { get; private set; }
-    public string? ProviderReference { get; private set; }
+    public string Reference { get; set; } = null!;
+    public string? Provider { get; set; }
+    public string? ProviderReference { get; set; }
 
 
-    public PayoutStatus Status { get; private set; }
+    public PayoutStatus Status { get; set; }
 
-    public DateTime? InitiatedAt { get; private set; }
-    public DateTime? CompletedAt { get; private set; }
-    public DateTime? FailedAt { get; private set; }
+    public DateTimeOffset? InitiatedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTimeOffset? FailedAt { get; set; }
 
-    public string? FailureReason { get; private set; }
+    public string? FailureReason { get; set; }
+
+    public Wallet Wallet { get; set; } = null!;
+
+    public BankAccount BankAccount { get; set; } = null!;
 }

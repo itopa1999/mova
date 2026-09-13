@@ -97,7 +97,7 @@ public class SchedulePreviewService : ISchedulePreviewService
             PropertyNameCaseInsensitive = true
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-        
+
         // 2. ONCE specific validations
         if (frequencyType == ReleaseFrequency.Once)
         {
@@ -110,7 +110,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("OnceDate is required for Once frequency");
                 return result;
             }
-            
+
             // Check if OnceDate is in the past
             if (onceConfig.OnceDate < today)
             {
@@ -119,7 +119,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add($"OnceDate ({onceConfig.OnceDate:MMMM d, yyyy h:mm tt}) cannot be in the past. Please select a future date.");
                 return result;
             }
-            
+
             // Check if startDate > OnceDate
             if (startDate > onceConfig.OnceDate)
             {
@@ -128,7 +128,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add($"Start date ({startDate:MMMM d, yyyy h:mm tt}) cannot be greater than OnceDate ({onceConfig.OnceDate:MMMM d, yyyy h:mm tt})");
                 return result;
             }
-            
+
             // Check if release amount equals target amount
             if (releaseAmount != targetAmount)
             {
@@ -238,7 +238,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("Invalid Quarterly configuration");
                 return result;
             }
-            
+
             // Validate Months
             if (quarterlyConfig.Months == null || !quarterlyConfig.Months.Any())
             {
@@ -247,7 +247,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("At least one month must be selected for Quarterly frequency");
                 return result;
             }
-            
+
             // Validate Months values (1-12)
             if (quarterlyConfig.Months.Any(m => m < 1 || m > 12))
             {
@@ -256,7 +256,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("Months must contain values between 1 (January) and 12 (December)");
                 return result;
             }
-            
+
             // Validate DaysOfMonth
             if (quarterlyConfig.DaysOfMonth == null || !quarterlyConfig.DaysOfMonth.Any())
             {
@@ -265,7 +265,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("At least one day must be selected in DaysOfMonth for Quarterly frequency");
                 return result;
             }
-            
+
             // Validate DaysOfMonth values (1-31)
             if (quarterlyConfig.DaysOfMonth.Any(d => d < 1 || d > 31))
             {
@@ -297,7 +297,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("Invalid Yearly configuration");
                 return result;
             }
-            
+
             // Validate Months
             if (yearlyConfig.Months == null || !yearlyConfig.Months.Any())
             {
@@ -306,7 +306,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("At least one month must be selected for Yearly frequency");
                 return result;
             }
-            
+
             // Validate Months values (1-12)
             if (yearlyConfig.Months.Any(m => m < 1 || m > 12))
             {
@@ -315,7 +315,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("Months must contain values between 1 (January) and 12 (December)");
                 return result;
             }
-            
+
             // Validate DaysOfMonth
             if (yearlyConfig.DaysOfMonth == null || !yearlyConfig.DaysOfMonth.Any())
             {
@@ -324,13 +324,52 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("At least one day must be selected in DaysOfMonth for Yearly frequency");
                 return result;
             }
-            
+
             // Validate DaysOfMonth values (1-31)
             if (yearlyConfig.DaysOfMonth.Any(d => d < 1 || d > 31))
             {
                 result.IsSuccess = false;
                 result.Description = "Invalid configuration";
                 result.Errors.Add("DaysOfMonth must contain values between 1 and 31");
+                return result;
+            }
+        }
+
+        // 8. HOURLY specific validations
+        if (frequencyType == ReleaseFrequency.Hourly)
+        {
+            // Check if startDate < Today
+            if (startDate < today)
+            {
+                result.IsSuccess = false;
+                result.Description = "Invalid configuration";
+                result.Errors.Add($"Start date ({startDate:MMMM d, yyyy h:mm tt}) cannot be lesser than Today ({today:MMMM d, yyyy h:mm tt})");
+                return result;
+            }
+
+            // Validate Hourly config
+            var hourlyConfig = JsonSerializer.Deserialize<HourlyConfig>(frequencyConfig, options);
+            if (hourlyConfig == null)
+            {
+                result.IsSuccess = false;
+                result.Description = "Invalid configuration";
+                result.Errors.Add("Invalid Hourly configuration");
+                return result;
+            }
+
+            if (hourlyConfig.IntervalHours < 1)
+            {
+                result.IsSuccess = false;
+                result.Description = "Invalid configuration";
+                result.Errors.Add("IntervalHours must be at least 1");
+                return result;
+            }
+
+            if (hourlyConfig.IntervalHours > 24)
+            {
+                result.IsSuccess = false;
+                result.Description = "Invalid configuration";
+                result.Errors.Add("IntervalHours cannot exceed 24. Use Daily for longer intervals.");
                 return result;
             }
         }
@@ -354,6 +393,7 @@ public class SchedulePreviewService : ISchedulePreviewService
             // 6. Deserialize config based on frequency type
             var config = FrequencyConfigHelper.DeserializeConfig(frequencyConfig, frequencyType);
 
+            // Time is required for all frequency types (Hourly included)
             if (config == null || string.IsNullOrEmpty(config.Time))
             {
                 result.IsSuccess = false;
@@ -370,7 +410,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 result.Errors.Add("Time must be in HH:mm format (e.g., 09:30, 14:45) with hours 00-23 and minutes 00-59");
                 return result;
             }
-            
+
             // 7. Calculate releases
             var regularReleases = (int)Math.Floor(targetAmount / releaseAmount);
             var regularTotal = regularReleases * releaseAmount;
@@ -478,6 +518,10 @@ public class SchedulePreviewService : ISchedulePreviewService
             case ReleaseFrequency.Custom:
                 generatedDates = GenerateCustomDates(config as CustomConfig, startDate, totalReleases, maxReleases);
                 break;
+
+            case ReleaseFrequency.Hourly:
+                generatedDates = GenerateHourlyDates(config as HourlyConfig, startDate, totalReleases, maxReleases);
+                break;
         }
 
         // Build release previews with amounts
@@ -486,7 +530,7 @@ public class SchedulePreviewService : ISchedulePreviewService
         {
             var isLastRelease = (i == generatedDates.Count - 1);
             var amount = isLastRelease ? finalAmount : regularAmount;
-            
+
             if (frequencyType == ReleaseFrequency.Once)
             {
                 amount = finalAmount;
@@ -518,7 +562,7 @@ public class SchedulePreviewService : ISchedulePreviewService
         {
             // Get time from config (default to 00:00 if not provided)
             var timeString = config.Time ?? "00:00";
-            
+
             // Apply time to the date
             var releaseDate = FrequencyConfigHelper.ApplyTime(config.OnceDate, timeString);
             dates.Add(releaseDate);
@@ -538,10 +582,10 @@ public class SchedulePreviewService : ISchedulePreviewService
 
         // If DaysOfWeek is empty, treat as every day
         var daysOfWeek = config.DaysOfWeek.Any() ? config.DaysOfWeek : new List<int> { 1, 2, 3, 4, 5, 6, 7 };
-        
+
         // Get time from config (default to 00:00 if not provided)
         var timeString = config.Time ?? "00:00";
-        
+
         var currentDate = startDate.Date;
         var releasesAdded = 0;
         var daysChecked = 0;
@@ -580,10 +624,10 @@ public class SchedulePreviewService : ISchedulePreviewService
 
         // Sort days of week for consistent ordering
         var sortedDays = config.DaysOfWeek.OrderBy(d => d).ToList();
-        
+
         // Get time from config (default to 00:00 if not provided)
         var timeString = config.Time ?? "00:00";
-        
+
         var currentDate = startDate.Date;
         var releasesAdded = 0;
         var daysChecked = 0;
@@ -622,7 +666,7 @@ public class SchedulePreviewService : ISchedulePreviewService
 
         // Get time from config (default to 00:00 if not provided)
         var timeString = config.Time ?? "00:00";
-        
+
         var currentDate = startDate.Date;
         var releasesAdded = 0;
         var monthsChecked = 0;
@@ -635,7 +679,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                 // Release on last day of month
                 var lastDay = DateTime.DaysInMonth(currentDate.Year, currentDate.Month);
                 var releaseDate = new DateTimeOffset(currentDate.Year, currentDate.Month, lastDay, 0, 0, 0, TimeSpan.Zero);
-                
+
                 // Apply time
                 releaseDate = FrequencyConfigHelper.ApplyTime(releaseDate, timeString);
 
@@ -656,7 +700,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                     var maxDay = DateTime.DaysInMonth(currentDate.Year, currentDate.Month);
                     var actualDay = Math.Min(day, maxDay);
                     var releaseDate = new DateTimeOffset(currentDate.Year, currentDate.Month, actualDay, 0, 0, 0, TimeSpan.Zero);
-                    
+
                     // Apply time
                     releaseDate = FrequencyConfigHelper.ApplyTime(releaseDate, timeString);
 
@@ -693,11 +737,11 @@ public class SchedulePreviewService : ISchedulePreviewService
         if (config.DaysOfMonth == null || !config.DaysOfMonth.Any())
             return dates;
 
-         var sortedDays = config.DaysOfMonth.OrderBy(d => d).ToList();
+        var sortedDays = config.DaysOfMonth.OrderBy(d => d).ToList();
 
         // Get time from config (default to 00:00 if not provided)
         var timeString = config.Time ?? "00:00";
-        
+
         var currentDate = startDate.Date;
         var releasesAdded = 0;
         var monthsChecked = 0;
@@ -715,7 +759,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                     var maxDay = DateTime.DaysInMonth(currentDate.Year, currentDate.Month);
                     var actualDay = Math.Min(day, maxDay);
                     var releaseDate = new DateTimeOffset(currentDate.Year, currentDate.Month, actualDay, 0, 0, 0, TimeSpan.Zero);
-                    
+
                     // Apply time
                     releaseDate = FrequencyConfigHelper.ApplyTime(releaseDate, timeString);
 
@@ -755,7 +799,7 @@ public class SchedulePreviewService : ISchedulePreviewService
 
         // Get time from config (default to 00:00 if not provided)
         var timeString = config.Time ?? "00:00";
-        
+
         var currentYear = startDate.Year;
         var releasesAdded = 0;
         var yearsChecked = 0;
@@ -767,7 +811,7 @@ public class SchedulePreviewService : ISchedulePreviewService
             {
                 if (releasesAdded >= totalReleases || releasesAdded >= maxReleases)
                     break;
-                
+
                 var yearToProcess = currentYear;
 
                 if (yearToProcess < startDate.Year)
@@ -781,7 +825,7 @@ public class SchedulePreviewService : ISchedulePreviewService
                     var maxDay = DateTime.DaysInMonth(yearToProcess, month);
                     var actualDay = Math.Min(day, maxDay);
                     var releaseDate = new DateTimeOffset(yearToProcess, month, actualDay, 0, 0, 0, TimeSpan.Zero);
-                    
+
                     // Apply time
                     releaseDate = FrequencyConfigHelper.ApplyTime(releaseDate, timeString);
 
@@ -811,7 +855,7 @@ public class SchedulePreviewService : ISchedulePreviewService
 
         // Get time from config (default to 00:00 if not provided)
         var timeString = config.Time ?? "00:00";
-        
+
         var currentDate = startDate.Date;
         var releasesAdded = 0;
 
@@ -821,8 +865,49 @@ public class SchedulePreviewService : ISchedulePreviewService
             var releaseDate = FrequencyConfigHelper.ApplyTime(currentDate, timeString);
             dates.Add(releaseDate);
             releasesAdded++;
-            
+
             currentDate = currentDate.AddDays(config.IntervalDays);
+        }
+
+        return dates;
+    }
+
+    private List<DateTimeOffset> GenerateHourlyDates(
+        HourlyConfig config,
+        DateTimeOffset startDate,
+        int totalReleases,
+        int maxReleases)
+    {
+        var dates = new List<DateTimeOffset>();
+        if (config == null || config.IntervalHours < 1)
+            return dates;
+
+        // Anchor on the configured time-of-day, on the same offset as `startDate`.
+        var anchorTime = FrequencyConfigHelper.ParseTime(
+            string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time);
+
+        var baseAnchor = new DateTimeOffset(
+            startDate.Year, startDate.Month, startDate.Day,
+            anchorTime.Hours, anchorTime.Minutes, 0,
+            startDate.Offset);
+
+        var step = TimeSpan.FromHours(config.IntervalHours);
+
+        // If the anchor for today is already at/before startDate, roll forward.
+        var currentDate = baseAnchor;
+        if (currentDate <= startDate)
+        {
+            var elapsed = startDate - baseAnchor;
+            var steps = Math.Floor(elapsed.TotalHours / config.IntervalHours) + 1;
+            currentDate = baseAnchor.AddHours(steps * config.IntervalHours);
+        }
+
+        var releasesAdded = 0;
+        while (releasesAdded < totalReleases && releasesAdded < maxReleases)
+        {
+            dates.Add(currentDate);
+            releasesAdded++;
+            currentDate = currentDate.AddHours(config.IntervalHours);
         }
 
         return dates;
@@ -834,10 +919,10 @@ public class SchedulePreviewService : ISchedulePreviewService
     {
         if (string.IsNullOrEmpty(time))
             return false;
-        
+
         if (!TimeSpan.TryParse(time, out var parsedTime))
             return false;
-        
+
         return parsedTime.TotalHours >= 0 && parsedTime.TotalHours < 24;
     }
 }

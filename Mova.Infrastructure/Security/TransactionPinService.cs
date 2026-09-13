@@ -57,6 +57,7 @@ public class TransactionPinService : ITransactionPinService
 
         user.TransactionPinHash =
             _passwordHasher.HashPassword(user, pin);
+        user.TransactionPinSetAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -111,6 +112,7 @@ public class TransactionPinService : ITransactionPinService
 
         user.TransactionPinHash =
             _passwordHasher.HashPassword(user, newPin);
+        user.TransactionPinChangedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
     }
@@ -128,5 +130,21 @@ public class TransactionPinService : ITransactionPinService
             throw new ArgumentException(
                 "PIN must contain exactly 6 digits.");
         }
+    }
+
+    public async Task<bool> ResetPinAsync(string UserPublicId, CancellationToken cancellationToken = default)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.PublicId == UserPublicId,
+                cancellationToken);
+        if (user is null) return false;
+
+        user.TransactionPinHash = null;
+        user.TransactionPinResetAt = DateTimeOffset.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return true;
     }
 }

@@ -21,7 +21,7 @@ public sealed class PayoutConfiguration : IEntityTypeConfiguration<Payout>
             .HasConversion<int>();
 
         builder.Property(x => x.Provider)
-            .IsRequired()
+            .IsRequired(false)
             .HasMaxLength(50);
 
         builder.Property(x => x.ProviderReference)

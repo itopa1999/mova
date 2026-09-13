@@ -38,6 +38,7 @@ public static class FrequencyConfigHelper
                 "months" => "months",
                 "daysofmonth" => "daysOfMonth",
                 "intervaldays" => "intervalDays",
+                "intervalhours" => "intervalHours",
                 _ => property.Key
             };
 
@@ -76,6 +77,7 @@ public static class FrequencyConfigHelper
             ReleaseFrequency.Quarterly => JsonSerializer.Deserialize<QuarterlyConfig>(json, options) ?? new QuarterlyConfig(),
             ReleaseFrequency.Yearly => JsonSerializer.Deserialize<YearlyConfig>(json, options) ?? new YearlyConfig(),
             ReleaseFrequency.Custom => JsonSerializer.Deserialize<CustomConfig>(json, options) ?? new CustomConfig(),
+            ReleaseFrequency.Hourly => JsonSerializer.Deserialize<HourlyConfig>(json, options) ?? new HourlyConfig(),
             _ => throw new ArgumentException($"Unsupported frequency type: {type}")
         };
     }
@@ -94,6 +96,7 @@ public static class FrequencyConfigHelper
             ReleaseFrequency.Quarterly => GetQuarterlyDescription((QuarterlyConfig)config),
             ReleaseFrequency.Yearly => GetYearlyDescription((YearlyConfig)config),
             ReleaseFrequency.Custom => $"Every {((CustomConfig)config).IntervalDays} days",
+            ReleaseFrequency.Hourly => GetHourlyDescription((HourlyConfig)config),
             _ => "Unknown schedule"
         };
     }
@@ -159,7 +162,14 @@ public static class FrequencyConfigHelper
         var dayNames = string.Join(", ", config.DaysOfMonth.Select(d => OrdinalSuffix(d)));
         
         return $"Yearly on {string.Join(", ", monthNames)} {dayNames} at {config.Time}";
-    }    
+    }
+
+    private static string GetHourlyDescription(HourlyConfig config)
+    {
+        return config.IntervalHours == 1
+            ? "Every hour"
+            : $"Every {config.IntervalHours} hours";
+    }
     
     private static string DayOfWeekToString(int day)
     {

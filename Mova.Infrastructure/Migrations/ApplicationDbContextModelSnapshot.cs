@@ -548,11 +548,10 @@ namespace Mova.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<string>("BankAccountId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<long>("BankAccountId")
+                        .HasColumnType("bigint");
 
-                    b.Property<DateTime?>("CompletedAt")
+                    b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -569,14 +568,14 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<DateTime?>("FailedAt")
+                    b.Property<DateTimeOffset?>("FailedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("FailureReason")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<DateTime?>("InitiatedAt")
+                    b.Property<DateTimeOffset?>("InitiatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
@@ -590,7 +589,6 @@ namespace Mova.Infrastructure.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("Provider")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
@@ -610,9 +608,8 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<string>("WalletId")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<long>("WalletId")
+                        .HasColumnType("bigint");
 
                     b.ComplexProperty<Dictionary<string, object>>("Amount", "Mova.Domain.Entities.Payout.Amount#Money", b1 =>
                         {
@@ -654,6 +651,8 @@ namespace Mova.Infrastructure.Migrations
                         });
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId");
 
                     b.HasIndex("ProviderReference")
                         .IsUnique();
@@ -1343,8 +1342,17 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("TransactionPinChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("TransactionPinHash")
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("TransactionPinResetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("TransactionPinSetAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
@@ -1450,6 +1458,25 @@ namespace Mova.Infrastructure.Migrations
                         .WithMany("LedgerEntries")
                         .HasForeignKey("WalletId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Mova.Domain.Entities.Payout", b =>
+                {
+                    b.HasOne("Mova.Domain.Entities.BankAccount", "BankAccount")
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Mova.Domain.Entities.Wallet", "Wallet")
+                        .WithMany()
+                        .HasForeignKey("WalletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BankAccount");
+
+                    b.Navigation("Wallet");
                 });
 
             modelBuilder.Entity("Mova.Domain.Entities.ScheduledRelease", b =>

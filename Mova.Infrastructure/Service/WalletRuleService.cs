@@ -30,6 +30,7 @@ public sealed class WalletRuleService : IWalletRuleService
             ReleaseFrequency.Quarterly => NextQuarterly(configJson, options, after),
             ReleaseFrequency.Yearly => NextYearly(configJson, options, after),
             ReleaseFrequency.Custom => NextCustom(configJson, options, after),
+            ReleaseFrequency.Hourly => NextHourly(configJson, options, after),
             _ => null
         };
 
@@ -171,6 +172,36 @@ public sealed class WalletRuleService : IWalletRuleService
 
         var candidateDate = after.Date.AddDays(config.IntervalDays);
         return ApplyTime(candidateDate, config.Time, after);
+    }
+
+    private static DateTimeOffset? NextHourly(string json, JsonSerializerOptions options, DateTimeOffset after)
+    {
+        var config = JsonSerializer.Deserialize<HourlyConfig>(json, options);
+        if (config is null || config.IntervalHours < 1)
+            return null;
+
+        // Anchor on the configured time-of-day, on the same offset as `after`.
+        var anchorTime = FrequencyConfigHelper.ParseTime(
+            string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time);
+
+        var baseAnchor = new DateTimeOffset(
+            after.Year, after.Month, after.Day,
+            anchorTime.Hours, anchorTime.Minutes, 0,
+            after.Offset);
+
+        var step = TimeSpan.FromHours(config.IntervalHours);
+
+        // If the anchor for today is already in the past, roll forward by whole steps
+        // until we're strictly after `after`.
+        var candidate = baseAnchor;
+        if (candidate <= after)
+        {
+            var elapsed = after - baseAnchor;
+            var steps = Math.Floor(elapsed.TotalHours / config.IntervalHours) + 1;
+            candidate = baseAnchor.AddHours(steps * config.IntervalHours);
+        }
+
+        return candidate > after ? candidate : null;
     }
 
     private static DateTimeOffset? ApplyTime(DateTimeOffset date, string time, DateTimeOffset after)

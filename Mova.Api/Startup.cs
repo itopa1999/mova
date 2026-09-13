@@ -183,10 +183,10 @@ public class Startup(IConfiguration configuration)
         var recurringJobManager = app.Services
             .GetRequiredService<IRecurringJobManager>();
 
-        // recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
-        //     "process-scheduled-releases",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.Minutely);
+        recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
+            "process-scheduled-releases",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.Minutely);
 
         app.UseHangfireDashboard("/hangfire");
 

@@ -26,5 +26,14 @@ public class User : IdentityUser<long>
             .Where(value => !string.IsNullOrWhiteSpace(value)));
             
     public string? TransactionPinHash { get; set; }
+
+    public DateTimeOffset? TransactionPinSetAt { get; set; }
+
+    public DateTimeOffset? TransactionPinResetAt { get; set; }
+
+    public DateTimeOffset? TransactionPinChangedAt { get; set; }
+
+    
+
     public Money Balance { get; set; } = Money.FromNaira(0); // The current balance of the user, representing the total amount of funds available for transactions
 }

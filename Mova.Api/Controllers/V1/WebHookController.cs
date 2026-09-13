@@ -57,16 +57,7 @@ public class WebHookController(
 
     var rawBody = bodyStream.ToArray();
 
-    Console.WriteLine("========================================");
-    Console.WriteLine("FLUTTERWAVE WEBHOOK REQUEST");
-    Console.WriteLine("========================================");
-
-    // Print all headers
-    Console.WriteLine("\nHEADERS:");
-    foreach (var header in Request.Headers)
-    {
-        Console.WriteLine($"{header.Key}: {header.Value}");
-    }
+    
 
     // Print signature specifically
     var signature = Request.Headers["Verif-Hash"]

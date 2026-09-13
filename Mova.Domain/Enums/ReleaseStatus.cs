@@ -6,5 +6,6 @@ public enum ReleaseStatus
     Processing = 2,
     Released = 3,
     Failed = 4,
-    Cancelled = 5
+    Cancelled = 5,
+    Paused = 6
 }

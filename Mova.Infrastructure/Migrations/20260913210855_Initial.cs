@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Mova.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitiateCreate : Migration
+    public partial class Initial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -34,6 +34,15 @@ namespace Mova.Infrastructure.Migrations
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     PublicId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    FirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    OtherNames = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    LastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    TransactionPinHash = table.Column<string>(type: "text", nullable: true),
+                    TransactionPinSetAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    TransactionPinResetAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    TransactionPinChangedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    balance_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    balance_minor_units = table.Column<long>(type: "bigint", nullable: false),
                     UserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     NormalizedUserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
@@ -55,6 +64,93 @@ namespace Mova.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "bank_accounts",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserPublicId = table.Column<string>(type: "text", nullable: false),
+                    AccountNumber = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    AccountName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    BankCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    BankName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    BankImageUrl = table.Column<string>(type: "text", nullable: false),
+                    PaystackRecipientCode = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
+                    IsDefault = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    VerifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    VerificationMessage = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ConsentGiven = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    ConsentGivenAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ConsentVersion = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    Institution = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false, defaultValue: "NGN"),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_bank_accounts", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "banks",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Slug = table.Column<string>(type: "text", nullable: false),
+                    Code = table.Column<string>(type: "text", nullable: false),
+                    Ussd = table.Column<string>(type: "text", nullable: true),
+                    Logo = table.Column<string>(type: "text", nullable: true),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_banks", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "notifications",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserPublicId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Message = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: false),
+                    IsRead = table.Column<bool>(type: "boolean", nullable: false),
+                    ActionUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Metadata = table.Column<string>(type: "jsonb", nullable: true),
+                    ReadAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_notifications", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "otp_verifications",
                 columns: table => new
                 {
@@ -64,8 +160,8 @@ namespace Mova.Infrastructure.Migrations
                     OtpCode = table.Column<string>(type: "text", nullable: false),
                     Purpose = table.Column<string>(type: "text", nullable: false),
                     IsUsed = table.Column<bool>(type: "boolean", nullable: false),
-                    UsedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UsedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -87,8 +183,8 @@ namespace Mova.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     UserPublicId = table.Column<string>(type: "text", nullable: false),
                     TokenHash = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    RevokedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    RevokedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     RevokedByIp = table.Column<string>(type: "text", nullable: true),
                     ReplacedByTokenHash = table.Column<string>(type: "text", nullable: true),
                     RevocationReason = table.Column<string>(type: "text", nullable: true),
@@ -109,23 +205,20 @@ namespace Mova.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "wallets",
+                name: "virtual_accounts",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     UserPublicId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    CompletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ClosedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    available_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    available_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
-                    locked_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    locked_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
-                    target_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    target_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    Provider = table.Column<int>(type: "integer", maxLength: 50, nullable: false),
+                    ProviderCustomerId = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
+                    ProviderAccountId = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
+                    AccountNumber = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    BankName = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    AccountName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Currency = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false, defaultValue: "NGN"),
+                    Status = table.Column<int>(type: "integer", maxLength: 30, nullable: false, defaultValue: 1),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -136,7 +229,28 @@ namespace Mova.Infrastructure.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_wallets", x => x.Id);
+                    table.PrimaryKey("PK_virtual_accounts", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "wallet_categories",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Icon = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_wallet_categories", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -246,12 +360,114 @@ namespace Mova.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "wallets",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserPublicId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    CategoryId = table.Column<long>(type: "bigint", nullable: false, defaultValue: 24L),
+                    BankAccountId = table.Column<long>(type: "bigint", nullable: true),
+                    Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    CompletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ClosedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    available_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    available_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    funded_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    funded_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    locked_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    locked_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    target_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    target_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    total_released_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    total_released_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    total_withdrawn_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    total_withdrawn_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    unused_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    unused_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_wallets", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_wallets_bank_accounts_BankAccountId",
+                        column: x => x.BankAccountId,
+                        principalTable: "bank_accounts",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_wallets_wallet_categories_CategoryId",
+                        column: x => x.CategoryId,
+                        principalTable: "wallet_categories",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "payouts",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserPublicId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    WalletId = table.Column<long>(type: "bigint", nullable: false),
+                    BankAccountId = table.Column<long>(type: "bigint", nullable: false),
+                    Reference = table.Column<string>(type: "text", nullable: false),
+                    Provider = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    ProviderReference = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    InitiatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CompletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    FailedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    FailureReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    fee_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    fee_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    net_amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    net_amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_payouts", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_payouts_bank_accounts_BankAccountId",
+                        column: x => x.BankAccountId,
+                        principalTable: "bank_accounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_payouts_wallets_WalletId",
+                        column: x => x.WalletId,
+                        principalTable: "wallets",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "transactions",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    WalletId = table.Column<long>(type: "bigint", nullable: false),
+                    UserPublicId = table.Column<string>(type: "text", nullable: false),
+                    WalletId = table.Column<long>(type: "bigint", nullable: true),
+                    Title = table.Column<string>(type: "text", nullable: false, defaultValue: ""),
                     Type = table.Column<int>(type: "integer", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     Reference = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
@@ -285,6 +501,7 @@ namespace Mova.Infrastructure.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     WalletId = table.Column<long>(type: "bigint", nullable: false),
                     Frequency = table.Column<int>(type: "integer", nullable: false),
+                    FrequencyConfig = table.Column<string>(type: "text", nullable: false),
                     StartDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     EndDate = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
@@ -314,7 +531,7 @@ namespace Mova.Infrastructure.Migrations
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    WalletId = table.Column<long>(type: "bigint", nullable: false),
+                    WalletId = table.Column<long>(type: "bigint", nullable: true),
                     TransactionId = table.Column<long>(type: "bigint", nullable: false),
                     IsCredit = table.Column<bool>(type: "boolean", nullable: false),
                     amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
@@ -354,6 +571,7 @@ namespace Mova.Infrastructure.Migrations
                     WalletRuleId = table.Column<long>(type: "bigint", nullable: false),
                     ScheduledFor = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
+                    FailedAttempts = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     ReleasedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     amount_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     amount_minor_units = table.Column<long>(type: "bigint", nullable: false),
@@ -426,10 +644,49 @@ namespace Mova.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_AspNetUsers_PublicId",
+                table: "AspNetUsers",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "UserNameIndex",
                 table: "AspNetUsers",
                 column: "NormalizedUserName",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bank_accounts_AccountNumber",
+                table: "bank_accounts",
+                column: "AccountNumber");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bank_accounts_RecipientCode",
+                table: "bank_accounts",
+                column: "PaystackRecipientCode");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bank_accounts_UserPublicId",
+                table: "bank_accounts",
+                column: "UserPublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bank_accounts_UserPublicId_AccountNumber",
+                table: "bank_accounts",
+                columns: new[] { "UserPublicId", "AccountNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bank_accounts_UserPublicId_IsDefault",
+                table: "bank_accounts",
+                columns: new[] { "UserPublicId", "IsDefault" },
+                unique: true,
+                filter: "\"IsDefault\" = true");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_bank_accounts_UserPublicId_Status",
+                table: "bank_accounts",
+                columns: new[] { "UserPublicId", "Status" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_ledger_entries_TransactionId",
@@ -445,6 +702,48 @@ namespace Mova.Infrastructure.Migrations
                 name: "IX_ledger_entries_WalletId_CreatedAt",
                 table: "ledger_entries",
                 columns: new[] { "WalletId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_notifications_CreatedAt",
+                table: "notifications",
+                column: "CreatedAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_notifications_UserPublicId",
+                table: "notifications",
+                column: "UserPublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_notifications_UserPublicId_IsRead",
+                table: "notifications",
+                columns: new[] { "UserPublicId", "IsRead" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_payouts_BankAccountId",
+                table: "payouts",
+                column: "BankAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_payouts_ProviderReference",
+                table: "payouts",
+                column: "ProviderReference",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_payouts_Reference",
+                table: "payouts",
+                column: "Reference",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_payouts_UserPublicId",
+                table: "payouts",
+                column: "UserPublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_payouts_WalletId_Status",
+                table: "payouts",
+                columns: new[] { "WalletId", "Status" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_refresh_tokens_ExpiresAt",
@@ -495,10 +794,32 @@ namespace Mova.Infrastructure.Migrations
                 columns: new[] { "WalletId", "Status" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_virtual_accounts_Provider_AccountNumber",
+                table: "virtual_accounts",
+                columns: new[] { "Provider", "AccountNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_virtual_accounts_UserPublicId_Provider",
+                table: "virtual_accounts",
+                columns: new[] { "UserPublicId", "Provider" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_wallet_rules_WalletId",
                 table: "wallet_rules",
                 column: "WalletId",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_wallets_BankAccountId",
+                table: "wallets",
+                column: "BankAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_wallets_CategoryId",
+                table: "wallets",
+                column: "CategoryId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_wallets_UserPublicId",
@@ -530,16 +851,28 @@ namespace Mova.Infrastructure.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "banks");
+
+            migrationBuilder.DropTable(
                 name: "ledger_entries");
 
             migrationBuilder.DropTable(
+                name: "notifications");
+
+            migrationBuilder.DropTable(
                 name: "otp_verifications");
+
+            migrationBuilder.DropTable(
+                name: "payouts");
 
             migrationBuilder.DropTable(
                 name: "refresh_tokens");
 
             migrationBuilder.DropTable(
                 name: "scheduled_releases");
+
+            migrationBuilder.DropTable(
+                name: "virtual_accounts");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
@@ -555,6 +888,12 @@ namespace Mova.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "wallets");
+
+            migrationBuilder.DropTable(
+                name: "bank_accounts");
+
+            migrationBuilder.DropTable(
+                name: "wallet_categories");
         }
     }
 }

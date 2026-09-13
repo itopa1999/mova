@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Logging;
 
@@ -33,7 +34,8 @@ public sealed class ProcessScheduledReleasesJob
         var releaseIds = await _context.ScheduledReleases
             .AsNoTracking()
             .Where(x => x.Status == ReleaseStatus.Scheduled
-                        && x.ScheduledFor <= DateTimeOffset.UtcNow)
+                        // && x.ScheduledFor <= DateTimeOffset.UtcNow)
+            )
             .OrderBy(x => x.ScheduledFor)
             .ThenBy(x => x.Id)
             .Select(x => x.Id)
@@ -65,7 +67,8 @@ public sealed class ProcessScheduledReleasesJob
 
         if (scheduledRelease is null
             || scheduledRelease.Status != ReleaseStatus.Scheduled
-            || scheduledRelease.ScheduledFor > DateTimeOffset.UtcNow)
+            // || scheduledRelease.ScheduledFor > DateTimeOffset.UtcNow)
+        )
         {
             await transaction.RollbackAsync(cancellationToken);
             return;
@@ -74,9 +77,33 @@ public sealed class ProcessScheduledReleasesJob
         var wallet = await _context.Wallets
             .FirstOrDefaultAsync(x => x.Id == scheduledRelease.WalletId, cancellationToken);
 
-        if (wallet is null || wallet.Status is WalletStatus.Closed or WalletStatus.Paused)
+        if (wallet is null)
         {
             MarkFailure(scheduledRelease);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return;
+        }
+
+        if (wallet.Status is WalletStatus.Closed or WalletStatus.Paused)
+        {
+            scheduledRelease.Status = ReleaseStatus.Paused;
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return;
+        }
+
+        if (wallet.Status == WalletStatus.Broken)
+        {
+            MarkFailure(scheduledRelease);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return;
+        }
+
+        if (wallet.Status == WalletStatus.Completed)
+        {
+            scheduledRelease.Status = ReleaseStatus.Cancelled;
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return;
@@ -139,6 +166,38 @@ public sealed class ProcessScheduledReleasesJob
 
         await _context.LedgerEntries.AddAsync(ledgerEntry, cancellationToken);
 
+        if (wallet.BankAccountId is null || wallet.BankAccountId <= 0)
+        {
+            op.Success("Skipped payout: wallet has no linked bank account.");
+        }
+        else
+        {
+            var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";
+
+            var payoutAlreadyExists = await _context.Set<Payout>()
+                .AnyAsync(x => x.Reference == payoutReference, cancellationToken);
+
+            if (!payoutAlreadyExists)
+            {
+                var payout = new Payout
+                {
+                    UserPublicId = wallet.UserPublicId,
+                    WalletId = wallet.Id,
+                    BankAccountId = wallet.BankAccountId.Value,
+                    Amount = scheduledRelease.Amount,
+                    Fee = Money.FromNaira(0),
+                    NetAmount = scheduledRelease.Amount,
+                    Reference = payoutReference,
+                    Provider = null,
+                    ProviderReference = null,
+                    Status = PayoutStatus.Pending,
+                    InitiatedAt = DateTimeOffset.UtcNow
+                };
+
+                await _context.Set<Payout>().AddAsync(payout, cancellationToken);
+            }
+        }
+
         scheduledRelease.Status = ReleaseStatus.Released;
         scheduledRelease.ReleasedAt = DateTimeOffset.UtcNow;
 
@@ -160,6 +219,11 @@ public sealed class ProcessScheduledReleasesJob
     {
         if (wallet.TotalReleasedAmount.MinorUnits >= wallet.TargetAmount.MinorUnits)
         {
+            if (wallet.Status != WalletStatus.Completed)
+            {
+                wallet.Status = WalletStatus.Completed;
+                wallet.CompletedAt = DateTimeOffset.UtcNow;
+            }
             using var op = OperationLogger.Start(
                 _logger,
                 "EnsureNextScheduledRelease",
@@ -182,10 +246,12 @@ public sealed class ProcessScheduledReleasesJob
         if (nextRelease is null)
             return;
 
+        var nextScheduledForUtc = nextRelease.ScheduledFor.ToUniversalTime();
+
         var alreadyScheduled = await _context.ScheduledReleases
             .AnyAsync(
                 x => x.WalletRuleId == walletRule.Id
-                     && x.ScheduledFor == nextRelease.ScheduledFor
+                     && x.ScheduledFor == nextScheduledForUtc
                      && x.Status != ReleaseStatus.Cancelled,
                 cancellationToken);
 

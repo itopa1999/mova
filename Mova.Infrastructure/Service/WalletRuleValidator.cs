@@ -104,6 +104,9 @@ public class WalletRuleValidator : IWalletRuleValidator
                 case ReleaseFrequency.Custom:
                     ValidateCustomConfig(configJson, result);
                     break;
+                case ReleaseFrequency.Hourly:
+                    ValidateHourlyConfig(configJson, result);
+                    break;
                 default:
                     result.AddError($"Unknown frequency type: {type}");
                     break;
@@ -448,6 +451,7 @@ public class WalletRuleValidator : IWalletRuleValidator
         config.Months = config.Months.OrderBy(m => m).ToList();
         config.DaysOfMonth = config.DaysOfMonth.OrderBy(d => d).ToList();
     }
+
     private void ValidateCustomConfig(string configJson, ValidationResult result)
     {
         var config = JsonSerializer.Deserialize<CustomConfig>(configJson, JsonOptions);
@@ -474,14 +478,62 @@ public class WalletRuleValidator : IWalletRuleValidator
             result.AddWarning("7 days interval is essentially weekly. Consider using Weekly frequency.");
     }
 
+    private void ValidateHourlyConfig(string configJson, ValidationResult result)
+    {
+        var config = JsonSerializer.Deserialize<HourlyConfig>(configJson, JsonOptions);
+
+        if (config == null)
+        {
+            result.AddError("Invalid Hourly configuration.");
+            return;
+        }
+
+        if (config.IntervalHours < 1)
+        {
+            result.AddError("Interval hours must be at least 1.");
+            return;
+        }
+
+        if (config.IntervalHours > 24)
+        {
+            result.AddError("Interval hours cannot exceed 24. Use Daily or Custom frequency for longer intervals.");
+            return;
+        }
+
+        // Time is now required for hourly (used as the anchor for the schedule).
+        if (string.IsNullOrEmpty(config.Time))
+        {
+            result.AddError("Time is required for Hourly frequency.");
+            return;
+        }
+
+        if (!IsValidTimeFormat(config.Time))
+        {
+            result.AddError("Time must be in HH:mm format (e.g., 09:30, 14:45) with hours 00-23 and minutes 00-59.");
+            return;
+        }
+
+        if (config.IntervalHours == 1)
+            result.AddWarning("Releasing every hour can result in a large number of releases. Make sure this is intentional.");
+
+        if (config.IntervalHours == 12)
+            result.AddWarning("12 hours interval is essentially twice daily. Consider if Daily frequency fits better.");
+
+        if (config.IntervalHours == 24)
+            result.AddWarning("24 hours interval is essentially daily. Consider using Daily frequency instead.");
+
+        if (24 % config.IntervalHours != 0)
+            result.AddWarning($"Interval of {config.IntervalHours} hours does not divide evenly into 24. Releases will not land on consistent clock times every day.");
+    }
+
     private bool IsValidTimeFormat(string time)
     {
         if (string.IsNullOrEmpty(time))
             return false;
-        
+
         if (!TimeSpan.TryParse(time, out var parsedTime))
             return false;
-        
+
         return parsedTime.TotalHours >= 0 && parsedTime.TotalHours < 24;
     }
 

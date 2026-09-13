@@ -57,3 +57,9 @@ public class CustomConfig : FrequencyConfigBase
 {
     public int IntervalDays { get; set; }
 }
+
+// Hourly: Release every N hours
+public class HourlyConfig : FrequencyConfigBase
+{
+    public int IntervalHours { get; set; } = 1; // every 1..N hours
+}

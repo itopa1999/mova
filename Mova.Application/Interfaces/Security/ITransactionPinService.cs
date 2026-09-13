@@ -16,6 +16,11 @@ public interface ITransactionPinService
         string pin,
         CancellationToken cancellationToken = default);
 
+    Task<bool> ResetPinAsync(
+        string UserPublicId,
+        CancellationToken cancellationToken = default);
+
+
     Task ChangePinAsync(
         string UserPublicId,
         string newPin,

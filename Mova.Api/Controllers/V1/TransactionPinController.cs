@@ -33,6 +33,8 @@ public class TransactionPinController(
     }
 
     [HttpPost("verify")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> VerifyPin(
         [FromBody] VerifyPinCommand.Command command,
         CancellationToken cancellationToken)
@@ -47,6 +49,8 @@ public class TransactionPinController(
     }
 
     [HttpPut("change")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> ChangePin(
         [FromBody] ChangePinCommand.Command command,
         CancellationToken cancellationToken)
@@ -77,4 +81,42 @@ public class TransactionPinController(
             result);
 
     }
+
+
+    [HttpPost("forgot-pin-send")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> SendOtpForPinForgot(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new SendForgotPinOtpCommand.Command
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
+
+    [HttpPost("forgot-pin-verify")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> VerifyOtpForPinForgot(
+        [FromBody] VerifyForgotPinOtpCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.UserId = CurrentUserId ?? 0;
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
+
+    
 }
