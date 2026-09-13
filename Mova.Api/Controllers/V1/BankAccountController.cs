@@ -132,6 +132,27 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+
+    [HttpDelete("{bankAccountId:long}/remove")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> RemoveBankAccounts(
+        long bankAccountId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new DeleteBankAccount.Command
+            {
+                UserPublicId = UserPublicId ?? string.Empty,
+                BankAccountId = bankAccountId
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+
+
     [HttpGet("deposits")]
     [ProducesResponseType(
         typeof(BaseResult<List<TransactionDto>>),
@@ -194,7 +215,7 @@ public class BankAccountController(
                 $"{frontendUrl}/payment/confirmation",
                 new Dictionary<string, string?>
                 {
-                    ["reference"] = reference,
+                    ["reference"] = paymentReference,
                     ["status"] = "NotFound"
                 });
 

@@ -174,8 +174,8 @@ public sealed class RegisterCommand
 
                 _notificationQueue.QueueOtpDelivery(
                     firstName,
-                    request.Email,
-                    request.PhoneNumber,
+                    normalizedEmail,
+                    normalizedPhoneNumber,
                     otpCode,
                     otp.Purpose);
 
@@ -189,7 +189,7 @@ public sealed class RegisterCommand
                         UserPublicId = userPublicId,
                         Email = normalizedEmail,
                         Phone = normalizedPhoneNumber,
-                        FullName = firstName,
+                        FullName = $"{firstName} {lastName}",
                         Data = "Account created. Please verify your email/phone with the OTP sent.",
                         NextStep = "Email Verification"
                     });

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Mova.Api.Configurations;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Shared.Common;
+using static Mova.Application.BBL.MovaAPIs.GetNotificationsQuery;
 using static Mova.Application.BBL.MovaAPIs.HomeQuery;
 
 namespace Mova.Api.Controllers.V1;
@@ -27,6 +28,59 @@ public class MovaQueries(
             new HomeQuery.Query
             {
                 UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("get-notifications")]
+    [ProducesResponseType(typeof(BaseResult<List<NotificationDto>>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetAllNotiications(
+        [FromQuery] bool unreadOnly = false,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(
+            new GetNotificationsQuery.Query
+            {
+                UserPublicId = UserPublicId,
+                UnreadOnly = unreadOnly,
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPatch("{id:long}/read-notification")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> MarkAsRead(
+        long id,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new MarkNotificationAsRead.Command
+            {
+                UserPublicId = UserPublicId,
+                NotificationId = id,
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+
+    [HttpPatch("read-all-notifications")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> MarkAllAsRead(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new MarkAllNotificationsAsRead.Command
+            {
+                UserPublicId = UserPublicId,
             },
             cancellationToken);
 

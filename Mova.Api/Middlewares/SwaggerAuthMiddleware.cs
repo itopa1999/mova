@@ -31,6 +31,11 @@ public class SwaggerAuthMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (context.Request.Method == HttpMethods.Options)
+        {
+            await _next(context);
+            return;
+        }
         using var op = OperationLogger.Start(
             _logger,
             "SwaggerAuth",

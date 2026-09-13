@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,8 @@ public sealed class ApplicationDbContext
     private readonly ICurrentUserService _currentUser;
 
     public ApplicationDbContext(
-        DbContextOptions<ApplicationDbContext> options, ICurrentUserService currentUser)
+        DbContextOptions<ApplicationDbContext> options,
+        ICurrentUserService currentUser)
         : base(options)
     {
         _currentUser = currentUser;
@@ -32,6 +34,7 @@ public sealed class ApplicationDbContext
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<Payout> Payouts => Set<Payout>();
     public DbSet<WalletCategory> WalletCategories => Set<WalletCategory>();
+    public DbSet<AppNotification> AppNotifications => Set<AppNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,47 +42,56 @@ public sealed class ApplicationDbContext
 
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(ApplicationDbContext).Assembly);
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (!typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
+                continue;
+
+            if (entityType.IsOwned())
+                continue;
+
+            var parameter = Expression.Parameter(entityType.ClrType, "e");
+
+            var isDeletedProperty = Expression.Property(
+                parameter,
+                nameof(BaseEntity.IsDeleted));
+
+            var filter = Expression.Lambda(
+                Expression.Equal(
+                    isDeletedProperty,
+                    Expression.Constant(false)),
+                parameter);
+
+            modelBuilder
+                .Entity(entityType.ClrType)
+                .HasQueryFilter(filter);
+        }
     }
 
     public override async Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {
-        var entries = ChangeTracker
-            .Entries<BaseEntity>();
+        var entries = ChangeTracker.Entries<BaseEntity>();
 
         foreach (var entry in entries)
         {
             switch (entry.State)
             {
                 case EntityState.Added:
-
-                    entry.Entity.CreatedAt =
-                        DateTimeOffset.UtcNow;
-
+                    entry.Entity.CreatedAt = DateTimeOffset.UtcNow;
                     break;
-
 
                 case EntityState.Modified:
-
-                    entry.Entity.ModifiedAt =
-                        DateTimeOffset.UtcNow;
-
+                    entry.Entity.ModifiedAt = DateTimeOffset.UtcNow;
                     entry.Entity.ModifiedBy = _currentUser.UserId.ToString();
-
                     break;
 
-
                 case EntityState.Deleted:
-
                     entry.State = EntityState.Modified;
-
                     entry.Entity.IsDeleted = true;
-
-                    entry.Entity.DeletedAt =
-                        DateTimeOffset.UtcNow;
-
+                    entry.Entity.DeletedAt = DateTimeOffset.UtcNow;
                     entry.Entity.DeletedBy = _currentUser.UserId.ToString();
-
                     break;
             }
         }
@@ -89,14 +101,14 @@ public sealed class ApplicationDbContext
         {
             foreach (var property in entry.Properties)
             {
-                if (property.CurrentValue is DateTimeOffset value && value.Offset != TimeSpan.Zero)
+                if (property.CurrentValue is DateTimeOffset value &&
+                    value.Offset != TimeSpan.Zero)
                 {
                     property.CurrentValue = value.ToUniversalTime();
                 }
             }
         }
 
-        return await base.SaveChangesAsync(
-            cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
     }
 }

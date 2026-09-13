@@ -1,6 +1,5 @@
 using System.Net;
 using MediatR;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;

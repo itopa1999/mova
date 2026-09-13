@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
@@ -17,7 +18,8 @@ namespace Mova.Application.BBL.Commands.WebHook;
 
 public sealed class FlutterwaveWebHookCommand
 {
-    public sealed class Command : IRequest<BaseResult<FlutterwaveWebhookResponseDto>>
+    public sealed class Command
+        : IRequest<BaseResult<FlutterwaveWebhookResponseDto>>
     {
         public byte[] RawBody { get; set; } = Array.Empty<byte>();
 
@@ -27,53 +29,112 @@ public sealed class FlutterwaveWebHookCommand
     public sealed class FlutterwaveWebhookResponseDto
     {
         [JsonPropertyName("id")]
-        public string Id { get; set; } = string.Empty;
+        public long Id { get; set; }
 
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty;
+        [JsonPropertyName("txRef")]
+        public string TxRef { get; set; } = string.Empty;
 
-        [JsonPropertyName("data")]
-        public FlutterwaveWebhookDataDto? Data { get; set; }
-    }
+        [JsonPropertyName("flwRef")]
+        public string FlwRef { get; set; } = string.Empty;
 
-    public sealed class FlutterwaveWebhookDataDto
-    {
-        [JsonPropertyName("id")]
-        public string Id { get; set; } = string.Empty;
+        [JsonPropertyName("orderRef")]
+        public string OrderRef { get; set; } = string.Empty;
+
+        [JsonPropertyName("paymentPlan")]
+        public object? PaymentPlan { get; set; }
+
+        [JsonPropertyName("paymentPage")]
+        public object? PaymentPage { get; set; }
+
+        [JsonPropertyName("createdAt")]
+        public DateTimeOffset CreatedAt { get; set; }
 
         [JsonPropertyName("amount")]
         public decimal Amount { get; set; }
 
-        [JsonPropertyName("currency")]
-        public string Currency { get; set; } = string.Empty;
-
-        [JsonPropertyName("reference")]
-        public string Reference { get; set; } = string.Empty;
+        [JsonPropertyName("charged_amount")]
+        public decimal ChargedAmount { get; set; }
 
         [JsonPropertyName("status")]
         public string Status { get; set; } = string.Empty;
 
-        [JsonPropertyName("payment_method")]
-        public FlutterwavePaymentMethodDto? PaymentMethod { get; set; }
+        [JsonPropertyName("IP")]
+        public string Ip { get; set; } = string.Empty;
+
+        [JsonPropertyName("currency")]
+        public string Currency { get; set; } = string.Empty;
+
+        [JsonPropertyName("appfee")]
+        public decimal AppFee { get; set; }
+
+        [JsonPropertyName("merchantfee")]
+        public decimal MerchantFee { get; set; }
+
+        [JsonPropertyName("merchantbearsfee")]
+        public int MerchantBearsFee { get; set; }
+
+        [JsonPropertyName("charge_type")]
+        public string ChargeType { get; set; } = string.Empty;
+
+        [JsonPropertyName("customer")]
+        public FlutterwaveCustomerDto? Customer { get; set; }
+
+        [JsonPropertyName("entity")]
+        public FlutterwaveEntityDto? Entity { get; set; }
+
+        [JsonPropertyName("event.type")]
+        public string EventType { get; set; } = string.Empty;
     }
 
-    public sealed class FlutterwavePaymentMethodDto
+    public sealed class FlutterwaveCustomerDto
     {
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty;
+        [JsonPropertyName("id")]
+        public long Id { get; set; }
 
-        [JsonPropertyName("bank_transfer")]
-        public FlutterwaveBankTransferDto? BankTransfer { get; set; }
+        [JsonPropertyName("phone")]
+        public string? Phone { get; set; }
+
+        [JsonPropertyName("fullName")]
+        public string? FullName { get; set; }
+
+        [JsonPropertyName("customertoken")]
+        public string? CustomerToken { get; set; }
+
+        [JsonPropertyName("email")]
+        public string? Email { get; set; }
+
+        [JsonPropertyName("createdAt")]
+        public DateTimeOffset? CreatedAt { get; set; }
+
+        [JsonPropertyName("updatedAt")]
+        public DateTimeOffset? UpdatedAt { get; set; }
+
+        [JsonPropertyName("deletedAt")]
+        public DateTimeOffset? DeletedAt { get; set; }
+
+        [JsonPropertyName("AccountId")]
+        public long? AccountId { get; set; }
     }
 
-    public sealed class FlutterwaveBankTransferDto
+    public sealed class FlutterwaveEntityDto
     {
-        [JsonPropertyName("virtual_account_number")]
-        public string VirtualAccountNumber { get; set; } = string.Empty;
+        [JsonPropertyName("account_number")]
+        public string? AccountNumber { get; set; }
+
+        [JsonPropertyName("first_name")]
+        public string? FirstName { get; set; }
+
+        [JsonPropertyName("last_name")]
+        public string? LastName { get; set; }
+
+        [JsonPropertyName("createdAt")]
+        public DateTimeOffset? CreatedAt { get; set; }
     }
 
     public sealed class Handler
-        : IRequestHandler<Command, BaseResult<FlutterwaveWebhookResponseDto>>
+        : IRequestHandler<
+            Command,
+            BaseResult<FlutterwaveWebhookResponseDto>>
     {
         private static readonly JsonSerializerOptions JsonOptions =
             new(JsonSerializerDefaults.Web);
@@ -81,200 +142,359 @@ public sealed class FlutterwaveWebHookCommand
         private readonly IFlutterwaveService _flutterwaveService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
+        private readonly IMediator _mediator;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IFlutterwaveService flutterwaveService,
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
+            IMediator mediator,
             ILogger<Handler> logger)
         {
             _flutterwaveService = flutterwaveService;
             _unitOfWork = unitOfWork;
             _identityService = identityService;
+            _mediator = mediator;
             _logger = logger;
         }
 
-        public async Task<BaseResult<FlutterwaveWebhookResponseDto>> Handle(
+        public async Task<
+            BaseResult<FlutterwaveWebhookResponseDto>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
                 _logger,
                 "FlutterwaveWebHook",
-                ("Signature", !string.IsNullOrWhiteSpace(request.Signature) ? "Present" : "Missing"));
+                (
+                    "Signature",
+                    !string.IsNullOrWhiteSpace(request.Signature)
+                        ? "Present"
+                        : "Missing"
+                ));
 
             if (string.IsNullOrWhiteSpace(request.Signature))
             {
                 op.Fail("Webhook signature is missing.");
-                return Result(HttpStatusCode.Unauthorized, "Invalid webhook signature.");
+
+                return Result(
+                    HttpStatusCode.Unauthorized,
+                    "Invalid webhook signature.");
             }
 
-            var isValid = await _flutterwaveService.VerifyWebhookSignatureAsync(
-                request.RawBody,
-                request.Signature);
+            if (request.RawBody.Length == 0)
+            {
+                op.Fail("Webhook body is empty.");
+
+                return Result(
+                    HttpStatusCode.BadRequest,
+                    "Webhook body is empty.");
+            }
+
+            var isValid =
+                await _flutterwaveService
+                    .VerifyWebhookSignatureAsync(
+                        request.RawBody,
+                        request.Signature);
 
             if (!isValid)
             {
                 op.Fail("Invalid webhook signature.");
-                return Result(HttpStatusCode.Unauthorized, "Invalid webhook signature.");
+
+                return Result(
+                    HttpStatusCode.Unauthorized,
+                    "Invalid webhook signature.");
             }
 
             FlutterwaveWebhookResponseDto? webhook;
 
             try
             {
-                webhook = JsonSerializer.Deserialize<FlutterwaveWebhookResponseDto>(
-                    request.RawBody,
-                    JsonOptions);
+                webhook =
+                    JsonSerializer.Deserialize<
+                        FlutterwaveWebhookResponseDto>(
+                            request.RawBody,
+                            JsonOptions);
             }
             catch (JsonException jsonEx)
             {
-                op.Fail($"Invalid JSON payload: {jsonEx.Message}", jsonEx);
-                return Result(HttpStatusCode.BadRequest, "Invalid webhook payload.");
+                op.Fail(
+                    $"Invalid JSON payload: {jsonEx.Message}",
+                    jsonEx);
+
+                return Result(
+                    HttpStatusCode.BadRequest,
+                    "Invalid webhook payload.");
             }
 
-            if (webhook?.Data is null)
+            if (webhook is null)
             {
-                op.Fail("Webhook data is missing.");
-                return Result(HttpStatusCode.BadRequest, "Invalid webhook payload.");
+                op.Fail("Webhook payload is null.");
+
+                return Result(
+                    HttpStatusCode.BadRequest,
+                    "Invalid webhook payload.");
             }
 
-            var data = webhook.Data;
-            var bankTransfer = data.PaymentMethod?.BankTransfer;
+            op.Success(
+                $"Webhook received. " +
+                $"FlutterwaveId: {webhook.Id}, " +
+                $"TxRef: {webhook.TxRef}, " +
+                $"Status: {webhook.Status}, " +
+                $"Amount: ₦{webhook.Amount:N2}, " +
+                $"Currency: {webhook.Currency}, " +
+                $"Event: {webhook.EventType}");
 
-            if (!string.Equals(webhook.Type, "charge.completed", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(
+                    webhook.EventType,
+                    "BANK_TRANSFER_TRANSACTION",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                op.Fail($"Webhook event ignored: {webhook.Type}");
-                return Result(HttpStatusCode.OK, "Webhook event ignored.", webhook);
+                op.Success(
+                    $"Webhook event ignored: {webhook.EventType}");
+
+                return Result(
+                    HttpStatusCode.OK,
+                    "Webhook event ignored.",
+                    webhook);
             }
 
-            if (!string.Equals(data.Status, "succeeded", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(data.Status, "successful", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(
+                    webhook.Status,
+                    "successful",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                op.Fail($"Transaction not successful: {data.Status}");
-                return Result(HttpStatusCode.OK, "Transaction is not successful.", webhook);
+                op.Success(
+                    $"Transaction is not successful. " +
+                    $"Status: {webhook.Status}");
+
+                return Result(
+                    HttpStatusCode.OK,
+                    "Transaction is not successful.",
+                    webhook);
             }
 
-            if (string.IsNullOrWhiteSpace(data.Reference))
+            if (string.IsNullOrWhiteSpace(webhook.TxRef))
             {
                 op.Fail("Transaction reference is missing.");
-                return Result(HttpStatusCode.BadRequest, "Transaction reference is required.");
+
+                return Result(
+                    HttpStatusCode.BadRequest,
+                    "Transaction reference is required.");
             }
 
-            if (data.Amount <= 0)
+            if (webhook.Amount <= 0)
             {
-                op.Fail($"Invalid transaction amount: {data.Amount}");
-                return Result(HttpStatusCode.BadRequest, "Invalid transaction amount.");
+                op.Fail(
+                    $"Invalid transaction amount: {webhook.Amount}");
+
+                return Result(
+                    HttpStatusCode.BadRequest,
+                    "Invalid transaction amount.");
             }
 
-            if (!string.Equals(data.Currency, "NGN", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(
+                    webhook.Currency,
+                    "NGN",
+                    StringComparison.OrdinalIgnoreCase))
             {
-                op.Fail($"Unsupported currency: {data.Currency}");
-                return Result(HttpStatusCode.BadRequest, "Unsupported transaction currency.");
+                op.Fail(
+                    $"Unsupported currency: {webhook.Currency}");
+
+                return Result(
+                    HttpStatusCode.BadRequest,
+                    "Unsupported transaction currency.");
             }
 
-            if (bankTransfer is null
-                || !string.Equals(data.PaymentMethod?.Type, "bank_transfer", StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrWhiteSpace(bankTransfer.VirtualAccountNumber))
+            var transaction =
+                await _unitOfWork.Query<Transaction>()
+                    .FirstOrDefaultAsync(
+                        x => x.Reference == webhook.TxRef,
+                        cancellationToken);
+
+            if (transaction is null)
             {
-                op.Fail("Flutterwave virtual account details are missing.");
-                return Result(HttpStatusCode.BadRequest, "Invalid virtual account transaction.");
+                op.Fail(
+                    $"Transaction not found. " +
+                    $"Reference: {webhook.TxRef}");
+
+                return Result(
+                    HttpStatusCode.NotFound,
+                    "Transaction not found.");
             }
 
-            var virtualAccount = await _unitOfWork.Query<VirtualAccount>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.AccountNumber == bankTransfer.VirtualAccountNumber
-                         && x.Provider == PaymentProvider.Flutterwave
-                         && x.Status == VirtualAccountStatus.Active,
-                    cancellationToken);
-
-            if (virtualAccount is null)
+            if (transaction.Status == TransactionStatus.Completed)
             {
-                op.Fail($"Virtual account not found: {bankTransfer.VirtualAccountNumber}");
-                return Result(HttpStatusCode.BadRequest, "Virtual account not found.");
+                op.Success(
+                    $"Duplicate webhook ignored. " +
+                    $"Reference: {webhook.TxRef}");
+
+                return Result(
+                    HttpStatusCode.OK,
+                    "Transaction already processed.",
+                    webhook);
             }
 
-            var existingTransaction = await _unitOfWork.Query<Transaction>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.Reference == data.Reference,
-                    cancellationToken);
+            var receivedAmountMinorUnits =
+                Convert.ToInt64(
+                    Math.Round(
+                        webhook.Amount * 100m,
+                        MidpointRounding.AwayFromZero));
 
-            if (existingTransaction is not null)
+            if (transaction.Amount.MinorUnits !=
+                receivedAmountMinorUnits)
             {
-                op.Fail($"Duplicate transaction detected: {data.Reference}");
-                return Result(HttpStatusCode.OK, "Transaction already processed.", webhook);
+                op.Fail(
+                    $"Amount mismatch. " +
+                    $"Expected: {transaction.Amount.MinorUnits}, " +
+                    $"Received: {receivedAmountMinorUnits}, " +
+                    $"Reference: {webhook.TxRef}");
+
+                return Result(
+                    HttpStatusCode.BadRequest,
+                    "Transaction amount mismatch.");
             }
 
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                var updated = await _identityService.UpdateBalanceAsync(
-                    virtualAccount.UserPublicId,
-                    data.Amount,
-                    cancellationToken);
+                var freshTransaction =
+                    await _unitOfWork.Query<Transaction>()
+                        .FirstOrDefaultAsync(
+                            x => x.Reference == webhook.TxRef,
+                            cancellationToken);
+
+                if (freshTransaction is null)
+                {
+                    await _unitOfWork
+                        .RollbackTransactionAsync(cancellationToken);
+
+                    op.Fail(
+                        $"Transaction not found inside " +
+                        $"transaction scope. " +
+                        $"Reference: {webhook.TxRef}");
+
+                    return Result(
+                        HttpStatusCode.NotFound,
+                        "Transaction not found.");
+                }
+
+                if (freshTransaction.Status == TransactionStatus.Completed)
+                {
+                    await _unitOfWork
+                        .RollbackTransactionAsync(cancellationToken);
+
+                    op.Success(
+                        $"Duplicate webhook detected inside " +
+                        $"transaction. Reference: {webhook.TxRef}");
+
+                    return Result(
+                        HttpStatusCode.OK,
+                        "Transaction already processed.",
+                        webhook);
+                }
+
+                var updated =
+                    await _identityService.UpdateBalanceAsync(
+                        freshTransaction.UserPublicId,
+                        webhook.Amount,
+                        cancellationToken);
 
                 if (!updated)
                 {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail($"Failed to update balance for user: {virtualAccount.UserPublicId}");
-                    return Result(HttpStatusCode.BadRequest, "Failed to update user balance.");
+                    await _unitOfWork
+                        .RollbackTransactionAsync(cancellationToken);
+
+                    op.Fail(
+                        $"Failed to update balance. " +
+                        $"User: {freshTransaction.UserPublicId}");
+
+                    return Result(
+                        HttpStatusCode.BadRequest,
+                        "Failed to update user balance.");
                 }
 
-                var transaction = new Transaction
-                {
-                    WalletId = null,
-                    Title = "Account Deposit",
-                    Amount = Money.FromNaira(data.Amount),
-                    Type = TransactionType.Deposit,
-                    Status = TransactionStatus.Completed,
-                    Reference = data.Reference,
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
+                freshTransaction.Status = TransactionStatus.Completed;
 
-                await _unitOfWork.AddAsync(transaction, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                freshTransaction.CompletedAt = DateTimeOffset.UtcNow;
 
                 var ledgerEntry = new LedgerEntry
                 {
                     WalletId = null,
-                    TransactionId = transaction.Id,
-                    Amount = Money.FromNaira(data.Amount),
+                    TransactionId = freshTransaction.Id,
+                    Amount = Money.FromNaira(webhook.Amount),
                     IsCredit = true,
                 };
 
-                await _unitOfWork.AddAsync(ledgerEntry, cancellationToken);
+                await _unitOfWork.AddAsync(
+                    ledgerEntry,
+                    cancellationToken);
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                op.Success($"Webhook processed successfully. Reference: {data.Reference}, Amount: ₦{data.Amount:N2}, User: {virtualAccount.UserPublicId}");
-                return Result(HttpStatusCode.OK, "Webhook processed successfully.", webhook);
+                try
+                {
+                    await _mediator.Send(
+                        new CreateNotificationCommand.Command
+                        {
+                            UserPublicId = freshTransaction.UserPublicId,
+                            Type = NotificationType.Deposit,
+                            Title = "Deposit successful",
+                            Message =
+                                $"₦{webhook.Amount:N0} has been added to " +
+                                $"your available balance.",
+                            ActionUrl = "/add-funds?tab=history",
+                        },
+                        cancellationToken);
+                }
+                catch (Exception notifEx)
+                {
+                    op.Fail(
+                        "Failed to send deposit notification.",
+                        notifEx);
+                }
+
+                op.Success(
+                    $"Flutterwave webhook processed successfully. " +
+                    $"Reference: {webhook.TxRef}, " +
+                    $"Amount: ₦{webhook.Amount:N2}, " +
+                    $"User: {freshTransaction.UserPublicId}");
+
+                return Result(
+                    HttpStatusCode.OK,
+                    "Webhook processed successfully.",
+                    webhook);
             }
             catch (DbUpdateException dbEx)
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                await _unitOfWork
+                    .RollbackTransactionAsync(cancellationToken);
 
-                var duplicateTransaction = await _unitOfWork.Query<Transaction>()
-                    .AsNoTracking()
-                    .AnyAsync(x => x.Reference == data.Reference, cancellationToken);
+                op.Fail(
+                    $"Database error processing Flutterwave " +
+                    $"webhook: {dbEx.Message}",
+                    dbEx);
 
-                if (duplicateTransaction)
-                {
-                    op.Fail($"Duplicate transaction detected: {data.Reference}");
-                    return Result(HttpStatusCode.OK, "Transaction already processed.", webhook);
-                }
-
-                op.Fail($"Database error processing webhook: {dbEx.Message}", dbEx);
-                return Result(HttpStatusCode.Conflict, "A database conflict occurred while processing the webhook.");
+                return Result(
+                    HttpStatusCode.Conflict,
+                    "A database conflict occurred while processing the webhook.");
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Error processing webhook: {ex.Message}", ex);
-                return Result(HttpStatusCode.InternalServerError, "An error occurred while processing the webhook.");
+                await _unitOfWork
+                    .RollbackTransactionAsync(cancellationToken);
+
+                op.Fail(
+                    $"Error processing Flutterwave webhook: {ex.Message}",
+                    ex);
+
+                return Result(
+                    HttpStatusCode.InternalServerError,
+                    "An error occurred while processing the webhook.");
             }
         }
 

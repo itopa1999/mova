@@ -195,4 +195,22 @@ public class WalletController(
         var result = await _mediator.Send(query, cancellationToken);
         return StatusCode((int)result.StatusCode, result);
     }
+
+    [HttpPut("{walletId:long}/break")]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> BreakWallet(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var command = new BreakWalletCommand.Command
+        {
+            UserPublicId = UserPublicId,
+            WalletId = walletId,
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
 }

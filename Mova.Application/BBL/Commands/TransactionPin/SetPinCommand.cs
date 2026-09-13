@@ -3,8 +3,10 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Security;
+using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 
@@ -12,7 +14,7 @@ namespace Mova.Application.BBL.Commands.TransactionPin;
 
 public sealed class SetPinCommand
 {
-    public sealed class Command : IRequest<BaseResult>
+    public sealed class Command : IRequest<BaseResult<object>>
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
@@ -23,23 +25,26 @@ public sealed class SetPinCommand
         public string Pin { get; init; } = string.Empty;
     }
 
-    public sealed class Handler : IRequestHandler<Command, BaseResult>
+    public sealed class Handler : IRequestHandler<Command, BaseResult<object>>
     {
         private readonly ITransactionPinService _transactionPinService;
         private readonly IIdentityService _identityService;
+        private readonly IMediator _mediator;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             ITransactionPinService transactionPinService,
             IIdentityService identityService,
+            IMediator mediator,
             ILogger<Handler> logger)
         {
             _transactionPinService = transactionPinService;
             _identityService = identityService;
+            _mediator = mediator;
             _logger = logger;
         }
 
-        public async Task<BaseResult> Handle(
+        public async Task<BaseResult<object>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
@@ -51,7 +56,7 @@ public sealed class SetPinCommand
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
                 op.Fail("UserPublicId is required.");
-                return new BaseResult(
+                return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
             }
@@ -59,7 +64,7 @@ public sealed class SetPinCommand
             if (string.IsNullOrWhiteSpace(request.Pin))
             {
                 op.Fail("PIN is required.");
-                return new BaseResult(
+                return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "PIN is required.");
             }
@@ -67,7 +72,7 @@ public sealed class SetPinCommand
             if (request.Pin.Length != 6)
             {
                 op.Fail($"Invalid PIN length: {request.Pin.Length}");
-                return new BaseResult(
+                return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "PIN must be exactly 6 digits.");
             }
@@ -75,7 +80,7 @@ public sealed class SetPinCommand
             if (!request.Pin.All(char.IsDigit))
             {
                 op.Fail("PIN contains non-digit characters.");
-                return new BaseResult(
+                return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "PIN must contain only digits.");
             }
@@ -87,7 +92,7 @@ public sealed class SetPinCommand
             if (user == null)
             {
                 op.Fail($"User not found: {request.UserPublicId}");
-                return new BaseResult(
+                return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "User not found.");
             }
@@ -101,7 +106,7 @@ public sealed class SetPinCommand
                 if (hasPin)
                 {
                     op.Fail($"PIN already set for user {request.UserPublicId}");
-                    return new BaseResult(
+                    return new BaseResult<object>(
                         HttpStatusCode.Conflict,
                         "Transaction PIN has already been set.");
                 }
@@ -111,30 +116,58 @@ public sealed class SetPinCommand
                     request.Pin,
                     cancellationToken);
 
-                op.Success($"Transaction PIN created successfully for user {request.UserPublicId}");
+                try
+                {
+                    await _mediator.Send(
+                        new CreateNotificationCommand.Command
+                        {
+                            UserPublicId = request.UserPublicId,
+                            Type = NotificationType.Security,
+                            Title = "Transaction PIN created",
+                            Message =
+                                "Your transaction PIN was created successfully. " +
+                                "You'll need it to confirm sensitive actions.",
+                            ActionUrl = "/settings",
+                        },
+                        cancellationToken);
+                }
+                catch (Exception notifEx)
+                {
+                    op.Fail("Failed to send PIN created notification.", notifEx);
+                }
 
-                return new BaseResult(
+                op.Success(
+                    $"Transaction PIN created successfully for user {request.UserPublicId}");
+
+                return new BaseResult<object>(
                     HttpStatusCode.OK,
-                    "Transaction PIN created successfully.");
+                    "Transaction PIN created successfully.",
+                    new
+                    {
+                        notification = true,
+                    });
             }
             catch (ArgumentException argEx)
             {
                 op.Fail($"Invalid PIN format: {argEx.Message}", argEx);
-                return new BaseResult(
+                return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "The PIN format is invalid.");
             }
             catch (InvalidOperationException invEx)
             {
                 op.Fail($"PIN operation error: {invEx.Message}", invEx);
-                return new BaseResult(
+                return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "The PIN operation could not be completed.");
             }
             catch (Exception ex)
             {
-                op.Fail($"Error setting PIN for user {request.UserPublicId}: {ex.Message}", ex);
-                return new BaseResult(
+                op.Fail(
+                    $"Error setting PIN for user {request.UserPublicId}: {ex.Message}",
+                    ex);
+
+                return new BaseResult<object>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while setting your transaction PIN. Please try again later.");
             }

@@ -1,6 +1,7 @@
 
 
 using System.Net;
+using System.Text;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Mova.Api.Configurations;
@@ -49,20 +50,50 @@ public class WebHookController(
         CancellationToken cancellationToken)
     {
         using var bodyStream = new MemoryStream();
-        await Request.Body.CopyToAsync(bodyStream, cancellationToken);
 
-        var signature = Request.Headers["flutterwave-signature"].FirstOrDefault();
+    await Request.Body.CopyToAsync(
+        bodyStream,
+        cancellationToken);
 
-        var command = new FlutterwaveWebHookCommand.Command
-        {
-            RawBody = bodyStream.ToArray(),
-            Signature = signature
-        };
+    var rawBody = bodyStream.ToArray();
 
-        var result = await _mediator.Send(command, cancellationToken);
+    Console.WriteLine("========================================");
+    Console.WriteLine("FLUTTERWAVE WEBHOOK REQUEST");
+    Console.WriteLine("========================================");
 
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
+    // Print all headers
+    Console.WriteLine("\nHEADERS:");
+    foreach (var header in Request.Headers)
+    {
+        Console.WriteLine($"{header.Key}: {header.Value}");
     }
+
+    // Print signature specifically
+    var signature = Request.Headers["Verif-Hash"]
+        .FirstOrDefault();
+
+    Console.WriteLine("\nFLUTTERWAVE SIGNATURE:");
+    Console.WriteLine(signature ?? "NULL");
+
+    // Print complete request body
+    Console.WriteLine("\nREQUEST BODY:");
+    Console.WriteLine(
+        Encoding.UTF8.GetString(rawBody));
+
+    Console.WriteLine("\n========================================");
+
+    var command = new FlutterwaveWebHookCommand.Command
+    {
+        RawBody = rawBody,
+        Signature = signature
+    };
+
+    var result = await _mediator.Send(
+        command,
+        cancellationToken);
+
+    return StatusCode(
+        (int)result.StatusCode,
+        result);
+}
 }

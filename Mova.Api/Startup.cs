@@ -66,7 +66,12 @@ public class Startup(IConfiguration configuration)
             options.AddPolicy("AllowSpecificOrigin",
                 policy =>
                 {
-                    policy.WithOrigins("https://localhost:3000", "http://localhost:5173")
+                    policy.WithOrigins(
+                        "https://localhost:3000", 
+                        "http://localhost:5173",
+                        "http://localhost:5174",
+                        "https://mova-frontend.luckystarboy01.workers.dev"
+                        )
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
@@ -185,6 +190,8 @@ public class Startup(IConfiguration configuration)
 
         app.UseHangfireDashboard("/hangfire");
 
+        app.UseCors("AllowSpecificOrigin");
+
         app.UseMiddleware<SwaggerAuthMiddleware>();
 
         app.UseSwagger();
@@ -213,17 +220,6 @@ public class Startup(IConfiguration configuration)
             options.DocumentTitle =
                 "Mova API Documentation";
         });
-
-
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseCors("AllowSpecificOrigin");
-        }
-        else
-        {
-            app.UseCors("AllowSpecificOrigin");
-        }
-
 
         app.UseMiddleware<ExceptionHandlingMiddleware>();
 

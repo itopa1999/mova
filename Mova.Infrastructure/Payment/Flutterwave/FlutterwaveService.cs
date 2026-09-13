@@ -118,18 +118,13 @@ public sealed class FlutterwaveService(
             return Task.FromResult(false);
         }
 
-        using var hmac = new HMACSHA256(
-            Encoding.UTF8.GetBytes(_settings.SecretKey));
-
-        var expectedSignature = Convert.ToHexString(
-            hmac.ComputeHash(rawBody))
-            .ToLowerInvariant();
-
         var expectedBytes =
-            Encoding.UTF8.GetBytes(expectedSignature);
+            Encoding.UTF8.GetBytes(
+                _settings.SecretKey.Trim());
 
         var actualBytes =
-            Encoding.UTF8.GetBytes(signature.Trim());
+            Encoding.UTF8.GetBytes(
+                signature.Trim());
 
         return Task.FromResult(
             CryptographicOperations.FixedTimeEquals(

@@ -3,6 +3,7 @@ using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
@@ -80,17 +81,20 @@ public sealed class PaystackWebHookCommand
         private readonly IPaystackService _paystackService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
+        private readonly IMediator _mediator;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IPaystackService paystackService,
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
+            IMediator mediator,
             ILogger<Handler> logger)
         {
             _paystackService = paystackService;
             _unitOfWork = unitOfWork;
             _identityService = identityService;
+            _mediator = mediator;
             _logger = logger;
         }
 
@@ -108,10 +112,10 @@ public sealed class PaystackWebHookCommand
                         : "Missing"
                 ));
 
-            // 1. Signature
             if (string.IsNullOrWhiteSpace(request.Signature))
             {
                 op.Fail("Webhook signature is missing.");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.Unauthorized,
                     "Invalid webhook signature.",
@@ -121,6 +125,7 @@ public sealed class PaystackWebHookCommand
             if (request.RawBody.Length == 0)
             {
                 op.Fail("Webhook body is empty.");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Webhook body is empty.",
@@ -135,13 +140,13 @@ public sealed class PaystackWebHookCommand
             if (!isValidSignature)
             {
                 op.Fail("Invalid webhook signature.");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.Unauthorized,
                     "Invalid webhook signature.",
                     null);
             }
 
-            // 2. Deserialize
             PaystackWebHookResponseDto? webhook;
 
             try
@@ -153,7 +158,10 @@ public sealed class PaystackWebHookCommand
             }
             catch (JsonException jsonEx)
             {
-                op.Fail($"Invalid JSON payload: {jsonEx.Message}", jsonEx);
+                op.Fail(
+                    $"Invalid JSON payload: {jsonEx.Message}",
+                    jsonEx);
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid webhook payload.",
@@ -163,16 +171,17 @@ public sealed class PaystackWebHookCommand
             if (webhook is null)
             {
                 op.Fail("Deserialized webhook payload is null.");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid webhook payload.",
                     null);
             }
 
-            // 3. Event check
             if (string.IsNullOrWhiteSpace(webhook.Event))
             {
                 op.Fail("Webhook event is missing.");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Webhook event is required.",
@@ -185,18 +194,19 @@ public sealed class PaystackWebHookCommand
                     StringComparison.OrdinalIgnoreCase))
             {
                 op.Success($"Webhook event ignored: {webhook.Event}");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.OK,
                     "Webhook event ignored.",
                     webhook);
             }
 
-            // 4. Data checks
             var webhookData = webhook.Data;
 
             if (webhookData is null)
             {
                 op.Fail("Webhook data is missing.");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid webhook payload.",
@@ -210,6 +220,7 @@ public sealed class PaystackWebHookCommand
             {
                 op.Success(
                     $"Charge event received but status is not successful: {webhookData.Status}");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.OK,
                     "Transaction is not successful.",
@@ -219,6 +230,7 @@ public sealed class PaystackWebHookCommand
             if (string.IsNullOrWhiteSpace(webhookData.Reference))
             {
                 op.Fail("Transaction reference is missing.");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Transaction reference is required.",
@@ -227,7 +239,9 @@ public sealed class PaystackWebHookCommand
 
             if (webhookData.Amount <= 0)
             {
-                op.Fail($"Invalid transaction amount: {webhookData.Amount}");
+                op.Fail(
+                    $"Invalid transaction amount: {webhookData.Amount}");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid transaction amount.",
@@ -239,6 +253,7 @@ public sealed class PaystackWebHookCommand
             if (amount <= 0)
             {
                 op.Fail($"Invalid converted amount: {amount}");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid transaction amount.",
@@ -250,14 +265,15 @@ public sealed class PaystackWebHookCommand
                     "NGN",
                     StringComparison.OrdinalIgnoreCase))
             {
-                op.Fail($"Unsupported currency: {webhookData.Currency}");
+                op.Fail(
+                    $"Unsupported currency: {webhookData.Currency}");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Unsupported transaction currency.",
                     null);
             }
 
-            // 5. Find the existing transaction by reference
             var transaction =
                 await _unitOfWork.Query<Transaction>()
                     .FirstOrDefaultAsync(
@@ -268,24 +284,24 @@ public sealed class PaystackWebHookCommand
             {
                 op.Fail(
                     $"Transaction not found for reference: {webhookData.Reference}");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.NotFound,
                     "Transaction not found.",
                     null);
             }
 
-            // 6. Duplicate / already-completed check
             if (transaction.Status == TransactionStatus.Completed)
             {
                 op.Success(
                     $"Duplicate webhook ignored. Reference: {webhookData.Reference}");
+
                 return new BaseResult<PaystackWebHookResponseDto>(
                     HttpStatusCode.OK,
                     "Transaction already processed.",
                     webhook);
             }
 
-            // 7. Amount sanity check (optional but recommended)
             if (transaction.Amount.MinorUnits != webhookData.Amount)
             {
                 op.Fail(
@@ -298,12 +314,10 @@ public sealed class PaystackWebHookCommand
                     null);
             }
 
-            // 8. Begin DB transaction and process
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                // Re-fetch inside transaction to be safe against race conditions
                 var freshTransaction =
                     await _unitOfWork.Query<Transaction>()
                         .FirstOrDefaultAsync(
@@ -313,7 +327,9 @@ public sealed class PaystackWebHookCommand
                 if (freshTransaction is null)
                 {
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+
                     op.Fail("Transaction disappeared inside transaction scope.");
+
                     return new BaseResult<PaystackWebHookResponseDto>(
                         HttpStatusCode.NotFound,
                         "Transaction not found.",
@@ -323,15 +339,16 @@ public sealed class PaystackWebHookCommand
                 if (freshTransaction.Status == TransactionStatus.Completed)
                 {
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+
                     op.Success(
                         $"Duplicate webhook detected inside transaction. Reference: {webhookData.Reference}");
+
                     return new BaseResult<PaystackWebHookResponseDto>(
                         HttpStatusCode.OK,
                         "Transaction already processed.",
                         webhook);
                 }
 
-                // 9. Credit the user's balance
                 var updated =
                     await _identityService.UpdateBalanceAsync(
                         freshTransaction.UserPublicId,
@@ -341,31 +358,55 @@ public sealed class PaystackWebHookCommand
                 if (!updated)
                 {
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+
                     op.Fail(
                         $"Failed to update balance for user: {freshTransaction.UserPublicId}");
+
                     return new BaseResult<PaystackWebHookResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Failed to update user balance.",
                         null);
                 }
 
-                // 10. Mark transaction as completed
                 freshTransaction.Status = TransactionStatus.Completed;
+
                 freshTransaction.CompletedAt = DateTimeOffset.UtcNow;
 
-                // 11. Ledger entry
                 var ledgerEntry = new LedgerEntry
                 {
                     WalletId = null,
                     TransactionId = freshTransaction.Id,
                     Amount = Money.FromNaira(amount),
-                    IsCredit = true
+                    IsCredit = true,
                 };
 
                 await _unitOfWork.AddAsync(ledgerEntry, cancellationToken);
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
+
+                try
+                {
+                    await _mediator.Send(
+                        new CreateNotificationCommand.Command
+                        {
+                            UserPublicId = freshTransaction.UserPublicId,
+                            Type = NotificationType.Deposit,
+                            Title = "Deposit successful",
+                            Message =
+                                $"₦{amount:N0} has been added to " +
+                                $"your available balance.",
+                            ActionUrl = "/add-funds?tab=history",
+                        },
+                        cancellationToken);
+                }
+                catch (Exception notifEx)
+                {
+                    op.Fail(
+                        "Failed to send deposit notification.",
+                        notifEx);
+                }
 
                 op.Success(
                     $"Paystack webhook processed. " +
@@ -394,6 +435,7 @@ public sealed class PaystackWebHookCommand
                 {
                     op.Success(
                         $"Duplicate webhook ignored after DB constraint. Reference: {webhookData.Reference}");
+
                     return new BaseResult<PaystackWebHookResponseDto>(
                         HttpStatusCode.OK,
                         "Transaction already processed.",
