@@ -20,9 +20,10 @@ public sealed class ToggleFeatureFlag
 
     public sealed class ToggleFeatureFlagDto
     {
+        public long Id { get; set; }
         public FeatureFlagName Name { get; set; }
         public bool IsEnabled { get; set; }
-        public DateTimeOffset ModifiedAt { get; set; }
+        public DateTimeOffset? ModifiedAt { get; set; }
     }
 
     public sealed class Handler
@@ -56,9 +57,10 @@ public sealed class ToggleFeatureFlag
                     $"Feature flag is already {(request.IsEnabled ? "enabled" : "disabled")}.",
                     new ToggleFeatureFlagDto
                     {
+                        Id = flag.Id,
                         Name = flag.Name,
                         IsEnabled = flag.IsEnabled,
-                        ModifiedAt = flag.ModifiedAt.Value,
+                        ModifiedAt = flag.ModifiedAt,
                     });
             }
 
@@ -71,9 +73,10 @@ public sealed class ToggleFeatureFlag
                 $"Feature flag {(request.IsEnabled ? "enabled" : "disabled")} successfully.",
                 new ToggleFeatureFlagDto
                 {
+                    Id = flag.Id,
                     Name = flag.Name,
                     IsEnabled = flag.IsEnabled,
-                    ModifiedAt = flag.ModifiedAt.Value,
+                    ModifiedAt = flag.ModifiedAt,
                 });
         }
     }

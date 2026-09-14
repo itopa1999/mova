@@ -32,6 +32,8 @@ public sealed class DepositTransaction
 
         public string Reference { get; init; } = string.Empty;
 
+        public string FailureReason { get; set; } = string.Empty;
+
         public DateTimeOffset? CompletedAt { get; init; }
         public DateTimeOffset? CreatedAt { get; init; }
 
@@ -66,6 +68,9 @@ public sealed class DepositTransaction
                     Amount = x.Amount.ToDecimal(),
                     Type = x.Type,
                     Status = x.Status,
+                    FailureReason = x.Status == TransactionStatus.Failed
+                        ? x.FailureReason
+                        : null,
                     Reference = x.Reference ?? string.Empty,
                     CompletedAt = x.CompletedAt,
                     CreatedAt = x.CreatedAt

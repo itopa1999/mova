@@ -16,12 +16,13 @@ public sealed class GetFeatureFlags
     }
     public sealed class FeatureFlagDto
     {
+        public long Id { get; set; }
         public FeatureFlagName Name { get; set; }
         public string Description { get; set; } = string.Empty;
         public bool IsEnabled { get; set; }
         public string? Metadata { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
-        public DateTimeOffset ModifiedAt { get; set; }
+        public DateTimeOffset? ModifiedAt { get; set; }
     }
 
     public sealed class Handler
@@ -43,12 +44,13 @@ public sealed class GetFeatureFlags
                 .OrderBy(x => x.Name)
                 .Select(x => new FeatureFlagDto
                 {
+                    Id = x.Id,
                     Name = x.Name,
                     Description = x.Description,
                     IsEnabled = x.IsEnabled,
                     Metadata = x.Metadata,
                     CreatedAt = x.CreatedAt,
-                    ModifiedAt = x.ModifiedAt.Value,
+                    ModifiedAt = x.ModifiedAt,
                 })
                 .ToListAsync(cancellationToken);
 

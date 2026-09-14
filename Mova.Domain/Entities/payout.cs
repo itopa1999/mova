@@ -26,6 +26,8 @@ public class Payout : BaseEntity
     public DateTimeOffset? InitiatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset? FailedAt { get; set; }
+    
+    public int FailedAttempts { get; set; }
 
     public string? FailureReason { get; set; }
 

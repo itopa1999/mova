@@ -125,3 +125,6 @@ docker-data/
 # WINDOWS
 # =========================
 Desktop.ini
+
+Migrations/
+**/Migrations/

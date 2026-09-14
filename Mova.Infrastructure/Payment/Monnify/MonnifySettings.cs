@@ -10,4 +10,6 @@ public sealed class MonnifySettings
     public string SecretKey { get; set; } = string.Empty;
 
     public string ContractCode { get; set; } = string.Empty;
+
+    public string SourceAccountNumber { get; set; } = string.Empty;
 }

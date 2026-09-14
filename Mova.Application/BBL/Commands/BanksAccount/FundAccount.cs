@@ -229,6 +229,7 @@ public sealed class FundAccount
                     UserPublicId = request.UserPublicId,
                     WalletId = null,
                     Title = $"Fund account via {provider}",
+                    Provider = provider,
                     Amount = amount,
                     Type = TransactionType.Deposit,
                     Status = TransactionStatus.Processing,

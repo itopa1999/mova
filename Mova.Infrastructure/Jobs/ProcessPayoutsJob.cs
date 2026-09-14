@@ -1,277 +1,390 @@
-// using Hangfire;
-// using Microsoft.EntityFrameworkCore;
-// using Microsoft.Extensions.Logging;
-// using Mova.Application.Interfaces.Payment;
-// using Mova.Domain.Enums;
-// using Mova.Infrastructure.Persistence;
-// using Mova.Shared.Logging;
+using Hangfire;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Payment;
+using Mova.Application.Interfaces.Service;
+using Mova.Domain.Entities;
+using Mova.Domain.Enums;
+using Mova.Infrastructure.Persistence;
+using Mova.Shared.Logging;
 
-// namespace Mova.Infrastructure.Jobs;
+namespace Mova.Infrastructure.Jobs;
 
-// public sealed class ProcessPayoutsJob
-// {
-//     private readonly ApplicationDbContext _context;
-//     private readonly ILogger<ProcessPayoutsJob> _logger;
-//     private readonly IPaystackService _paystackService;
+public sealed class ProcessPayoutsJob
+{
+    private readonly ApplicationDbContext _context;
+    private readonly ILogger<ProcessPayoutsJob> _logger;
+    private readonly IFeatureFlagService _featureFlagService;
+    private readonly IPaystackService _paystackService;
+    private readonly IMonnifyService _monnifyService;
+    private readonly IFlutterwaveService _flutterwaveService;
 
-//     public ProcessPayoutsJob(
-//         ApplicationDbContext context,
-//         ILogger<ProcessPayoutsJob> logger,
-//         IPaystackService paystackService)
-//     {
-//         _context = context;
-//         _logger = logger;
-//         _paystackService = paystackService;
-//     }
+    public ProcessPayoutsJob(
+        ApplicationDbContext context,
+        ILogger<ProcessPayoutsJob> logger,
+        IFeatureFlagService featureFlagService,
+        IPaystackService paystackService,
+        IMonnifyService monnifyService,
+        IFlutterwaveService flutterwaveService)
+    {
+        _context = context;
+        _logger = logger;
+        _featureFlagService = featureFlagService;
+        _paystackService = paystackService;
+        _monnifyService = monnifyService;
+        _flutterwaveService = flutterwaveService;
+    }
 
-//     [DisableConcurrentExecution(300)]
-//     public async Task ExecuteAsync(
-//         CancellationToken cancellationToken)
-//     {
-//         using var op = OperationLogger.Start(
-//             _logger,
-//             "ProcessPayouts");
+    [DisableConcurrentExecution(300)]
+    public async Task ExecuteAsync(
+        CancellationToken cancellationToken)
+    {
+        using var op = OperationLogger.Start(
+            _logger,
+            "ProcessPayouts");
 
-//         var payoutIds = await _context.Payouts
-//             .AsNoTracking()
-//             .Where(x =>
-//                 x.Status == PayoutStatus.Pending ||
-//                 x.Status == PayoutStatus.Processing)
-//             .OrderBy(x => x.Id)
-//             .Select(x => x.Id)
-//             .Take(100)
-//             .ToListAsync(cancellationToken);
+        var payoutIds = await _context.Payouts
+            .AsNoTracking()
+            .Where(x =>
+                x.Status == PayoutStatus.Pending ||
+                x.Status == PayoutStatus.Processing)
+            .OrderBy(x => x.Id)
+            .Select(x => x.Id)
+            .Take(100)
+            .ToListAsync(cancellationToken);
 
-//         foreach (var payoutId in payoutIds)
-//         {
-//             await ProcessPayoutAsync(
-//                 payoutId,
-//                 cancellationToken);
-//         }
+        foreach (var payoutId in payoutIds)
+        {
+            await ProcessPayoutAsync(
+                payoutId,
+                cancellationToken);
+        }
 
-//         op.Success(
-//             $"Processed {payoutIds.Count} payout(s).");
-//     }
+        op.Success(
+            $"Processed {payoutIds.Count} payout(s).");
+    }
 
-//     private async Task ProcessPayoutAsync(
-//         long payoutId,
-//         CancellationToken cancellationToken)
-//     {
-//         using var op = OperationLogger.Start(
-//             _logger,
-//             "ProcessPayout",
-//             ("PayoutId", payoutId));
+    private async Task ProcessPayoutAsync(
+        long payoutId,
+        CancellationToken cancellationToken)
+    {
+        using var op = OperationLogger.Start(
+            _logger,
+            "ProcessPayout",
+            ("PayoutId", payoutId));
 
-//         var payout = await _context.Payouts
-//             .Include(x => x.Wallet)
-//             .Include(x => x.BankAccount)
-//             .FirstOrDefaultAsync(
-//                 x => x.Id == payoutId,
-//                 cancellationToken);
+        var payout = await _context.Payouts
+            .Include(x => x.Wallet)
+            .Include(x => x.BankAccount)
+            .FirstOrDefaultAsync(
+                x => x.Id == payoutId,
+                cancellationToken);
 
-//         if (payout is null)
-//             return;
+        if (payout is null)
+            return;
 
-//         if (payout.Status is
-//             PayoutStatus.Successful or
-//             PayoutStatus.Failed or
-//             PayoutStatus.Reversed)
-//         {
-//             return;
-//         }
+        if (payout.Status is
+            PayoutStatus.Successful or
+            PayoutStatus.Failed or
+            PayoutStatus.Reversed)
+        {
+            return;
+        }
 
-//         if (payout.Wallet is null)
-//         {
-//             await MarkFailedAsync(
-//                 payout,
-//                 "Wallet was not found.",
-//                 cancellationToken);
+        if (payout.Wallet is null)
+        {
+            await MarkFailedAsync(
+                payout,
+                "Wallet was not found.",
+                cancellationToken);
 
-//             return;
-//         }
+            return;
+        }
 
-//         if (payout.BankAccount is null)
-//         {
-//             await MarkFailedAsync(
-//                 payout,
-//                 "Bank account was not found.",
-//                 cancellationToken);
+        if (payout.BankAccount is null)
+        {
+            await MarkFailedAsync(
+                payout,
+                "Bank account was not found.",
+                cancellationToken);
 
-//             return;
-//         }
+            return;
+        }
 
-//         if (payout.Amount.MinorUnits <= 0)
-//         {
-//             await MarkFailedAsync(
-//                 payout,
-//                 "Payout amount must be greater than zero.",
-//                 cancellationToken);
+        if (payout.Amount.MinorUnits <= 0)
+        {
+            await MarkFailedAsync(
+                payout,
+                "Payout amount must be greater than zero.",
+                cancellationToken);
 
-//             return;
-//         }
+            return;
+        }
 
-//         if (payout.Status == PayoutStatus.Processing)
-//         {
-//             await VerifyExistingTransferAsync(
-//                 payout,
-//                 cancellationToken);
+        var gateway = await ResolveGatewayAsync(cancellationToken);
 
-//             return;
-//         }
+        if (gateway is null)
+        {
+            await MarkFailedAsync(
+                payout,
+                "No payout gateway is currently enabled.",
+                cancellationToken);
 
-//         payout.Status = PayoutStatus.Processing;
+            return;
+        }
 
-//         await _context.SaveChangesAsync(
-//             cancellationToken);
+        if (payout.Status == PayoutStatus.Processing)
+        {
+            await VerifyExistingTransferAsync(
+                payout,
+                gateway.Value,
+                cancellationToken);
 
-//         try
-//         {
-//             var result = await _paystackService.TransferAsync(
-//                 payout.BankAccount,
-//                 payout.Amount,
-//                 payout.Reference,
-//                 cancellationToken);
+            return;
+        }
 
-//             if (!result.IsSuccessful)
-//             {
-//                 await MarkFailedAsync(
-//                     payout,
-//                     result.Message,
-//                     cancellationToken);
+        payout.Status = PayoutStatus.Processing;
+        payout.Provider = gateway.Value.ToString();
+        payout.InitiatedAt ??= DateTimeOffset.UtcNow;
 
-//                 return;
-//             }
+        await _context.SaveChangesAsync(
+            cancellationToken);
 
-//             payout.ProviderReference = result.Reference;
+        try
+        {
+            var result = await SendTransferAsync(
+                gateway.Value,
+                payout,
+                cancellationToken);
 
-//             if (result.Status.Equals(
-//                     "success",
-//                     StringComparison.OrdinalIgnoreCase))
-//             {
-//                 await MarkSuccessfulAsync(
-//                     payout,
-//                     cancellationToken);
+            if (!result.IsSuccessful)
+            {
+                await MarkFailedAsync(
+                    payout,
+                    result.Message,
+                    cancellationToken);
 
-//                 return;
-//             }
+                return;
+            }
 
-//             payout.Status = PayoutStatus.Processing;
+            payout.ProviderReference = result.Reference;
 
-//             await _context.SaveChangesAsync(
-//                 cancellationToken);
+            if (result.Status.Equals(
+                    "success",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                await MarkSuccessfulAsync(
+                    payout,
+                    cancellationToken);
 
-//             op.Success("Payout submitted to provider.");
-//         }
-//         catch (Exception ex)
-//         {
-//             _logger.LogError(
-//                 ex,
-//                 "Error processing payout {PayoutId}.",
-//                 payout.Id);
+                return;
+            }
 
-//             await _context.SaveChangesAsync(
-//                 cancellationToken);
+            payout.Status = PayoutStatus.Processing;
 
-//             throw;
-//         }
-//     }
+            await _context.SaveChangesAsync(
+                cancellationToken);
 
-//     private async Task VerifyExistingTransferAsync(
-//         dynamic payout,
-//         CancellationToken cancellationToken)
-//     {
-//         var result = await _paystackService
-//             .VerifyTransferAsync(
-//                 payout.Reference,
-//                 cancellationToken);
+            op.Success(
+                $"Payout submitted to {gateway.Value}.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error processing payout {PayoutId} via {Gateway}.",
+                payout.Id,
+                gateway.Value);
 
-//         if (!result.IsSuccessful)
-//         {
-//             payout.FailedAttempts++;
+            await _context.SaveChangesAsync(
+                cancellationToken);
 
-//             if (payout.FailedAttempts >= 3)
-//             {
-//                 payout.Status = PayoutStatus.Failed;
-//                 payout.FailureReason = result.Message;
-//             }
+            throw;
+        }
+    }
 
-//             await _context.SaveChangesAsync(
-//                 cancellationToken);
+    private async Task<PaymentProvider?> ResolveGatewayAsync(
+        CancellationToken cancellationToken)
+    {
+        if (await _featureFlagService.IsEnabledAsync(
+                FeatureFlagName.PayoutsViaMonnify,
+                cancellationToken))
+        {
+            return PaymentProvider.Monnify;
+        }
 
-//             return;
-//         }
+        if (await _featureFlagService.IsEnabledAsync(
+                FeatureFlagName.PayoutsViaFlutterwave,
+                cancellationToken))
+        {
+            return PaymentProvider.Flutterwave;
+        }
 
-//         payout.ProviderReference = result.Reference;
+        if (await _featureFlagService.IsEnabledAsync(
+                FeatureFlagName.PayoutsViaPaystack,
+                cancellationToken))
+        {
+            return PaymentProvider.Paystack;
+        }
 
-//         switch (result.Status.ToLowerInvariant())
-//         {
-//             case "success":
+        return null;
+    }
 
-//                 await MarkSuccessfulAsync(
-//                     payout,
-//                     cancellationToken);
+    private async Task<TransferResult> SendTransferAsync(
+        PaymentProvider gateway,
+        Payout payout,
+        CancellationToken cancellationToken)
+    {
+        return gateway switch
+        {
+            PaymentProvider.Paystack =>
+                await _paystackService.TransferAsync(
+                    payout.BankAccount,
+                    payout.Amount,
+                    payout.Reference,
+                    cancellationToken),
 
-//                 break;
+            PaymentProvider.Monnify =>
+                await _monnifyService.TransferAsync(
+                    payout.BankAccount,
+                    payout.Amount,
+                    payout.Reference,
+                    cancellationToken),
 
-//             case "failed":
+            PaymentProvider.Flutterwave =>
+                await _flutterwaveService.TransferAsync(
+                    payout.BankAccount,
+                    payout.Amount,
+                    payout.Reference,
+                    cancellationToken),
 
-//                 await MarkFailedAsync(
-//                     payout,
-//                     result.Message,
-//                     cancellationToken);
+            _ => throw new InvalidOperationException(
+                $"Unsupported gateway: {gateway}"),
+        };
+    }
 
-//                 break;
+    private async Task VerifyExistingTransferAsync(
+        Payout payout,
+        PaymentProvider gateway,
+        CancellationToken cancellationToken)
+    {
+        var result = await VerifyTransferAsync(
+            gateway,
+            payout,
+            cancellationToken);
 
-//             case "reversed":
+        if (!result.IsSuccessful)
+        {
+            payout.FailedAttempts++;
 
-//                 payout.Status = PayoutStatus.Reversed;
-//                 payout.FailureReason = result.Message;
+            if (payout.FailedAttempts >= 3)
+            {
+                payout.Status = PayoutStatus.Failed;
+                payout.FailureReason = result.Message;
+                payout.FailedAt = DateTimeOffset.UtcNow;
+            }
 
-//                 await _context.SaveChangesAsync(
-//                     cancellationToken);
+            await _context.SaveChangesAsync(
+                cancellationToken);
 
-//                 break;
+            return;
+        }
 
-//             case "pending":
-//             case "otp":
-//             case "received":
+        payout.ProviderReference = result.Reference;
 
-//                 payout.Status = PayoutStatus.Processing;
+        switch (result.Status.ToLowerInvariant())
+        {
+            case "success":
+                await MarkSuccessfulAsync(
+                    payout,
+                    cancellationToken);
+                break;
 
-//                 await _context.SaveChangesAsync(
-//                     cancellationToken);
+            case "failed":
+                await MarkFailedAsync(
+                    payout,
+                    result.Message,
+                    cancellationToken);
+                break;
 
-//                 break;
-//         }
-//     }
+            case "reversed":
+                payout.Status = PayoutStatus.Reversed;
+                payout.FailureReason = result.Message;
+                payout.FailedAt = DateTimeOffset.UtcNow;
 
-//     private async Task MarkSuccessfulAsync(
-//         dynamic payout,
-//         CancellationToken cancellationToken)
-//     {
-//         if (payout.Status == PayoutStatus.Successful)
-//             return;
+                await _context.SaveChangesAsync(
+                    cancellationToken);
+                break;
 
-//         payout.Status = PayoutStatus.Successful;
-//         payout.ProcessedAt = DateTimeOffset.UtcNow;
+            case "pending":
+            case "otp":
+            case "received":
+            case "processing":
+                payout.Status = PayoutStatus.Processing;
 
-//         await _context.SaveChangesAsync(
-//             cancellationToken);
-//     }
+                await _context.SaveChangesAsync(
+                    cancellationToken);
+                break;
+        }
+    }
 
-//     private async Task MarkFailedAsync(
-//         dynamic payout,
-//         string reason,
-//         CancellationToken cancellationToken)
-//     {
-//         payout.FailedAttempts++;
-//         payout.FailureReason = reason;
+    private async Task<TransferResult> VerifyTransferAsync(
+        PaymentProvider gateway,
+        Payout payout,
+        CancellationToken cancellationToken)
+    {
+        return gateway switch
+        {
+            PaymentProvider.Paystack =>
+                await _paystackService.VerifyTransferAsync(
+                    payout.Reference,
+                    cancellationToken),
 
-//         payout.Status = payout.FailedAttempts >= 3
-//             ? PayoutStatus.Failed
-//             : PayoutStatus.Pending;
+            PaymentProvider.Monnify =>
+                await _monnifyService.VerifyTransferAsync(
+                    payout.Reference,
+                    cancellationToken),
 
-//         await _context.SaveChangesAsync(
-//             cancellationToken);
-//     }
-// }
+            PaymentProvider.Flutterwave =>
+                await _flutterwaveService.VerifyTransferAsync(
+                    payout.Reference,
+                    cancellationToken),
+
+            _ => throw new InvalidOperationException(
+                $"Unsupported gateway: {gateway}"),
+        };
+    }
+
+    private async Task MarkSuccessfulAsync(
+        Payout payout,
+        CancellationToken cancellationToken)
+    {
+        if (payout.Status == PayoutStatus.Successful)
+            return;
+
+        payout.Status = PayoutStatus.Successful;
+        payout.CompletedAt = DateTimeOffset.UtcNow;
+
+        await _context.SaveChangesAsync(
+            cancellationToken);
+    }
+
+    private async Task MarkFailedAsync(
+        Payout payout,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        payout.FailedAttempts++;
+        payout.FailureReason = reason;
+
+        payout.Status = payout.FailedAttempts >= 3
+            ? PayoutStatus.Failed
+            : PayoutStatus.Pending;
+
+        if (payout.Status == PayoutStatus.Failed)
+            payout.FailedAt = DateTimeOffset.UtcNow;
+
+        await _context.SaveChangesAsync(
+            cancellationToken);
+    }
+}

@@ -13,11 +13,15 @@ public class Transaction : BaseEntity
     
     public string? Title {get; set; }
 
+    public PaymentProvider? Provider {get; set; }
+
     public Money Amount { get; set; }
 
     public TransactionType Type { get; set; }
 
     public TransactionStatus Status { get; set; }
+
+    public string? FailureReason { get; set; } = string.Empty;
 
     public string? Reference { get; set; }
 

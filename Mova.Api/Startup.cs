@@ -183,12 +183,20 @@ public class Startup(IConfiguration configuration)
         var recurringJobManager = app.Services
             .GetRequiredService<IRecurringJobManager>();
 
-        recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
-            "process-scheduled-releases",
-            job => job.ExecuteAsync(CancellationToken.None),
-            Cron.Minutely);
+        // recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
+        //     "process-scheduled-releases",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(2));
 
-        app.UseHangfireDashboard("/hangfire");
+        // recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
+        //     "process-releases-payouts",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(2));
+
+        // recurringJobManager.AddOrUpdate<processPendingProcessingTransactions>(
+        //     "process-releases-payouts",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.HourInterval(6));
 
         app.UseCors("AllowSpecificOrigin");
 
@@ -231,6 +239,14 @@ public class Startup(IConfiguration configuration)
         app.UseAuthentication();
 
         app.UseAuthorization();
+
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = new[]
+            {
+                new HangfireDashboardAuthorizationFilter()
+            }
+        });
 
         app.UseStaticFiles();
 

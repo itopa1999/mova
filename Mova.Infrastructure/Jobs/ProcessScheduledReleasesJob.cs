@@ -190,7 +190,8 @@ public sealed class ProcessScheduledReleasesJob
                     Reference = payoutReference,
                     Provider = null,
                     ProviderReference = null,
-                    Status = PayoutStatus.Processing,
+                    FailedAttempts = 0,
+                    Status = PayoutStatus.Pending,
                     InitiatedAt = DateTimeOffset.UtcNow
                 };
 
