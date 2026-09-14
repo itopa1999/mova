@@ -23,6 +23,7 @@ public sealed class HomeQuery
         public Balance Balance { get; set; } = new();
         public List<ReleasedSchedulesToday> TodayReleased { get; set; } = new();
         public List<Wallets> Wallets { get; set; } = new();
+        public List<LockedAmountPoint> LockedAmountHistory { get; set; } = new();
     }
 
     public sealed class Balance
@@ -47,6 +48,15 @@ public sealed class HomeQuery
         public string CategoryName { get; set; } = string.Empty;
         public string CategoryIcon { get; set; } = string.Empty;
         public decimal TargetAmount { get; set; }
+    }
+
+    public sealed class LockedAmountPoint
+    {
+        // e.g. "May 2026"
+        public string Label { get; set; } = string.Empty;
+
+        // Sum of target amounts for wallets created in this month
+        public decimal Value { get; set; }
     }
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<HomeQueryDto>>
@@ -87,7 +97,7 @@ public sealed class HomeQuery
             try
             {
                 var wallets = await _unitOfWork.Query<Wallet>()
-                    .Where(w => w.UserPublicId == request.UserPublicId 
+                    .Where(w => w.UserPublicId == request.UserPublicId
                                 && w.Status == WalletStatus.Active)
                     .Include(w => w.Category)
                     .OrderByDescending(w => w.CreatedAt)
@@ -115,7 +125,7 @@ public sealed class HomeQuery
                     .ToListAsync(cancellationToken);
 
                 var allWallets = await _unitOfWork.Query<Wallet>()
-                    .Where(w => w.UserPublicId == request.UserPublicId 
+                    .Where(w => w.UserPublicId == request.UserPublicId
                                 && w.Status == WalletStatus.Active)
                     .ToListAsync(cancellationToken);
 
@@ -132,6 +142,11 @@ public sealed class HomeQuery
                     TargetAmount = w.TargetAmount.ToDecimal()
                 }).ToList();
 
+                var lockedAmountHistory = await BuildLockedAmountHistoryAsync(
+                    request.UserPublicId,
+                    months: 5,
+                    cancellationToken);
+
                 var result = new HomeQueryDto
                 {
                     Balance = new Balance
@@ -141,7 +156,8 @@ public sealed class HomeQuery
                         TotalLockedAmount = totalLockedAmount
                     },
                     TodayReleased = todayReleased,
-                    Wallets = walletSummaries
+                    Wallets = walletSummaries,
+                    LockedAmountHistory = lockedAmountHistory
                 };
 
                 return new BaseResult<HomeQueryDto>(
@@ -155,6 +171,65 @@ public sealed class HomeQuery
                     HttpStatusCode.InternalServerError,
                     "An error occurred while retrieving your home data. Please try again later.");
             }
+        }
+
+        /// <summary>
+        /// For each of the last N months, returns the sum of TargetAmount
+        /// for wallets created in that month.
+        ///
+        /// Example output for months = 5 on Sep 2026:
+        ///   May 2026, Jun 2026, Jul 2026, Aug 2026, Sep 2026
+        /// </summary>
+        private async Task<List<LockedAmountPoint>> BuildLockedAmountHistoryAsync(
+            string userPublicId,
+            int months,
+            CancellationToken cancellationToken)
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            var currentMonthStart = new DateTimeOffset(
+                now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+
+            var windowStart = currentMonthStart.AddMonths(-(months - 1));
+            var windowEnd = currentMonthStart.AddMonths(1);
+
+            // Pull wallets created inside the window, with the fields we need
+            // to compute the per-month sum of TargetAmount.
+            var wallets = await _unitOfWork.Query<Wallet>()
+                .Where(w => w.UserPublicId == userPublicId
+                            && w.CreatedAt >= windowStart
+                            && w.CreatedAt < windowEnd)
+                .Select(w => new
+                {
+                    w.CreatedAt,
+                    TargetMinorUnits = w.TargetAmount.MinorUnits
+                })
+                .ToListAsync(cancellationToken);
+
+            // Group by the first day of the month the wallet was created in
+            var byMonth = wallets
+                .GroupBy(w => new DateTimeOffset(
+                    w.CreatedAt.Year, w.CreatedAt.Month, 1, 0, 0, 0, TimeSpan.Zero))
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Sum(x => x.TargetMinorUnits) / 100m);
+
+            var result = new List<LockedAmountPoint>(months);
+
+            for (var i = 0; i < months; i++)
+            {
+                var monthStart = windowStart.AddMonths(i);
+
+                result.Add(new LockedAmountPoint
+                {
+                    Label = monthStart.ToString(
+                        "MMM yyyy",
+                        System.Globalization.CultureInfo.InvariantCulture),
+                    Value = byMonth.TryGetValue(monthStart, out var v) ? v : 0m
+                });
+            }
+
+            return result;
         }
     }
 }

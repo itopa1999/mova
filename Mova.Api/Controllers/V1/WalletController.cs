@@ -4,13 +4,16 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mova.Api.Configurations;
 using Mova.Application.BBL.Commands.AccountWallet;
+using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Shared.Common;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateWalletCommand;
+using static Mova.Application.BBL.MovaAPIs.GetReleasesQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletActivities;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletAnalytics;
+using static Mova.Application.BBL.Queries.AccountWallet.GetWalletPayouts;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletSchedulePreviewQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.WalletDetails;
 using static Mova.Application.BBL.Queries.SchedulePreview.SchedulePreviewQuery;
@@ -127,6 +130,24 @@ public class WalletController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("{walletId:long}/payouts")]
+    [ProducesResponseType(typeof(BaseResult<List<WalletPayoutGroupDto>>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetWalletPayouts(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetWalletPayouts.Query
+        {
+            WalletId = walletId,
+            UserPublicId = UserPublicId
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("analytics")]
     [ProducesResponseType(typeof(BaseResult<WalletAnalyticsDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -182,6 +203,24 @@ public class WalletController(
         return StatusCode(
             (int)result.StatusCode,
             result);
+    }
+
+    [HttpGet("releases")]
+    [ProducesResponseType(typeof(BaseResult<GetReleasesQueryDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult<GetReleasesQueryDto>), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetReleases(
+        [FromQuery] int upcomingLimit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetReleasesQuery.Query
+        {
+            UserPublicId = UserPublicId,
+            UpcomingLimit = upcomingLimit
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
     }
 
     [HttpPost("preview")]

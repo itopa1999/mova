@@ -622,3 +622,8 @@ POST /api/schedule/preview
                          │
                          ↓
                       BANK
+
+
+<!-- TODO -->
+1. make sure that every FK queries uses include
+2. 

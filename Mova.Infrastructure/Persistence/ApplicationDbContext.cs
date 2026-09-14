@@ -35,6 +35,7 @@ public sealed class ApplicationDbContext
     public DbSet<Payout> Payouts => Set<Payout>();
     public DbSet<WalletCategory> WalletCategories => Set<WalletCategory>();
     public DbSet<AppNotification> AppNotifications => Set<AppNotification>();
+    public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

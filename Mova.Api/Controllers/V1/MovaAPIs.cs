@@ -3,8 +3,11 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mova.Api.Configurations;
+using Mova.Application.BBL.Commands.FeatureFlags;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Shared.Common;
+using static Mova.Application.BBL.Commands.FeatureFlags.ToggleFeatureFlag;
+using static Mova.Application.BBL.MovaAPIs.GetFeatureFlags;
 using static Mova.Application.BBL.MovaAPIs.GetNotificationsQuery;
 using static Mova.Application.BBL.MovaAPIs.HomeQuery;
 
@@ -83,6 +86,37 @@ public class MovaQueries(
                 UserPublicId = UserPublicId,
             },
             cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("feature-flags")]
+    [ProducesResponseType(typeof(BaseResult<List<FeatureFlagDto>>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetAll(
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(
+            new GetFeatureFlags.Query(), cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPost("feature-flags/toggle")]
+    [ProducesResponseType(typeof(BaseResult<ToggleFeatureFlagDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> Toggle(
+        [FromQuery] long id,
+        [FromQuery] bool isEnabled,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new ToggleFeatureFlag.Command
+        {
+            Id = id,
+            IsEnabled = isEnabled,
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
     }

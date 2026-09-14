@@ -76,10 +76,22 @@ public sealed class PayoutConfiguration : IEntityTypeConfiguration<Payout>
                     .IsRequired();
             });
 
+        // FK relationships — explicit so EF doesn't create shadow properties
+        builder.HasOne(x => x.Wallet)
+            .WithMany()
+            .HasForeignKey(x => x.WalletId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.BankAccount)
+            .WithMany()
+            .HasForeignKey(x => x.BankAccountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(x => x.UserPublicId);
 
         builder.HasIndex(x => x.ProviderReference)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("\"ProviderReference\" IS NOT NULL");
 
         builder.HasIndex(x => x.Reference)
             .IsUnique();

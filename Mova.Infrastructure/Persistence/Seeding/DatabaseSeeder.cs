@@ -15,6 +15,7 @@ public sealed class DatabaseSeeder
         CancellationToken cancellationToken = default)
     {
         await SeedWalletCategoriesAsync(cancellationToken);
+        await SeedFeatureFlagsAsync(cancellationToken);
     }
 
     private async Task SeedWalletCategoriesAsync(
@@ -38,6 +39,32 @@ public sealed class DatabaseSeeder
 
         await _dbContext.WalletCategories.AddRangeAsync(
             categoriesToAdd,
+            cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task SeedFeatureFlagsAsync(
+        CancellationToken cancellationToken)
+    {
+        var existingNames = (await _dbContext.FeatureFlags
+            .Select(x => x.Name)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        var defaultFlags = DefaultFeatureFlags.Create();
+
+        var flagsToAdd = defaultFlags
+            .Where(x => !existingNames.Contains(x.Name))
+            .ToList();
+
+        if (flagsToAdd.Count == 0)
+        {
+            return;
+        }
+
+        await _dbContext.FeatureFlags.AddRangeAsync(
+            flagsToAdd,
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);

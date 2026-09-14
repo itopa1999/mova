@@ -190,13 +190,26 @@ public sealed class ProcessScheduledReleasesJob
                     Reference = payoutReference,
                     Provider = null,
                     ProviderReference = null,
-                    Status = PayoutStatus.Pending,
+                    Status = PayoutStatus.Processing,
                     InitiatedAt = DateTimeOffset.UtcNow
                 };
 
                 await _context.Set<Payout>().AddAsync(payout, cancellationToken);
             }
         }
+
+        var notification = new AppNotification
+        {
+            UserPublicId = wallet.UserPublicId,
+            Type = NotificationType.Release,
+            Title = $"{wallet.Name} schedule released",
+            Message = $"{wallet.Name} schedule released",
+            IsRead = false,
+            ActionUrl = $"/wallet/{wallet.Id}",
+            Metadata = null,
+        };
+
+        await _context.Set<AppNotification>().AddAsync(notification, cancellationToken);
 
         scheduledRelease.Status = ReleaseStatus.Released;
         scheduledRelease.ReleasedAt = DateTimeOffset.UtcNow;

@@ -57,6 +57,12 @@ public class ScheduledReleaseConfiguration
             x.ScheduledFor
         });
 
+        builder.HasIndex(x => new
+        {
+            x.WalletRuleId,
+            x.ScheduledFor
+        });
+
         builder.HasIndex(x => x.WalletId);
 
         builder.HasIndex(x => x.WalletRuleId);

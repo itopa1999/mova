@@ -16,6 +16,7 @@ public class BankAccount : BaseEntity
     public string BankImageUrl { get; set; } = string.Empty;
 
     public string? PaystackRecipientCode { get; set; }
+    public string? FlutterwaveRecipientId { get; set; }
 
     public BankAccountStatus Status { get; set; }
     public bool IsDefault { get; set; }
