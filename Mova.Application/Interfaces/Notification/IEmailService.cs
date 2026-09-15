@@ -25,6 +25,14 @@ public interface IEmailService
         CancellationToken cancellationToken = default
     );
 
+    Task SendNotificationEmailAsync(
+        string firstName,
+        string email,
+        string message,
+        string subject,
+        CancellationToken cancellationToken = default
+    );
+
     Task SendAsync(
         EmailMessage email,
         CancellationToken cancellationToken = default

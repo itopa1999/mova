@@ -2,7 +2,9 @@ using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Mova.Api.Configurations;
+using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.FeatureFlags;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Shared.Common;
@@ -23,6 +25,7 @@ public class MovaQueries(
     private readonly IMediator _mediator = mediator;
 
     [HttpGet("home")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<HomeQueryDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetHomeData(CancellationToken cancellationToken)
@@ -38,6 +41,7 @@ public class MovaQueries(
     }
 
     [HttpGet("get-notifications")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<NotificationDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetAllNotiications(
@@ -56,6 +60,7 @@ public class MovaQueries(
     }
 
     [HttpPatch("{id:long}/read-notification")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> MarkAsRead(
@@ -75,6 +80,7 @@ public class MovaQueries(
 
 
     [HttpPatch("read-all-notifications")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> MarkAllAsRead(
@@ -91,6 +97,7 @@ public class MovaQueries(
     }
 
     [HttpGet("feature-flags")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<FeatureFlagDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetAll(
@@ -103,6 +110,7 @@ public class MovaQueries(
     }
 
     [HttpPost("feature-flags/toggle")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<ToggleFeatureFlagDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> Toggle(

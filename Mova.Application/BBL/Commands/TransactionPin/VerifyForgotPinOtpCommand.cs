@@ -3,8 +3,8 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
@@ -36,21 +36,21 @@ public sealed class VerifyForgotPinOtpCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
-        private readonly IMediator _mediator;
         private readonly ITransactionPinService _transactionPinService;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger,
-            IMediator mediator,
             ITransactionPinService transactionPinService)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
+            _notificationQueue = notificationQueue;
             _logger = logger;
-            _mediator = mediator;
             _transactionPinService = transactionPinService;
         }
 
@@ -132,48 +132,58 @@ public sealed class VerifyForgotPinOtpCommand
                     "OTP has expired. Please request a new one.");
             }
 
-            // Reset the PIN
-            var isReset = await _transactionPinService.ResetPinAsync(
-                request.UserPublicId,
-                cancellationToken);
-
-            if (!isReset)
-            {
-                op.Fail("Failed to reset the existing transaction PIN.");
-                return new BaseResult<object>(
-                    HttpStatusCode.BadRequest,
-                    "Unable to reset PIN. Please try again.");
-            }
-
-            // Mark OTP used
-            otpRecord.IsUsed = true;
-            otpRecord.UsedAt = DateTimeOffset.UtcNow;
-
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            // Notify the user — PIN reset verified
             try
             {
-                await _mediator.Send(
-                    new CreateNotificationCommand.Command
-                    {
-                        UserPublicId = request.UserPublicId,
-                        Type = NotificationType.Security,
-                        Title = "PIN reset verified",
-                        Message =
-                            "Your identity was verified and your transaction PIN has been cleared. " +
-                            "Set a new PIN to continue using secure actions. " +
-                            "If this wasn't you, contact support immediately.",
-                        ActionUrl = "/pin-gate",
-                    },
+                var isReset = await _transactionPinService.ResetPinAsync(
+                    request.UserPublicId,
                     cancellationToken);
+
+                if (!isReset)
+                {
+                    op.Fail("Failed to reset the existing transaction PIN.");
+                    return new BaseResult<object>(
+                        HttpStatusCode.BadRequest,
+                        "Unable to reset PIN. Please try again.");
+                }
+
+                otpRecord.IsUsed = true;
+                otpRecord.UsedAt = DateTimeOffset.UtcNow;
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                op.Success("Forgot-PIN verified with password + OTP.");
             }
-            catch (Exception notifEx)
+            catch (Exception ex)
             {
-                op.Fail("Failed to send PIN reset notification.", notifEx);
+                op.Fail(
+                    $"Error resetting PIN for user {request.UserPublicId}",
+                    ex);
+
+                return new BaseResult<object>(
+                    HttpStatusCode.InternalServerError,
+                    "An error occurred while resetting your PIN. Please try again later.");
             }
 
-            op.Success("Forgot-PIN verified with password + OTP.");
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    request.UserPublicId,
+                    NotificationType.Security,
+                    "PIN reset verified",
+                    "Your identity was verified and your transaction PIN has been cleared. " +
+                    "Set a new PIN to continue using secure actions. " +
+                    "If this wasn't you, contact support immediately.",
+                    "/pin-gate",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for forgot PIN verification. UserPublicId: {UserPublicId}",
+                    request.UserPublicId);
+            }
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,

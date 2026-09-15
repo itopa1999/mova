@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light">
-  <title>MOVA · Verify your email</title>
+  <title>MOVA Notification</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -72,7 +72,6 @@
       overflow: hidden;
     }
 
-    /* Soft radial glow to give the header depth */
     .header::before {
       content: '';
       position: absolute;
@@ -87,7 +86,6 @@
       pointer-events: none;
     }
 
-    /* Subtle diagonal sheen for a polished feel */
     .header::after {
       content: '';
       position: absolute;
@@ -131,7 +129,7 @@
       color: var(--mova-charcoal);
       font-weight: 600;
       letter-spacing: -0.02em;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       line-height: 1.3;
     }
 
@@ -142,64 +140,15 @@
     .message {
       color: var(--mova-mid);
       font-size: 15px;
-      line-height: 1.65;
-      margin-bottom: 28px;
+      line-height: 1.7;
+      margin-bottom: 0;
     }
 
-    /* ─── OTP box ───────────────────────────────────── */
-    .otp-box {
-      background: var(--mova-green-soft);
-      border-radius: 18px;
-      padding: 28px 20px 24px;
-      text-align: center;
-      border: 1px solid var(--mova-green-light);
-      margin: 0 0 28px;
-      position: relative;
-    }
-
-    .otp-label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--mova-mid);
-      margin-bottom: 14px;
-    }
-
-    .otp-code {
-      display: inline-block;
-      font-family: 'DM Mono', 'Courier New', monospace;
-      font-size: 40px;
-      font-weight: 700;
-      letter-spacing: 14px;
+    .message a {
       color: var(--mova-green);
-      background: #FFFFFF;
-      padding: 14px 22px 14px 34px;
-      border-radius: 14px;
-      box-shadow: 0 1px 3px rgba(15, 81, 50, 0.06);
-      border: 1px solid var(--mova-green-light);
-      line-height: 1;
-    }
-
-    .expiry-note {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      margin-top: 18px;
-      font-size: 13px;
-      color: var(--mova-mid);
-    }
-
-    .expiry-note svg {
-      flex-shrink: 0;
-      color: var(--mova-green);
-    }
-
-    .expiry-note strong {
-      color: var(--mova-green);
-      font-weight: 600;
+      text-decoration: none;
+      font-weight: 500;
+      border-bottom: 1px solid rgba(27, 107, 58, 0.25);
     }
 
     /* ─── Divider ───────────────────────────────────── */
@@ -209,7 +158,7 @@
       margin: 28px 0 24px;
     }
 
-    /* ─── Footer notes ──────────────────────────────── */
+    /* ─── Security note ─────────────────────────────── */
     .footer-note {
       display: flex;
       align-items: flex-start;
@@ -231,11 +180,6 @@
       text-decoration: none;
       font-weight: 500;
       border-bottom: 1px solid rgba(27, 107, 58, 0.25);
-      transition: border-color 200ms ease;
-    }
-
-    .footer-note a:hover {
-      border-bottom-color: var(--mova-green);
     }
 
     /* ─── Signature ─────────────────────────────────── */
@@ -264,13 +208,6 @@
 
       .greeting { font-size: 18px; }
       .message { font-size: 14px; }
-
-      .otp-box { padding: 22px 16px 20px; }
-      .otp-code {
-        font-size: 32px;
-        letter-spacing: 10px;
-        padding: 12px 16px 12px 26px;
-      }
     }
   </style>
 </head>
@@ -292,45 +229,28 @@
     <div class="body">
 
       <p class="greeting">
-        Hello <span class="name">{{Name}}</span>,
+        Hello <span class="name">{{FirstName}}</span>,
       </p>
 
       <p class="message">
-        {{message}}
-      </p>
-
-      <!-- OTP CODE -->
-      <div class="otp-box">
-        <span class="otp-label">Your verification code</span>
-
-        <div class="otp-code">{{OTP}}</div>
-
-        <div class="expiry-note">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
-          <span>Expires in <strong>{{Expiry}}</strong></span>
-        </div>
-      </div>
-
-      <!-- SECURITY NOTE -->
-      <p class="footer-note">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-        </svg>
-        <span>
-          If you didn&rsquo;t request this code, please ignore this email or
-          <a href="#">contact support</a>.
-        </span>
+        {{Message}}
       </p>
 
       <div class="divider"></div>
 
+      <p class="footer-note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span>
+          You&rsquo;re receiving this because it relates to your MOVA account.
+          Need help? <a href="#">Contact support</a>.
+        </span>
+      </p>
+
       <div class="signature">
         Regards,<br>
-        <strong>MOVA Security Team</strong>
+        <strong>The MOVA Team</strong>
       </div>
 
     </div>

@@ -3,8 +3,8 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
@@ -29,18 +29,18 @@ public sealed class SetPinCommand
     {
         private readonly ITransactionPinService _transactionPinService;
         private readonly IIdentityService _identityService;
-        private readonly IMediator _mediator;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             ITransactionPinService transactionPinService,
             IIdentityService identityService,
-            IMediator mediator,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _transactionPinService = transactionPinService;
             _identityService = identityService;
-            _mediator = mediator;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -116,36 +116,8 @@ public sealed class SetPinCommand
                     request.Pin,
                     cancellationToken);
 
-                try
-                {
-                    await _mediator.Send(
-                        new CreateNotificationCommand.Command
-                        {
-                            UserPublicId = request.UserPublicId,
-                            Type = NotificationType.Security,
-                            Title = "Transaction PIN created",
-                            Message =
-                                "Your transaction PIN was created successfully. " +
-                                "You'll need it to confirm sensitive actions.",
-                            ActionUrl = "/settings",
-                        },
-                        cancellationToken);
-                }
-                catch (Exception notifEx)
-                {
-                    op.Fail("Failed to send PIN created notification.", notifEx);
-                }
-
                 op.Success(
                     $"Transaction PIN created successfully for user {request.UserPublicId}");
-
-                return new BaseResult<object>(
-                    HttpStatusCode.OK,
-                    "Transaction PIN created successfully.",
-                    new
-                    {
-                        notification = true,
-                    });
             }
             catch (ArgumentException argEx)
             {
@@ -171,6 +143,34 @@ public sealed class SetPinCommand
                     HttpStatusCode.InternalServerError,
                     "An error occurred while setting your transaction PIN. Please try again later.");
             }
+
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    request.UserPublicId,
+                    NotificationType.Security,
+                    "Transaction PIN created",
+                    "Your transaction PIN was created successfully. " +
+                    "You'll need it to confirm sensitive actions.",
+                    "/settings",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for set PIN. UserPublicId: {UserPublicId}",
+                    request.UserPublicId);
+            }
+
+            return new BaseResult<object>(
+                HttpStatusCode.OK,
+                "Transaction PIN created successfully.",
+                new
+                {
+                    notification = true,
+                });
         }
     }
 }

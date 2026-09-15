@@ -1,6 +1,9 @@
 using Hangfire;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Notification;
+using Mova.Domain.Entities;
+using Mova.Domain.Enums;
+using Mova.Infrastructure.Persistence;
 using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Jobs;
@@ -10,15 +13,18 @@ public sealed class BackgroundNotificationJob
     private readonly IEmailService _emailService;
     private readonly ISmsService _smsService;
     private readonly ILogger<BackgroundNotificationJob> _logger;
+    private readonly ApplicationDbContext _context;
 
     public BackgroundNotificationJob(
         IEmailService emailService,
         ISmsService smsService,
-        ILogger<BackgroundNotificationJob> logger)
+        ILogger<BackgroundNotificationJob> logger,
+        ApplicationDbContext context)
     {
         _emailService = emailService;
         _smsService = smsService;
         _logger = logger;
+        _context = context;
     }
 
     [AutomaticRetry(Attempts = 3)]
@@ -104,6 +110,24 @@ public sealed class BackgroundNotificationJob
             cancellationToken);
     }
 
+
+    [AutomaticRetry(Attempts = 3)]
+    public async Task SendNotificationEmailAsync(
+        string firstName,
+        string email,
+        string message,
+        string subject,
+        CancellationToken cancellationToken)
+    {
+        await _emailService.SendNotificationEmailAsync(
+            string.IsNullOrWhiteSpace(firstName) ? "Customer" : firstName,
+            email,
+            message,
+            subject,
+            cancellationToken);
+    }
+
+
     [AutomaticRetry(Attempts = 3)]
     public async Task SendForgotPasswordOtpAsync(
         string email,
@@ -149,5 +173,48 @@ public sealed class BackgroundNotificationJob
         CancellationToken cancellationToken)
     {
         return _emailService.SendForgotPasswordOtpAsync(email, otp, cancellationToken);
+    }
+
+    [AutomaticRetry(Attempts = 2)]
+    public async Task InAppNotificationAsync(
+        string userId,
+        NotificationType type,
+        string title,
+        string message,
+        string? actionUrl,
+        string? metadata,
+        CancellationToken cancellationToken)
+    {
+        using var op = OperationLogger.Start(
+            _logger,
+            "BackgroundInAppNotification",
+            ("UserId", userId),
+            ("Type", type.ToString()));
+
+        try
+        {
+            var notification = new AppNotification
+            {
+                UserPublicId = userId,
+                Type = type,
+                Title = title.Trim(),
+                Message = message.Trim(),
+                IsRead = false,
+                ActionUrl = actionUrl,
+                Metadata = metadata,
+            };
+
+            await _context.Set<AppNotification>()
+                .AddAsync(notification, cancellationToken);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            op.Success($"In-app notification saved. Id: {notification.Id}");
+        }
+        catch (Exception exception)
+        {
+            op.Fail("Background in-app notification failed.", exception);
+            throw;
+        }
     }
 }

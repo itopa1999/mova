@@ -3,8 +3,8 @@ using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
@@ -81,20 +81,20 @@ public sealed class PaystackWebHookCommand
         private readonly IPaystackService _paystackService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
-        private readonly IMediator _mediator;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IPaystackService paystackService,
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
-            IMediator mediator,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _paystackService = paystackService;
             _unitOfWork = unitOfWork;
             _identityService = identityService;
-            _mediator = mediator;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -314,6 +314,8 @@ public sealed class PaystackWebHookCommand
                     null);
             }
 
+            string creditedUserPublicId = string.Empty;
+
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
@@ -386,38 +388,13 @@ public sealed class PaystackWebHookCommand
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                try
-                {
-                    await _mediator.Send(
-                        new CreateNotificationCommand.Command
-                        {
-                            UserPublicId = freshTransaction.UserPublicId,
-                            Type = NotificationType.Deposit,
-                            Title = "Deposit successful",
-                            Message =
-                                $"₦{amount:N0} has been added to " +
-                                $"your available balance.",
-                            ActionUrl = "/add-funds?tab=history",
-                        },
-                        cancellationToken);
-                }
-                catch (Exception notifEx)
-                {
-                    op.Fail(
-                        "Failed to send deposit notification.",
-                        notifEx);
-                }
+                creditedUserPublicId = freshTransaction.UserPublicId;
 
                 op.Success(
                     $"Paystack webhook processed. " +
                     $"Reference: {webhookData.Reference}, " +
                     $"Amount: ₦{amount:N2}, " +
-                    $"User: {freshTransaction.UserPublicId}");
-
-                return new BaseResult<PaystackWebHookResponseDto>(
-                    HttpStatusCode.OK,
-                    "Webhook processed successfully.",
-                    webhook);
+                    $"User: {creditedUserPublicId}");
             }
             catch (DbUpdateException dbEx)
             {
@@ -463,6 +440,109 @@ public sealed class PaystackWebHookCommand
                     HttpStatusCode.InternalServerError,
                     "An error occurred while processing the webhook.",
                     null);
+            }
+
+            try
+            {
+                await SendDepositNotificationsAsync(
+                    creditedUserPublicId,
+                    amount,
+                    webhookData.Reference);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Notification block failed for Paystack webhook. Reference: {Reference}",
+                    webhookData.Reference);
+            }
+
+            return new BaseResult<PaystackWebHookResponseDto>(
+                HttpStatusCode.OK,
+                "Webhook processed successfully.",
+                webhook);
+        }
+
+        private async Task SendDepositNotificationsAsync(
+            string userPublicId,
+            decimal amount,
+            string reference)
+        {
+            var title = "Deposit successful";
+
+            var inAppMessage =
+                $"₦{amount:N0} has been added to your available balance.";
+
+            var emailSubject = "Your MOVA deposit is complete";
+
+            var emailMessage =
+                $"₦{amount:N0} has been added to your MOVA available balance. " +
+                $"You can now allocate it to wallets or use it as you wish.";
+
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    userPublicId,
+                    NotificationType.Deposit,
+                    title,
+                    inAppMessage,
+                    "/add-funds?tab=history",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for Paystack deposit. Reference: {Reference}",
+                    reference);
+            }
+
+            string firstName = string.Empty;
+            string email = string.Empty;
+
+            try
+            {
+                var user = await _identityService.GetByIdentifierAsync(
+                    userPublicId,
+                    CancellationToken.None);
+
+                if (user is null)
+                {
+                    _logger.LogWarning(
+                        "Skipped deposit email for reference {Reference} — user not found: {UserPublicId}",
+                        reference,
+                        userPublicId);
+                    return;
+                }
+
+                firstName = user.FirstName;
+                email = user.Email;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to load user for deposit email. Reference: {Reference}, UserPublicId: {UserPublicId}",
+                    reference,
+                    userPublicId);
+                return;
+            }
+
+            try
+            {
+                _notificationQueue.QueueNotificationEmail(
+                    firstName,
+                    email,
+                    emailMessage,
+                    emailSubject);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Email queue failed for Paystack deposit. Reference: {Reference}",
+                    reference);
             }
         }
     }

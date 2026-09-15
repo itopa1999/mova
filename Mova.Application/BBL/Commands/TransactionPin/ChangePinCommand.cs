@@ -3,8 +3,8 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
@@ -34,18 +34,18 @@ public sealed class ChangePinCommand
     {
         private readonly ITransactionPinService _transactionPinService;
         private readonly IIdentityService _identityService;
-        private readonly IMediator _mediator;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             ITransactionPinService transactionPinService,
             IIdentityService identityService,
-            IMediator mediator,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _transactionPinService = transactionPinService;
             _identityService = identityService;
-            _mediator = mediator;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -166,30 +166,8 @@ public sealed class ChangePinCommand
                     request.NewPin,
                     cancellationToken);
 
-                // 👇 Notify the user that their PIN was changed
-                await _mediator.Send(
-                    new CreateNotificationCommand.Command
-                    {
-                        UserPublicId = request.UserPublicId,
-                        Type = NotificationType.Security,
-                        Title = "Transaction PIN changed",
-                        Message =
-                            "Your transaction PIN was changed successfully. " +
-                            "If this wasn't you, contact support immediately.",
-                        ActionUrl = "/settings",
-                    },
-                    cancellationToken);
-
                 op.Success(
                     $"Transaction PIN changed successfully for user {request.UserPublicId}");
-
-                return new BaseResult<object>(
-                    HttpStatusCode.OK,
-                    "Transaction PIN changed successfully.",
-                    new
-                    {
-                        notification = true,
-                    });
             }
             catch (ArgumentException argEx)
             {
@@ -214,6 +192,83 @@ public sealed class ChangePinCommand
                 return new BaseResult<object>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while changing your transaction PIN. Please try again later.");
+            }
+
+            try
+            {
+                await SendPinChangedNotificationsAsync(
+                    request.UserPublicId,
+                    user.Email,
+                    user.FirstName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Notification block failed for PIN change. UserPublicId: {UserPublicId}",
+                    request.UserPublicId);
+            }
+
+            return new BaseResult<object>(
+                HttpStatusCode.OK,
+                "Transaction PIN changed successfully.",
+                new
+                {
+                    notification = true,
+                });
+        }
+
+        private async Task SendPinChangedNotificationsAsync(
+            string userPublicId,
+            string email,
+            string firstName)
+        {
+            var title = "Transaction PIN changed";
+
+            var inAppMessage =
+                "Your transaction PIN was changed successfully. " +
+                "If this wasn't you, contact support immediately.";
+
+            var emailSubject = "Your MOVA transaction PIN was changed";
+
+            var emailMessage =
+                "Your transaction PIN was changed successfully. " +
+                "If you didn't make this change, contact support immediately " +
+                "to secure your account.";
+
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    userPublicId,
+                    NotificationType.Security,
+                    title,
+                    inAppMessage,
+                    "/settings",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for PIN change. UserPublicId: {UserPublicId}",
+                    userPublicId);
+            }
+
+            try
+            {
+                _notificationQueue.QueueNotificationEmail(
+                    firstName,
+                    email,
+                    emailMessage,
+                    emailSubject);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Email queue failed for PIN change. UserPublicId: {UserPublicId}",
+                    userPublicId);
             }
         }
     }

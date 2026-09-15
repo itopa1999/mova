@@ -10,6 +10,7 @@ public sealed record UserIdentityDto(
     string LastName,
     string? Email,
     string? PhoneNumber,
+    string? ProfilePicture,
     Money Balance,
     string TransactionPinHash
     )

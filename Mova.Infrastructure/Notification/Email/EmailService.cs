@@ -240,4 +240,21 @@ public sealed class EmailService : IEmailService
             throw;
         }
     }
+
+    public async Task SendNotificationEmailAsync(string firstName, string email, string message, string subject, CancellationToken cancellationToken = default)
+    {
+        var body = await _renderer.RenderAsync(
+            "NotificationEmailTemplate.html",
+            new Dictionary<string, string>
+            {
+                ["FirstName"] = firstName,
+                ["Message"] = message
+            }, cancellationToken);
+
+        await SendEmailAsync(
+            email,
+            subject,
+            body,
+            cancellationToken);
+    }
 }

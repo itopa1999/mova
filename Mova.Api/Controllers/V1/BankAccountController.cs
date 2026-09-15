@@ -2,9 +2,11 @@ using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
+using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.AccountWallet;
 using Mova.Application.BBL.Commands.BanksAccount;
 using Mova.Application.BBL.Queries.BanksAccount;
@@ -33,6 +35,7 @@ public class BankAccountController(
     private readonly ExternalApiSettings _externalApiSettings = externalApiSettings.Value;
 
     [HttpGet("banks")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<GetBanksDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetBanksDetailsData([FromQuery] string? name, CancellationToken cancellationToken)
@@ -48,6 +51,7 @@ public class BankAccountController(
     }
 
     [HttpPost("banks/refresh")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> RefreshBanks(
@@ -61,6 +65,7 @@ public class BankAccountController(
     }
 
     [HttpPost("banks/verify")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<VerifyBankAccountDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> VerifyBankAccount(
@@ -75,6 +80,7 @@ public class BankAccountController(
     }
 
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<AddBankAccountDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> AddBankAccount(
@@ -82,6 +88,8 @@ public class BankAccountController(
         CancellationToken cancellationToken)
     {
         command.UserPublicId = UserPublicId;
+        command.Email = UserEmail;
+        command.FirstName  = UserFirstName;
 
         var result = await _mediator.Send(
             command,
@@ -93,6 +101,7 @@ public class BankAccountController(
     }
 
     [HttpPost("{walletId:long}/bank-account")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(
         typeof(BaseResult<LinkAccountToBankDto>),
         (int)HttpStatusCode.OK)]
@@ -106,6 +115,8 @@ public class BankAccountController(
     {
         command.UserPublicId = UserPublicId;
         command.WalletId = walletId;
+        command.FirstName = UserFirstName;
+        command.Email = UserEmail;
 
         var result = await _mediator.Send(
             command,
@@ -117,6 +128,7 @@ public class BankAccountController(
     }
 
     [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<GetAllBankAccountDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetBankAccounts(
@@ -134,6 +146,7 @@ public class BankAccountController(
 
 
     [HttpDelete("{bankAccountId:long}/remove")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> RemoveBankAccounts(
@@ -154,6 +167,7 @@ public class BankAccountController(
 
 
     [HttpGet("deposits")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(
         typeof(BaseResult<List<TransactionDto>>),
         (int)HttpStatusCode.OK)]
@@ -173,6 +187,7 @@ public class BankAccountController(
     }
 
     [HttpPost("fund-account")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<FundAccountDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> FundAccount(
@@ -186,6 +201,7 @@ public class BankAccountController(
 
     [HttpGet("payment/callback")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType((int)HttpStatusCode.Redirect)]
     public async Task<IActionResult> PaymentCallback(
         [FromQuery] string? reference,

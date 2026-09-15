@@ -10,6 +10,7 @@ using Microsoft.OpenApi.Models;
 using Mova.Application;
 using Mova.Infrastructure;
 using Mova.Infrastructure.Jobs;
+using Mova.Api.RateLimiting;
 
 namespace Mova.Api;
 
@@ -87,6 +88,7 @@ public class Startup(IConfiguration configuration)
         });
 
 
+        services.AddAppRateLimiting();
 
         // Swagger
         services.AddEndpointsApiExplorer();
@@ -239,6 +241,8 @@ public class Startup(IConfiguration configuration)
         app.UseAuthentication();
 
         app.UseAuthorization();
+
+        app.UseRateLimiter();
 
         app.UseHangfireDashboard("/hangfire", new DashboardOptions
         {

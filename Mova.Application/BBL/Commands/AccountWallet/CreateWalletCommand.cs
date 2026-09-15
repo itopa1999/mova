@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
@@ -21,6 +22,12 @@ public sealed class CreateWalletCommand
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+
+        [JsonIgnore]
+        public string Email { get; set; } = string.Empty;
+
+        [JsonIgnore]
+        public string FirstName { get; set; } = string.Empty;
 
         public string Name { get; set; } = string.Empty;
 
@@ -58,7 +65,7 @@ public sealed class CreateWalletCommand
         private readonly ILogger<Handler> _logger;
         private readonly ISchedulePreviewService _schedulePreviewService;
         private readonly IWalletRuleService _walletRuleService;
-        private readonly IMediator _mediator;
+        private readonly INotificationQueue _notificationQueue;
 
         public Handler(
             IIdentityService identityService,
@@ -66,14 +73,14 @@ public sealed class CreateWalletCommand
             ILogger<Handler> logger,
             ISchedulePreviewService schedulePreviewService,
             IWalletRuleService walletRuleService,
-            IMediator mediator)
+            INotificationQueue notificationQueue)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
             _schedulePreviewService = schedulePreviewService;
             _walletRuleService = walletRuleService;
-            _mediator = mediator;
+            _notificationQueue = notificationQueue;
         }
 
         public async Task<BaseResult<CreateWalletResponseDto>> Handle(
@@ -256,6 +263,9 @@ public sealed class CreateWalletCommand
             var targetMoney = Money.FromNaira(request.TargetAmount);
             var releaseMoney = Money.FromNaira(request.AmountToBeReleased);
 
+            long walletId = 0;
+            DateTimeOffset firstReleaseDate = default;
+
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
@@ -366,31 +376,10 @@ public sealed class CreateWalletCommand
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                await _mediator.Send(
-                    new CreateNotificationCommand.Command
-                    {
-                        UserPublicId = request.UserPublicId,
-                        Type = NotificationType.Wallet,
-                        Title = $"{wallet.Name} wallet created",
-                        Message =
-                            $"Your {wallet.Name} wallet is now active. " +
-                            $"First release scheduled for " +
-                            $"{firstRelease.ScheduledFor:MMM d, yyyy}.",
-                        ActionUrl = $"/wallets",
-                    },
-                    cancellationToken);
+                walletId = wallet.Id;
+                firstReleaseDate = firstRelease.ScheduledFor;
 
                 op.Success($"Wallet created successfully with first release scheduled for {firstRelease.ScheduledFor:u}. WalletId: {wallet.Id}");
-
-                return new BaseResult<CreateWalletResponseDto>(
-                    HttpStatusCode.Created,
-                    "Wallet created successfully.",
-                    new CreateWalletResponseDto
-                    {
-                        WalletId = wallet.Id,
-                        FirstReleaseDate = firstRelease.ScheduledFor,
-                        Notification = true,
-                    });
             }
             catch (Exception ex)
             {
@@ -401,6 +390,91 @@ public sealed class CreateWalletCommand
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while creating the wallet.");
+            }
+
+            try
+            {
+                await SendWalletCreatedNotificationsAsync(
+                    request.UserPublicId,
+                    request.Email,
+                    request.FirstName,
+                    walletId,
+                    walletName,
+                    firstReleaseDate);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Notification block failed for created wallet {WalletId}.",
+                    walletId);
+            }
+
+            return new BaseResult<CreateWalletResponseDto>(
+                HttpStatusCode.Created,
+                "Wallet created successfully.",
+                new CreateWalletResponseDto
+                {
+                    WalletId = walletId,
+                    FirstReleaseDate = firstReleaseDate,
+                    Notification = true,
+                });
+        }
+
+        private async Task SendWalletCreatedNotificationsAsync(
+            string userPublicId,
+            string email,
+            string firstName,
+            long walletId,
+            string walletName,
+            DateTimeOffset firstReleaseDate)
+        {
+            var title = $"{walletName} wallet created";
+
+            var inAppMessage =
+                $"Your {walletName} wallet is now active. " +
+                $"First release scheduled for {firstReleaseDate:MMM d, yyyy}.";
+
+            var emailSubject = $"Your {walletName} wallet is ready";
+
+            var emailMessage =
+                $"Your {walletName} wallet has been created and is now active. " +
+                $"Your first release is scheduled for {firstReleaseDate:MMM d, yyyy}. " +
+                $"MOVA will handle the schedule from here.";
+
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    userPublicId,
+                    NotificationType.Wallet,
+                    title,
+                    inAppMessage,
+                    "/wallets",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for created wallet {WalletId}.",
+                    walletId);
+            }
+
+            try
+            {
+                _notificationQueue.QueueNotificationEmail(
+                    firstName,
+                    email,
+                    emailMessage,
+                    emailSubject);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Email queue failed for created wallet {WalletId}.",
+                    walletId);
             }
         }
     }

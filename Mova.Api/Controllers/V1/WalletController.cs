@@ -2,7 +2,9 @@ using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Mova.Api.Configurations;
+using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.AccountWallet;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.BBL.Queries.AccountWallet;
@@ -30,11 +32,14 @@ public class WalletController(
     private readonly IMediator _mediator = mediator;
 
     [HttpPost("create")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult<CreateWalletResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateWallet([FromBody] CreateWalletCommand.Command command, CancellationToken cancellationToken)
     {
         command.UserPublicId = UserPublicId;
+        command.Email = UserEmail;
+        command.FirstName = UserFirstName;
 
         var result = await _mediator.Send(command, cancellationToken);
 
@@ -44,6 +49,7 @@ public class WalletController(
     }
 
     [HttpPost("{walletId:long}/relock-unused")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> RelockUnusedFunds(
@@ -64,6 +70,7 @@ public class WalletController(
     }
 
     [HttpGet("{walletId:long}/schedule-preview")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<GetWalletSchedulePreviewResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetSchedulePreview(long walletId, CancellationToken cancellationToken)
@@ -80,6 +87,7 @@ public class WalletController(
     }
 
     [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<GetAllWalletsResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetAllWallets([FromQuery] int page = 1, [FromQuery]int pageSize = 10, CancellationToken cancellationToken = default)
@@ -97,6 +105,7 @@ public class WalletController(
     }
 
     [HttpGet("{walletId:long}/details")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<WalletDetailsResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetWalletDetails(long walletId, CancellationToken cancellationToken)
@@ -113,6 +122,7 @@ public class WalletController(
     }
 
     [HttpGet("{walletId:long}/activities")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<WalletActivityGroupDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetWalletActivities(
@@ -131,6 +141,7 @@ public class WalletController(
     }
 
     [HttpGet("{walletId:long}/payouts")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<WalletPayoutGroupDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetWalletPayouts(
@@ -149,6 +160,7 @@ public class WalletController(
     }
 
     [HttpGet("analytics")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<WalletAnalyticsDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetWalletAnalytics(
@@ -167,6 +179,7 @@ public class WalletController(
     }
 
     [HttpGet("categories")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<GetWalletCategories.WalletCategoryDto>>),(int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetWalletCategories(
@@ -180,6 +193,7 @@ public class WalletController(
     }
 
     [HttpGet("{walletId:long}/bank-account")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(
         typeof(BaseResult<GetWalletBankAccount.BankAccountDto>),
         (int)HttpStatusCode.OK)]
@@ -206,6 +220,7 @@ public class WalletController(
     }
 
     [HttpGet("releases")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<GetReleasesQueryDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult<GetReleasesQueryDto>), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetReleases(
@@ -225,6 +240,7 @@ public class WalletController(
 
     [HttpPost("preview")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<SchedulePreviewResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> PreviewSchedule(
@@ -236,6 +252,7 @@ public class WalletController(
     }
 
     [HttpPut("{walletId:long}/break")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> BreakWallet(
@@ -245,6 +262,8 @@ public class WalletController(
         var command = new BreakWalletCommand.Command
         {
             UserPublicId = UserPublicId,
+            Email = UserEmail,
+            FirstName = UserFirstName,
             WalletId = walletId,
         };
 
@@ -254,6 +273,7 @@ public class WalletController(
     }
 
     [HttpPut("{walletId:long}/toggle-status")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]

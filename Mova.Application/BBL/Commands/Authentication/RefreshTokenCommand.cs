@@ -22,6 +22,11 @@ public sealed class RefreshTokenCommand
 
     public class RefreshTokenResponseDto
     {
+        public string UserPublicId { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string? ProfilePicture { get; set; } = string.Empty;
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public string Platform { get; set; } = Platforms.Mobile;
@@ -150,6 +155,11 @@ public sealed class RefreshTokenCommand
                     "Token refreshed successfully.",
                     new RefreshTokenResponseDto
                     {
+                        UserPublicId = user.PublicId,
+                        Email = user.Email ?? string.Empty,
+                        Phone = user.PhoneNumber ?? string.Empty,
+                        FullName = user.FullName,
+                        ProfilePicture = user.ProfilePicture,
                         AccessToken = accessToken,
                         RefreshToken = newToken,
                         Platform = request.Platform,

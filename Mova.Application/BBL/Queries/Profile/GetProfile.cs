@@ -22,6 +22,7 @@ public sealed class GetProfile
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
+        public string? ProfilePicture { get; set; } = string.Empty;
         public bool HasPinSet { get; set; }
     }
 
@@ -66,6 +67,7 @@ public sealed class GetProfile
                 FullName = user.FullName,
                 Email = user.Email ?? string.Empty,
                 Phone = user.PhoneNumber ?? string.Empty,
+                ProfilePicture = user.ProfilePicture,
                 HasPinSet=!string.IsNullOrWhiteSpace(user.TransactionPinHash)
             };
 

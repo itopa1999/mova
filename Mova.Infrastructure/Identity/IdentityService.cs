@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.ValueObjects;
+using Mova.Infrastructure.Common;
 using Mova.Infrastructure.Persistence;
 
 namespace Mova.Infrastructure.Identity;
@@ -31,7 +32,8 @@ public sealed class IdentityService : IIdentityService
             Email = email,
             UserName = email,
             PhoneNumber = phoneNumber,
-            PublicId = string.Empty
+            PublicId = string.Empty,
+            ProfilePicture = DefaultProfilePictures.PickRandom(),
         };
 
         var result = await _userManager.CreateAsync(user, password);
@@ -99,6 +101,7 @@ public sealed class IdentityService : IIdentityService
                 x.LastName,
                 x.Email,
                 x.PhoneNumber,
+                x.ProfilePicture,
                 x.Balance,
                 x.TransactionPinHash ?? string.Empty))
             .FirstOrDefaultAsync(cancellationToken);

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
@@ -19,6 +19,12 @@ public sealed class AddBankAccount
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+
+        [JsonIgnore]
+        public string Email { get; set; } = string.Empty;
+
+        [JsonIgnore]
+        public string FirstName { get; set; } = string.Empty;
 
         public string AccountNumber { get; init; } = string.Empty;
 
@@ -51,18 +57,18 @@ public sealed class AddBankAccount
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPaystackService _paystackService;
-        private readonly IMediator _mediator;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IPaystackService paystackService,
-            IMediator mediator,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _paystackService = paystackService;
-            _mediator = mediator;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -163,58 +169,141 @@ public sealed class AddBankAccount
                         x.Status == BankAccountStatus.Active,
                     cancellationToken);
 
-            var bankAccount = new BankAccount
+            long bankAccountId = 0;
+            string accountName = string.Empty;
+            string bankName = string.Empty;
+            bool isDefault = false;
+            string status = string.Empty;
+
+            try
             {
-                UserPublicId = request.UserPublicId,
-                AccountNumber = verifiedAccount.AccountNumber,
-                AccountName = verifiedAccount.AccountName,
-                BankCode = bank.Code,
-                BankName = bank.Name,
-                BankImageUrl = bank.Logo,
-                Status = BankAccountStatus.Active,
-                IsDefault = !hasDefaultAccount,
-                VerifiedAt = DateTimeOffset.UtcNow,
-                VerificationMessage = "Account verified successfully.",
-                ConsentGiven = true,
-                ConsentGivenAt = DateTimeOffset.UtcNow,
-                ConsentVersion = "v1",
-                Currency = "NGN",
-            };
-
-            await _unitOfWork.AddAsync(bankAccount, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            await _mediator.Send(
-                new CreateNotificationCommand.Command
+                var bankAccount = new BankAccount
                 {
                     UserPublicId = request.UserPublicId,
-                    Type = NotificationType.System,
-                    Title = "Bank account added",
-                    Message =
-                        $"{verifiedAccount.AccountName} ({bank.Name}) " +
-                        $"has been linked to your MOVA account.",
-                    ActionUrl = "/bank",
-                },
-                cancellationToken);
+                    AccountNumber = verifiedAccount.AccountNumber,
+                    AccountName = verifiedAccount.AccountName,
+                    BankCode = bank.Code,
+                    BankName = bank.Name,
+                    BankImageUrl = bank.Logo,
+                    Status = BankAccountStatus.Active,
+                    IsDefault = !hasDefaultAccount,
+                    VerifiedAt = DateTimeOffset.UtcNow,
+                    VerificationMessage = "Account verified successfully.",
+                    ConsentGiven = true,
+                    ConsentGivenAt = DateTimeOffset.UtcNow,
+                    ConsentVersion = "v1",
+                    Currency = "NGN",
+                };
 
-            op.Success(
-                $"Bank account added successfully. " +
-                $"Id: {bankAccount.Id}, Bank: {bank.Name}");
+                await _unitOfWork.AddAsync(bankAccount, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                bankAccountId = bankAccount.Id;
+                accountName = bankAccount.AccountName;
+                bankName = bankAccount.BankName;
+                isDefault = bankAccount.IsDefault;
+                status = bankAccount.Status.ToString();
+
+                op.Success(
+                    $"Bank account added successfully. " +
+                    $"Id: {bankAccountId}, Bank: {bankName}");
+            }
+            catch (Exception ex)
+            {
+                op.Fail(
+                    $"Error adding bank account. AccountNumber: {accountNumber}",
+                    ex);
+
+                throw;
+            }
+
+            try
+            {
+                await SendBankAccountAddedNotificationsAsync(
+                    request.UserPublicId,
+                    request.Email,
+                    request.FirstName,
+                    bankAccountId,
+                    accountName,
+                    bankName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Notification block failed for added bank account {BankAccountId}.",
+                    bankAccountId);
+            }
 
             return new BaseResult<AddBankAccountDto>(
                 HttpStatusCode.Created,
                 "Bank account added successfully.",
                 new AddBankAccountDto
                 {
-                    Id = bankAccount.Id,
-                    AccountNumber = bankAccount.AccountNumber,
-                    AccountName = bankAccount.AccountName,
-                    BankCode = bankAccount.BankCode,
-                    BankInstitution = bankAccount.BankName,
-                    IsDefault = bankAccount.IsDefault,
-                    Status = bankAccount.Status.ToString(),
+                    Id = bankAccountId,
+                    AccountNumber = verifiedAccount.AccountNumber,
+                    AccountName = accountName,
+                    BankCode = bank.Code,
+                    BankInstitution = bankName,
+                    IsDefault = isDefault,
+                    Status = status,
                     Notification = true,
                 });
+        }
+
+        private async Task SendBankAccountAddedNotificationsAsync(
+            string userPublicId,
+            string email,
+            string firstName,
+            long bankAccountId,
+            string accountName,
+            string bankName)
+        {
+            var title = "Bank account added";
+
+            var inAppMessage =
+                $"{accountName} ({bankName}) has been linked to your MOVA account.";
+
+            var emailSubject = "Your bank account has been linked";
+
+            var emailMessage =
+                $"{accountName} ({bankName}) has been linked to your MOVA account. " +
+                $"You can now use this account to fund your MOVA wallets and receive releases.";
+
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    userPublicId,
+                    NotificationType.System,
+                    title,
+                    inAppMessage,
+                    "/bank",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for added bank account {BankAccountId}.",
+                    bankAccountId);
+            }
+
+            try
+            {
+                _notificationQueue.QueueNotificationEmail(
+                    firstName,
+                    email,
+                    emailMessage,
+                    emailSubject);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Email queue failed for added bank account {BankAccountId}.",
+                    bankAccountId);
+            }
         }
     }
 }

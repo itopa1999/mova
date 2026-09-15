@@ -627,3 +627,6 @@ POST /api/schedule/preview
 <!-- TODO -->
 1. make sure that every FK queries uses include
 2. 
+
+
+mark places that needs redis and also i need to mark out sending emails

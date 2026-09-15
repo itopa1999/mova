@@ -24,6 +24,8 @@ public class User : IdentityUser<long>
         " ",
         new[] { FirstName, OtherNames, LastName }
             .Where(value => !string.IsNullOrWhiteSpace(value)));
+
+    public string? ProfilePicture { get; set; } = string.Empty;
             
     public string? TransactionPinHash { get; set; }
 

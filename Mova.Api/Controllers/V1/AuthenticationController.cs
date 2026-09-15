@@ -2,8 +2,10 @@ using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
+using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.Authentication;
 using Mova.Application.BBL.Queries.Profile;
 using Mova.Infrastructure.Authentication.Jwt;
@@ -31,6 +33,7 @@ public class AuthenticationController(
     private readonly JwtSettings _jwt = jwtOptions.Value;
 
     [HttpPost("register")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<RegistrationResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> Register(
@@ -44,6 +47,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("verify-account")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<VerifyAccountResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> VerifyEmailToken(
@@ -66,6 +70,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("resend-verification-token")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<ResendVerificationOtpResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> ResendVerificationToken(
@@ -79,6 +84,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<LoginResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> LoginUser(
@@ -88,7 +94,6 @@ public class AuthenticationController(
 
         if (result.IsSuccess &&
             result.Data is not null &&
-            // !result.Data.Requires2Fa &&
             string.Equals(result.Data.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
         {
             SetAuthenticationCookies(
@@ -102,6 +107,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("refresh-token")]
+    [EnableRateLimiting(RateLimitPolicies.AuthMedium)]
     [ProducesResponseType(typeof(BaseResult<RefreshTokenResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> RefreshToken(
@@ -140,6 +146,7 @@ public class AuthenticationController(
 
     [HttpPost("logout")]
     [Authorize]
+    [EnableRateLimiting(RateLimitPolicies.AuthMedium)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> Logout(
@@ -171,21 +178,23 @@ public class AuthenticationController(
     }
 
 
-        [HttpPost("forgot-password")]
-        [ProducesResponseType(typeof(BaseResult<ForgotPasswordResponseDto>), (int)HttpStatusCode.OK)]
-        [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-        public async Task<IActionResult> ForgotPassword(
-            [FromBody] ForgotPasswordCommand.Command command, CancellationToken cancellationToken)
-        {
-            var result = await _mediator.Send(command, cancellationToken);
-            return StatusCode(
-                (int)result.StatusCode,
-                result
-            );
-        }
+    [HttpPost("forgot-password")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
+    [ProducesResponseType(typeof(BaseResult<ForgotPasswordResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> ForgotPassword(
+        [FromBody] ForgotPasswordCommand.Command command, CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(command, cancellationToken);
+        return StatusCode(
+            (int)result.StatusCode,
+            result
+        );
+    }
 
 
     [HttpPost("verify-forgot-password")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<VerifyPasswordTokenResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> VerifyForgotPasswordToken(
@@ -197,6 +206,7 @@ public class AuthenticationController(
 
 
     [HttpPost("reset-password")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> ResetForgotPassword(
@@ -211,6 +221,7 @@ public class AuthenticationController(
 
     [HttpPost("change-password")]
     [Authorize]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> ChangePassword(
@@ -274,6 +285,7 @@ public class AuthenticationController(
 
     [HttpGet("profile")]
     [Authorize]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<GetProfileDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetProfile(

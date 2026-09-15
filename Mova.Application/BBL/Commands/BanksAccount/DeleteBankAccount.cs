@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -26,16 +26,16 @@ public sealed class DeleteBankAccount
         : IRequestHandler<Command, BaseResult<object>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IMediator _mediator;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IMediator mediator,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _mediator = mediator;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -49,42 +49,67 @@ public sealed class DeleteBankAccount
                 ("UserId", request.UserPublicId),
                 ("BankAccountId", request.BankAccountId));
 
-            var account = await _unitOfWork.Query<BankAccount>()
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.Id == request.BankAccountId &&
-                        x.UserPublicId == request.UserPublicId,
-                    cancellationToken);
+            long bankAccountId = 0;
+            string accountName = string.Empty;
+            string bankName = string.Empty;
 
-            if (account is null)
+            try
             {
-                op.Fail($"Bank account not found: {request.BankAccountId}");
+                var account = await _unitOfWork.Query<BankAccount>()
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.Id == request.BankAccountId &&
+                            x.UserPublicId == request.UserPublicId,
+                        cancellationToken);
 
-                return new BaseResult<object>(
-                    HttpStatusCode.NotFound,
-                    "Bank account not found.");
+                if (account is null)
+                {
+                    op.Fail($"Bank account not found: {request.BankAccountId}");
+
+                    return new BaseResult<object>(
+                        HttpStatusCode.NotFound,
+                        "Bank account not found.");
+                }
+
+                account.IsDeleted = true;
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                bankAccountId = account.Id;
+                accountName = account.AccountName;
+                bankName = account.BankName;
+
+                op.Success(
+                    $"Bank account deleted successfully. " +
+                    $"Id: {bankAccountId}, Bank: {bankName}");
+            }
+            catch (Exception ex)
+            {
+                op.Fail(
+                    $"Error deleting bank account. BankAccountId: {request.BankAccountId}",
+                    ex);
+
+                throw;
             }
 
-            account.IsDeleted = true;
-
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            await _mediator.Send(
-                new CreateNotificationCommand.Command
-                {
-                    UserPublicId = request.UserPublicId,
-                    Type = NotificationType.System,
-                    Title = "Bank account removed",
-                    Message =
-                        $"{account.AccountName} ({account.BankName}) " +
-                        $"has been removed from your MOVA account.",
-                    ActionUrl = "/bank",
-                },
-                cancellationToken);
-
-            op.Success(
-                $"Bank account deleted successfully. " +
-                $"Id: {account.Id}, Bank: {account.BankName}");
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    request.UserPublicId,
+                    NotificationType.System,
+                    "Bank account removed",
+                    $"{accountName} ({bankName}) has been removed from your MOVA account.",
+                    "/bank",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for deleted bank account {BankAccountId}.",
+                    bankAccountId);
+            }
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,

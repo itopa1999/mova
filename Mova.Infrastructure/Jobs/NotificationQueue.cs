@@ -1,5 +1,6 @@
 using Hangfire;
 using Mova.Application.Interfaces.Notification;
+using Mova.Domain.Enums;
 
 namespace Mova.Infrastructure.Jobs;
 
@@ -66,5 +67,31 @@ public sealed class NotificationQueue : INotificationQueue
         //             otp,
         //             CancellationToken.None));
         // }
+    }
+
+    public void QueueNotificationEmail(string firstName, string email, string message, string subject)
+    {
+        _backgroundJobClient.Enqueue<BackgroundNotificationJob>(
+            job => job.SendNotificationEmailAsync(
+                firstName,
+                email,
+                message,
+                subject,
+                CancellationToken.None));
+    }
+
+    public void InAppNotificationAsync(string UserId, NotificationType Type, string Title, 
+    string Message, string? ActionUrl, string? Metadata, 
+    CancellationToken cancellationToken = default)
+    {
+        _backgroundJobClient.Enqueue<BackgroundNotificationJob>(
+            job => job.InAppNotificationAsync(
+                UserId,
+                Type,
+                Title,
+                Message,
+                ActionUrl,
+                Metadata,
+                CancellationToken.None));
     }
 }

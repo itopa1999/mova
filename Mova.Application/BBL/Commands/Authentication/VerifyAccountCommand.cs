@@ -32,7 +32,10 @@ public sealed class VerifyAccountCommand
     {
         public string UserPublicId { get; set; } = string.Empty;
         public bool IsAccountVerified { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
+        public string? ProfilePicture { get; set; } = string.Empty;
         public string Platform { get; set; } = Platforms.Mobile;
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
@@ -232,7 +235,10 @@ public sealed class VerifyAccountCommand
                     {
                         UserPublicId = user.PublicId,
                         IsAccountVerified = true,
+                        Email = user.Email ?? string.Empty,
+                        Phone = user.PhoneNumber ?? string.Empty,
                         FullName = user.FullName ?? string.Empty,
+                        ProfilePicture = user.ProfilePicture,
                         Platform = request.Platform,
                         AccessToken = accessToken,
                         RefreshToken = refreshToken,

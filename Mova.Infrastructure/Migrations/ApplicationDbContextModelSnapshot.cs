@@ -1405,6 +1405,9 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("ProfilePicture")
+                        .HasColumnType("text");
+
                     b.Property<string>("PublicId")
                         .IsRequired()
                         .HasMaxLength(100)

@@ -2,7 +2,9 @@ using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Mova.Api.Configurations;
+using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.TransactionPin;
 using Mova.Application.BBL.Queries.TransactionPin;
 using Mova.Shared.Common;
@@ -19,9 +21,10 @@ public class TransactionPinController(
     private readonly IMediator _mediator = mediator;
 
     [HttpPost("set")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> SetPin( [FromBody] SetPinCommand.Command command, CancellationToken cancellationToken)
+    public async Task<IActionResult> SetPin([FromBody] SetPinCommand.Command command, CancellationToken cancellationToken)
     {
         command.UserPublicId = UserPublicId;
 
@@ -33,6 +36,7 @@ public class TransactionPinController(
     }
 
     [HttpPost("verify")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> VerifyPin(
@@ -49,6 +53,7 @@ public class TransactionPinController(
     }
 
     [HttpPut("change")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> ChangePin(
@@ -66,6 +71,7 @@ public class TransactionPinController(
     }
 
     [HttpGet("has-pin-setup")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
     public async Task<IActionResult> CheckIfPinSet(
         CancellationToken cancellationToken)
     {
@@ -84,6 +90,7 @@ public class TransactionPinController(
 
 
     [HttpPost("forgot-pin-send")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> SendOtpForPinForgot(
@@ -102,6 +109,7 @@ public class TransactionPinController(
     }
 
     [HttpPost("forgot-pin-verify")]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> VerifyOtpForPinForgot(
@@ -118,5 +126,5 @@ public class TransactionPinController(
             result);
     }
 
-    
+
 }
