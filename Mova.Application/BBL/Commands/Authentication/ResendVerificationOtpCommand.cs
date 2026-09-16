@@ -20,7 +20,7 @@ public sealed class ResendVerificationOtpCommand
     {
         [EmailAddress]
         public string Email { get; init; } = string.Empty;
-        public string Purpose { get; init; } = "account-verification"; // "account-verification" or "password-reset"
+        public string Purpose { get; init; } = "account-verification";
     }
 
     public class ResendVerificationOtpResponseDto
@@ -54,9 +54,9 @@ public sealed class ResendVerificationOtpCommand
         public async Task<BaseResult<ResendVerificationOtpResponseDto>> Handle(Command request, CancellationToken cancellationToken)
         {
             var identifier = !string.IsNullOrWhiteSpace(request.Email) ? request.Email : string.Empty;
-            
+
             using var op = OperationLogger.Start(
-                _logger, 
+                _logger,
                 "ResendVerificationOtp",
                 ("Identifier", identifier ?? "unknown"),
                 ("Purpose", request.Purpose));
@@ -99,13 +99,19 @@ public sealed class ResendVerificationOtpCommand
                 }
             }
 
+            var otpCode = string.Empty;
+            var userPublicId = user.PublicId;
+            var userFirstName = user.FirstName;
+            var userEmail = user.Email;
+            var userPhone = user.PhoneNumber;
+
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
                 var existingOtps = await _unitOfWork.Query<OtpVerification>()
-                    .Where(o => o.UserPublicId == user.PublicId 
-                                && o.Purpose == otpPurpose 
+                    .Where(o => o.UserPublicId == userPublicId
+                                && o.Purpose == otpPurpose
                                 && !o.IsUsed)
                     .ToListAsync(cancellationToken);
 
@@ -115,11 +121,11 @@ public sealed class ResendVerificationOtpCommand
                     _unitOfWork.Update(existingOtp);
                 }
 
-                var otpCode = _otpService.GenerateOtp();
+                otpCode = _otpService.GenerateOtp();
 
                 var otp = new OtpVerification
                 {
-                    UserPublicId = user.PublicId,
+                    UserPublicId = userPublicId,
                     OtpCode = otpCode,
                     Purpose = otpPurpose,
                     ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
@@ -131,34 +137,12 @@ public sealed class ResendVerificationOtpCommand
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                _notificationQueue.QueueOtpDelivery(
-                    user.FirstName,
-                    user.Email,
-                    user.PhoneNumber,
-                    otpCode,
-                    otpPurpose);
-
-
-
-                var message = otpPurpose == OtpPurpose.AccountVerification 
-                    ? "A new verification OTP has been sent to your email and phone."
-                    : "A new password reset OTP has been sent to your email and phone.";
-
-                op.Success($"OTP resent successfully for user {user.PublicId} for purpose: {request.Purpose}");
-
-                return new BaseResult<ResendVerificationOtpResponseDto>(
-                    HttpStatusCode.OK,
-                    "Verification OTP resent successfully.",
-                    new ResendVerificationOtpResponseDto
-                    {
-                        UserPublicId = user.PublicId,
-                        Data = "A new verification OTP has been sent to your email and phone."
-                    });
+                op.Success($"OTP resent successfully for user {userPublicId} for purpose: {request.Purpose}");
             }
             catch (DbUpdateException dbEx)
             {
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error while resending OTP for user {user.PublicId}: {dbEx.Message}", dbEx);
+                op.Fail($"Database error while resending OTP for user {userPublicId}: {dbEx.Message}", dbEx);
 
                 return new BaseResult<ResendVerificationOtpResponseDto>(
                     HttpStatusCode.Conflict,
@@ -167,12 +151,38 @@ public sealed class ResendVerificationOtpCommand
             catch (Exception ex)
             {
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Resend OTP failed for user {user.PublicId}: {ex.Message}", ex);
+                op.Fail($"Resend OTP failed for user {userPublicId}: {ex.Message}", ex);
 
                 return new BaseResult<ResendVerificationOtpResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while resending the verification OTP. Please try again later.");
             }
+
+            try
+            {
+                _notificationQueue.QueueOtpDelivery(
+                    userFirstName,
+                    userEmail,
+                    userPhone,
+                    otpCode,
+                    otpPurpose.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to queue OTP delivery for {UserPublicId}.",
+                    userPublicId);
+            }
+
+            return new BaseResult<ResendVerificationOtpResponseDto>(
+                HttpStatusCode.OK,
+                "Verification OTP resent successfully.",
+                new ResendVerificationOtpResponseDto
+                {
+                    UserPublicId = userPublicId,
+                    Data = "A new verification OTP has been sent to your email and phone."
+                });
         }
     }
 }

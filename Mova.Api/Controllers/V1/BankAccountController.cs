@@ -87,9 +87,9 @@ public class BankAccountController(
         [FromBody] AddBankAccount.Command command,
         CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
-        command.Email = UserEmail;
-        command.FirstName  = UserFirstName;
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
+        command.FirstName  = UserFirstName ?? string.Empty;
 
         var result = await _mediator.Send(
             command,
@@ -113,10 +113,10 @@ public class BankAccountController(
         [FromBody] LinkAccountToBank.Command command,
         CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
         command.WalletId = walletId;
-        command.FirstName = UserFirstName;
-        command.Email = UserEmail;
+        command.FirstName = UserFirstName ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
 
         var result = await _mediator.Send(
             command,

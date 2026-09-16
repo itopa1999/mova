@@ -37,9 +37,9 @@ public class WalletController(
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> CreateWallet([FromBody] CreateWalletCommand.Command command, CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
-        command.Email = UserEmail;
-        command.FirstName = UserFirstName;
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
 
         var result = await _mediator.Send(command, cancellationToken);
 
@@ -132,7 +132,7 @@ public class WalletController(
         var query = new GetWalletActivities.Query
         {
             WalletId = walletId,
-            UserPublicId = UserPublicId
+            UserPublicId = UserPublicId ?? string.Empty
         };
 
         var result = await _mediator.Send(query, cancellationToken);
@@ -151,7 +151,7 @@ public class WalletController(
         var query = new GetWalletPayouts.Query
         {
             WalletId = walletId,
-            UserPublicId = UserPublicId
+            UserPublicId = UserPublicId ?? string.Empty
         };
 
         var result = await _mediator.Send(query, cancellationToken);
@@ -169,7 +169,7 @@ public class WalletController(
     {
         var query = new GetWalletAnalytics.Query
         {
-            UserPublicId = UserPublicId,
+            UserPublicId = UserPublicId ?? string.Empty,
             Date = date
         };
 
@@ -206,7 +206,7 @@ public class WalletController(
     {
         var query = new GetWalletBankAccount.Query
         {
-            UserPublicId = UserPublicId,
+            UserPublicId = UserPublicId ?? string.Empty,
             WalletId = walletId
         };
 
@@ -229,7 +229,7 @@ public class WalletController(
     {
         var query = new GetReleasesQuery.Query
         {
-            UserPublicId = UserPublicId,
+            UserPublicId = UserPublicId ?? string.Empty,
             UpcomingLimit = upcomingLimit
         };
 
@@ -261,9 +261,9 @@ public class WalletController(
     {
         var command = new BreakWalletCommand.Command
         {
-            UserPublicId = UserPublicId,
-            Email = UserEmail,
-            FirstName = UserFirstName,
+            UserPublicId = UserPublicId ?? string.Empty,
+            Email = UserEmail ?? string.Empty,
+            FirstName = UserFirstName ?? string.Empty,
             WalletId = walletId,
         };
 
@@ -284,7 +284,7 @@ public class WalletController(
         var result = await _mediator.Send(
             new ToggleWalletStatusCommand.Command
             {
-                UserPublicId = UserPublicId,
+                UserPublicId = UserPublicId ?? string.Empty,
                 WalletId = walletId,
             },
             cancellationToken);

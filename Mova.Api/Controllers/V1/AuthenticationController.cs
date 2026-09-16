@@ -153,7 +153,7 @@ public class AuthenticationController(
         [FromBody] LogoutCommand.Command command,
         CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
         if (string.IsNullOrWhiteSpace(command.RefreshToken))
         {
             var refreshTokenFromCookie = Request.Cookies["refresh_token"];
@@ -227,7 +227,7 @@ public class AuthenticationController(
     public async Task<IActionResult> ChangePassword(
         [FromBody] ChangePasswordCommand.Command command, CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
         var result = await _mediator.Send(command, cancellationToken);
         return StatusCode(
             (int)result.StatusCode,

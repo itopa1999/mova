@@ -59,12 +59,6 @@ public sealed class VerifyAccountCommand
                 Platforms.Swagger
             };
 
-        private static string GenerateDummyAccountNumber()
-        {
-            return Random.Shared.NextInt64(1_000_000_000L, 10_000_000_000L)
-                .ToString();
-        }
-
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
@@ -119,15 +113,21 @@ public sealed class VerifyAccountCommand
                     "User not found.");
             }
 
+            var userPublicId = user.PublicId;
+            var userEmail = user.Email ?? string.Empty;
+            var userFirstName = user.FirstName ?? "Customer";
+            var accessToken = string.Empty;
+            var refreshToken = string.Empty;
+
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
                 var otpVerification = await _unitOfWork.Query<OtpVerification>()
                     .Where(x => x.UserPublicId == user.PublicId
-                                && x.Purpose == OtpPurpose.AccountVerification.ToString()
+                                && x.Purpose == OtpPurpose.AccountVerification
                                 && !x.IsUsed)
-                    .OrderByDescending(x => x.CreatedAt)
+                    .OrderByDescending(x => x.Id) // TODO change to x.CreatedAt
                     .FirstOrDefaultAsync(cancellationToken);
 
                 if (otpVerification is null)
@@ -157,15 +157,6 @@ public sealed class VerifyAccountCommand
                         "OTP has expired. Please request a new one.");
                 }
 
-                if (otpVerification.IsUsed)
-                {
-                    op.Fail($"OTP already used for user {user.PublicId}");
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    return new BaseResult<VerifyAccountResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "This OTP has already been used.");
-                }
-
                 var (markSuccess, markError) = await _identityService.MarkEmailAndPhoneAsVerifiedAsync(user.Id);
                 if (!markSuccess)
                 {
@@ -180,33 +171,9 @@ public sealed class VerifyAccountCommand
                 otpVerification.UsedAt = DateTimeOffset.UtcNow;
                 _unitOfWork.Update(otpVerification);
 
-                var accountNumber = GenerateDummyAccountNumber();
-                var virtualAccount = new VirtualAccount
-                {
-                    UserPublicId = user.PublicId,
-                    Provider = PaymentProvider.Monnify,
-                    ProviderCustomerId = null,
-                    ProviderAccountId = null,
-                    AccountNumber = accountNumber,
-                    BankName = "Mova Bank",
-                    AccountName = user.FullName,
-                    Currency = "NGN",
-                    Status = VirtualAccountStatus.Active,
-                };
-
-                await _unitOfWork.AddAsync(virtualAccount, cancellationToken);
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                _notificationQueue.QueueWelcomeEmail(
-                    user.FirstName ?? "Customer",
-                    user.Email);
-
                 var roles = await _identityService.GetRolesAsync(user.Id);
 
-                var accessToken = _jwtTokenGenerator.GenerateToken(
+                accessToken = _jwtTokenGenerator.GenerateToken(
                     user.Id,
                     user.PublicId,
                     user.FirstName,
@@ -219,50 +186,71 @@ public sealed class VerifyAccountCommand
                     request.Platform,
                     roles);
 
-                var (refreshToken, refreshTokenEntity) = await _refreshTokenService.CreateAsync(
+                var (newRefreshToken, refreshTokenEntity) = await _refreshTokenService.CreateAsync(
                     user.PublicId,
                     cancellationToken);
 
                 await _unitOfWork.AddAsync(refreshTokenEntity, cancellationToken);
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                op.Success($"Account verified successfully for user {user.PublicId}. Access and refresh tokens generated.");
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                return new BaseResult<VerifyAccountResponseDto>(
-                    HttpStatusCode.OK,
-                    "Account verified successfully.",
-                    new VerifyAccountResponseDto
-                    {
-                        UserPublicId = user.PublicId,
-                        IsAccountVerified = true,
-                        Email = user.Email ?? string.Empty,
-                        Phone = user.PhoneNumber ?? string.Empty,
-                        FullName = user.FullName ?? string.Empty,
-                        ProfilePicture = user.ProfilePicture,
-                        Platform = request.Platform,
-                        AccessToken = accessToken,
-                        RefreshToken = refreshToken,
-                        AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
-                    });
+                refreshToken = newRefreshToken;
+
+                op.Success($"Account verified successfully for user {userPublicId}. Access and refresh tokens generated.");
             }
             catch (DbUpdateException dbEx)
             {
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error during account verification for user {user?.PublicId ?? "unknown"}: {dbEx.Message}", dbEx);
+                op.Fail($"Database error during account verification for user {userPublicId}: {dbEx.Message}", dbEx);
 
                 return new BaseResult<VerifyAccountResponseDto>(
                     HttpStatusCode.Conflict,
                     "An error occurred. Please try again.");
+
+                
             }
             catch (Exception ex)
             {
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Account verification failed for user {user?.PublicId ?? "unknown"}: {ex.Message}", ex);
+                op.Fail($"Account verification failed for user {userPublicId}: {ex.Message}", ex);
 
                 return new BaseResult<VerifyAccountResponseDto>(
                     HttpStatusCode.InternalServerError,
-                    "An error occurred during account verification. Please try again later.");
+                    $"DEBUG: [{ex.GetType().Name}] {ex.Message}");
             }
+
+            try
+            {
+                _notificationQueue.QueueWelcomeEmail(
+                    userFirstName,
+                    userEmail);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to queue welcome email for {UserPublicId}.",
+                    userPublicId);
+            }
+
+            return new BaseResult<VerifyAccountResponseDto>(
+                HttpStatusCode.OK,
+                "Account verified successfully.",
+                new VerifyAccountResponseDto
+                {
+                    UserPublicId = userPublicId,
+                    IsAccountVerified = true,
+                    Email = userEmail,
+                    Phone = user.PhoneNumber ?? string.Empty,
+                    FullName = user.FullName ?? string.Empty,
+                    ProfilePicture = user.ProfilePicture,
+                    Platform = request.Platform,
+                    AccessToken = accessToken,
+                    RefreshToken = refreshToken,
+                    AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
+                });
         }
     }
 }

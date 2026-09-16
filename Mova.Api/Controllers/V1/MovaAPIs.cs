@@ -51,7 +51,7 @@ public class MovaQueries(
         var result = await _mediator.Send(
             new GetNotificationsQuery.Query
             {
-                UserPublicId = UserPublicId,
+                UserPublicId = UserPublicId ?? string.Empty,
                 UnreadOnly = unreadOnly,
             },
             cancellationToken);
@@ -70,7 +70,7 @@ public class MovaQueries(
         var result = await _mediator.Send(
             new MarkNotificationAsRead.Command
             {
-                UserPublicId = UserPublicId,
+                UserPublicId = UserPublicId ?? string.Empty,
                 NotificationId = id,
             },
             cancellationToken);
@@ -89,7 +89,7 @@ public class MovaQueries(
         var result = await _mediator.Send(
             new MarkAllNotificationsAsRead.Command
             {
-                UserPublicId = UserPublicId,
+                UserPublicId = UserPublicId ?? string.Empty,
             },
             cancellationToken);
 

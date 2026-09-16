@@ -6,7 +6,7 @@ namespace Mova.Domain.Entities;
 [Table("refresh_tokens")]
 public class RefreshToken : BaseEntity
 {
-    public string UserPublicId { get; set; }
+    public required string UserPublicId { get; set; }
     public string TokenHash { get; set; } = string.Empty;
 
     public DateTimeOffset ExpiresAt { get; set; }

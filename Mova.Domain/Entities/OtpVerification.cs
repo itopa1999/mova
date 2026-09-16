@@ -6,7 +6,7 @@ namespace Mova.Domain.Entities;
 [Table("otp_verifications")]
 public class OtpVerification : BaseEntity
 {
-    public string UserPublicId { get; set; }
+    public required string UserPublicId { get; set; }
     public string OtpCode { get; set; } = string.Empty;
 
     public string Purpose { get; set; } = string.Empty;

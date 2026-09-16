@@ -268,7 +268,7 @@ public sealed class AddBankAccount
 
             var emailMessage =
                 $"{accountName} ({bankName}) has been linked to your MOVA account. " +
-                $"You can now use this account to fund your MOVA wallets and receive releases.";
+                $"You can now use this account to receive releases.";
 
             try
             {

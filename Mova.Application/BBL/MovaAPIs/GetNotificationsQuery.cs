@@ -65,7 +65,7 @@ public sealed class GetNotificationsQuery
             }
 
             var notifications = await query
-                .OrderByDescending(x => x.CreatedAt)
+                .OrderByDescending(x => x.Id) // TODO change to x.CreatedAt
                 .Take(100)
                 .Select(x => new NotificationDto
                 {

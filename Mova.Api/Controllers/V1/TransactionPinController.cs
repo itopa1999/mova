@@ -26,7 +26,7 @@ public class TransactionPinController(
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> SetPin([FromBody] SetPinCommand.Command command, CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
 
         var result = await _mediator.Send(command, cancellationToken);
 
@@ -43,7 +43,7 @@ public class TransactionPinController(
         [FromBody] VerifyPinCommand.Command command,
         CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
 
         var result = await _mediator.Send(command, cancellationToken);
 
@@ -60,7 +60,7 @@ public class TransactionPinController(
         [FromBody] ChangePinCommand.Command command,
         CancellationToken cancellationToken)
     {
-        command.UserPublicId = UserPublicId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
 
         var result = await _mediator.Send(command, cancellationToken);
 

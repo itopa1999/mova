@@ -91,7 +91,7 @@ public sealed class VerifyPasswordTokenCommand
                 .Where(x => x.UserPublicId == user.PublicId
                             && x.Purpose == OtpPurpose.PasswordReset.ToString()
                             && !x.IsUsed)
-                .OrderByDescending(x => x.CreatedAt)
+                .OrderByDescending(x => x.Id) // TODO change to x.CreatedAt
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (otpVerification is null)

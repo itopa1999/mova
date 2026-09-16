@@ -49,7 +49,6 @@ public sealed class RegisterCommand
         public string FullName { get; set; } = string.Empty;
         public string Data { get; set; } = string.Empty;
         public string NextStep { get; set; } = string.Empty;
-
     }
 
     public class Handler : IRequestHandler<Command, BaseResult<RegistrationResponseDto>>
@@ -77,7 +76,7 @@ public sealed class RegisterCommand
         public async Task<BaseResult<RegistrationResponseDto>> Handle(Command request, CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
-                _logger, 
+                _logger,
                 "RegisterUser",
                 ("Email", request.Email),
                 ("Phone", request.PhoneNumber));
@@ -125,11 +124,14 @@ public sealed class RegisterCommand
                     "Phone number is already in use.");
             }
 
+            var userPublicId = string.Empty;
+            var otpCode = string.Empty;
+
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
             try
             {
-                var (success, errorMessage, userPublicId, userId) = await _identityService.CreateUserAsync(
+                var (success, errorMessage, createdPublicId, userId) = await _identityService.CreateUserAsync(
                     firstName,
                     lastName,
                     normalizedEmail,
@@ -155,11 +157,11 @@ public sealed class RegisterCommand
                         roleError);
                 }
 
-                var otpCode = _otpService.GenerateOtp();
+                otpCode = _otpService.GenerateOtp();
 
                 var otp = new OtpVerification
                 {
-                    UserPublicId = userPublicId,
+                    UserPublicId = createdPublicId,
                     OtpCode = otpCode,
                     Purpose = OtpPurpose.AccountVerification,
                     ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
@@ -172,27 +174,9 @@ public sealed class RegisterCommand
 
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                _notificationQueue.QueueOtpDelivery(
-                    firstName,
-                    normalizedEmail,
-                    normalizedPhoneNumber,
-                    otpCode,
-                    otp.Purpose);
+                userPublicId = createdPublicId;
 
                 op.Success($"User {userPublicId} registered successfully.");
-
-                return new BaseResult<RegistrationResponseDto>(
-                    HttpStatusCode.Created,
-                    "Account created successfully.",
-                    new RegistrationResponseDto
-                    {
-                        UserPublicId = userPublicId,
-                        Email = normalizedEmail,
-                        Phone = normalizedPhoneNumber,
-                        FullName = $"{firstName} {lastName}",
-                        Data = "Account created. Please verify your email/phone with the OTP sent.",
-                        NextStep = "Email Verification"
-                    });
             }
             catch (DbUpdateException dbEx)
             {
@@ -212,6 +196,36 @@ public sealed class RegisterCommand
                     HttpStatusCode.InternalServerError,
                     "An error occurred during registration. Please try again later.");
             }
+
+            try
+            {
+                _notificationQueue.QueueOtpDelivery(
+                    firstName,
+                    normalizedEmail,
+                    normalizedPhoneNumber,
+                    otpCode,
+                    OtpPurpose.AccountVerification.ToString());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to queue OTP delivery for {UserPublicId}.",
+                    userPublicId);
+            }
+
+            return new BaseResult<RegistrationResponseDto>(
+                HttpStatusCode.Created,
+                "Account created successfully.",
+                new RegistrationResponseDto
+                {
+                    UserPublicId = userPublicId,
+                    Email = normalizedEmail,
+                    Phone = normalizedPhoneNumber,
+                    FullName = $"{firstName} {lastName}",
+                    Data = "Account created. Please verify your email/phone with the OTP sent.",
+                    NextStep = "Email Verification"
+                });
         }
     }
 }

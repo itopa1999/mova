@@ -7,8 +7,7 @@ namespace Mova.Domain.Entities;
 [Table("bank_accounts")]
 public class BankAccount : BaseEntity
 {
-    public string UserPublicId { get; set; }
-
+    public required string UserPublicId { get; set; }
     public string AccountNumber { get; set; } = string.Empty;
     public string AccountName { get; set; } = string.Empty;
     public string BankCode { get; set; } = string.Empty;
