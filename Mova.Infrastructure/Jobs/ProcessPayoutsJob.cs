@@ -43,6 +43,14 @@ public sealed class ProcessPayoutsJob
             _logger,
             "ProcessPayouts");
 
+        if (!await _featureFlagService.IsEnabledAsync(
+                FeatureFlagName.AllowWithdrawFunds,
+                cancellationToken))
+        {
+            op.Success("Withdrawals are disabled. Skipping payout processing.");
+            return;
+        }
+
         var payoutIds = await _context.Payouts
             .AsNoTracking()
             .Where(x =>

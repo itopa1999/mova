@@ -28,6 +28,14 @@ Env.Load(envPath);
 
 builder.Configuration.AddEnvironmentVariables();
 
+
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"];
+    options.Debug = builder.Environment.IsDevelopment();
+    options.EnableLogs = true;
+});
+
 var startup = new Startup(builder.Configuration);
 
 startup.ConfigureServices(builder.Services);

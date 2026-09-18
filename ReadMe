@@ -1,4 +1,3 @@
-
                  MOVA
                    │
            ┌───────┴────────┐
@@ -18,10 +17,35 @@
                          ↓
                       BANK
 
-
 <!-- TODO -->
-1. make sure that every FK queries uses include
-2. 
 
+1. make sure that every FK queries uses include
+2. please make sure that no DB error or datalink is done
+3. add all checks to FE input fields data coming into the backend 
+and remove the try and catch the middleware should handle that please.
+4. i need redis to be added to like places that need it the most please. ans also set a 
+stabdard way of invalidating the record redis
 
 mark places that needs redis and also i need to mark out sending emails
+
+paystack
+user initials and did not even do anything 
+
+{"status":true,"message":"Verification successful","data":{"id":6570062757,"domain":"test","status":"abandoned","reference":"MOVA-28E8B2811B564088943672982439D206","receipt_number":null,"amount":500000,"message":null,"gateway_response":"The transaction was not completed","gateway_response_code":null,"response_code":null,"paid_at":null,"created_at":"2026-09-18T07:33:33.000Z","channel":"card","currency":"NGN","ip_address":"105.127.10.202","metadata":{"referrer":"http://localhost:5173/"},"log":null,"fees":null,"fees_split":null,"authorization":{},"customer":{"id":205764191,"first_name":null,"last_name":null,"email":"salawulucky08071@gmail.com","customer_code":"CUS_lzszf9tffshgk4k","phone":null,"metadata":null,"risk_action":"default","international_format_phone":null},"plan":null,"split":{},"order_id":null,"paidAt":null,"createdAt":"2026-09-18T07:33:33.000Z","requested_amount":500000,"pos_transaction_data":null,"source":null,"fees_breakdown":null,"connect":null,"transaction_date":"2026-09-18T07:33:33.000Z","plan_object":{},"subaccount":{}}}
+
+HTTP STATUS: 200
+
+
+user successfully do it
+{"status":true,"message":"Verification successful","data":{"id":6570055820,"domain":"test","status":"success","reference":"MOVA-762FB05585414B7F80127BE6601C63F3","receipt_number":null,"amount":2000000,"message":null,"gateway_response":"Successful","gateway_response_code":"approved","response_code":"00","paid_at":"2026-09-18T07:30:51.000Z","created_at":"2026-09-18T07:30:42.000Z","channel":"card","currency":"NGN","ip_address":"105.127.10.202","metadata":{"referrer":"http://localhost:5173/"},"log":{"start_time":1789716646,"time_spent":6,"attempts":1,"errors":0,"success":true,"mobile":false,"input":[],"history":[{"type":"action","message":"Set payment method to: bank_transfer","time":2},{"type":"action","message":"Set payment method to: card","time":4},{"type":"action","message":"Attempted to pay with card","time":5},{"type":"success","message":"Successfully paid with card","time":6}]},"fees":40000,"fees_split":null,"authorization":{"authorization_code":"AUTH_ih4s9xo5qv","bin":"408408","last4":"4081","exp_month":"12","exp_year":"2030","channel":"card","card_type":"visa ","bank":"TEST BANK","country_code":"NG","brand":"visa","reusable":true,"signature":"SIG_8dZDdkWsT6rNmIqnz7ro","account_name":null,"receiver_bank_account_number":null,"receiver_bank":null},"customer":{"id":205764191,"first_name":null,"last_name":null,"email":"salawulucky08071@gmail.com","customer_code":"CUS_lzszf9tffshgk4k","phone":null,"metadata":null,"risk_action":"default","international_format_phone":null},"plan":null,"split":{},"order_id":null,"paidAt":"2026-09-18T07:30:51.000Z","createdAt":"2026-09-18T07:30:42.000Z","requested_amount":2000000,"pos_transaction_data":null,"source":null,"fees_breakdown":null,"connect":null,"transaction_date":"2026-09-18T07:30:42.000Z","plan_object":{},"subaccount":{}}}
+
+HTTP STATUS: 200
+
+
+
+flutterwave
+user initials and did not even do anything 
+
+
+
+{"status":"success","message":"Transaction fetched successfully","data":{"id":10499878,"tx_ref":"MOVA-C0A28D71753548A19A7E17D1694A8CE9","flw_ref":"9611910071441789716608436","device_fingerprint":"ced25c4764ac7d2cd70f3bb713b23e38322a16b6c90ab22f9eff4b4d64fcbfd1","amount":4000,"currency":"NGN","charged_amount":4000,"app_fee":56,"merchant_fee":0,"processor_response":"success","auth_model":"AUTH","ip":"105.127.10.202","narration":"AsoOfioke","status":"successful","payment_type":"bank_transfer","created_at":"2026-09-18T07:30:16.000Z","account_id":2252702,"meta":{"__CheckoutInitAddress":"http://localhost:5173/","virtualaccountnumber":"0067100155","originatoraccountnumber":"123*******90","originatorname":"JOHN DOE","bankname":"Access Bank","bankcode":"044","originatoramount":"N/A"},"amount_settled":3944,"customer":{"id":3480969,"name":"Aso_Ofi_oke","phone_number":"08012345678","email":"ravesb_b77ce136268f42623be9_salawulucky08071@gmail.com","created_at"}}

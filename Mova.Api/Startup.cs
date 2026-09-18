@@ -185,10 +185,10 @@ public class Startup(IConfiguration configuration)
         var recurringJobManager = app.Services
             .GetRequiredService<IRecurringJobManager>();
 
-        recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
-            "process-scheduled-releases",
-            job => job.ExecuteAsync(CancellationToken.None),
-            Cron.MinuteInterval(1));
+        // recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
+        //     "process-scheduled-releases",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(1));
 
         // recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
         //     "process-releases-payouts",
