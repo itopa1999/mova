@@ -377,6 +377,12 @@ public sealed class FlutterwaveService(
                 headers,
                 cancellationToken);
 
+        Console.WriteLine("===== FLUTTERWAVE VERIFY RESPONSE4 =====");
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+            response,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine("====================================");
+
         if (response is null)
         {
             return new PaymentVerificationResult

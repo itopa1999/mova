@@ -23,6 +23,7 @@ public sealed class GetProfile
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string? ProfilePicture { get; set; } = string.Empty;
+        public decimal Balance { get; set; }
         public bool HasPinSet { get; set; }
     }
 
@@ -68,6 +69,7 @@ public sealed class GetProfile
                 Email = user.Email ?? string.Empty,
                 Phone = user.PhoneNumber ?? string.Empty,
                 ProfilePicture = user.ProfilePicture,
+                Balance = user.Balance.ToDecimal(),
                 HasPinSet=!string.IsNullOrWhiteSpace(user.TransactionPinHash)
             };
 

@@ -295,7 +295,7 @@ public sealed class ProcessScheduledReleasesJob
         var emailMessage =
             $"₦{amount:N0} has been released from your {walletName} wallet. " +
             $"The money is on its way to your linked bank account and should " +
-            $"arrive within a few hours. MOVA will handle the next release on schedule.";
+            $"arrive within a few minutes. MOVA will handle the next release on schedule.";
 
         try
         {

@@ -36,6 +36,7 @@ public sealed class VerifyAccountCommand
         public string Phone { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? ProfilePicture { get; set; } = string.Empty;
+        public decimal Balance { get; set; }
         public string Platform { get; set; } = Platforms.Mobile;
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
@@ -246,6 +247,7 @@ public sealed class VerifyAccountCommand
                     Phone = user.PhoneNumber ?? string.Empty,
                     FullName = user.FullName ?? string.Empty,
                     ProfilePicture = user.ProfilePicture,
+                    Balance = user.Balance.ToDecimal(),
                     Platform = request.Platform,
                     AccessToken = accessToken,
                     RefreshToken = refreshToken,

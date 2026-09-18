@@ -27,6 +27,7 @@ public sealed class RefreshTokenCommand
         public string Phone { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? ProfilePicture { get; set; } = string.Empty;
+        public decimal Balance { get; set; }
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public string Platform { get; set; } = Platforms.Mobile;
@@ -160,6 +161,7 @@ public sealed class RefreshTokenCommand
                         Phone = user.PhoneNumber ?? string.Empty,
                         FullName = user.FullName,
                         ProfilePicture = user.ProfilePicture,
+                        Balance = user.Balance.ToDecimal(),
                         AccessToken = accessToken,
                         RefreshToken = newToken,
                         Platform = request.Platform,

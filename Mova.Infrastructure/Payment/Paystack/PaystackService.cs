@@ -392,13 +392,29 @@ public sealed class PaystackService(
             };
         }
 
+        var normalizedStatus = NormalizePaymentStatus(response.Data.Status);
+
         return new PaymentVerificationResult
         {
             IsSuccessful = true,
             Found = true,
-            Status = NormalizePaymentStatus(response.Data.Status),
+            Status = normalizedStatus,
             Reference = reference,
-            Message = response.Message,
+            Message = BuildPaymentMessage(response.Data, normalizedStatus),
+        };
+    }
+
+    private static string BuildPaymentMessage(
+        PaystackVerifyPaymentData data,
+        string normalizedStatus)
+    {
+        return normalizedStatus switch
+        {
+            "success" => $"Payment completed successfully. " +
+                        $"Amount: {(data.Amount / 100m):N2} {data.Currency}.",
+            "failed" => data.GatewayResponse ?? "Payment failed or was abandoned.",
+            "pending" => "Payment is still pending.",
+            _ => data.GatewayResponse ?? "Payment status unknown."
         };
     }
 

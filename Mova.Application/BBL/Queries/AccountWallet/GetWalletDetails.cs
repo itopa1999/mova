@@ -31,6 +31,7 @@ public sealed class WalletDetails
         public long CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public string CategoryIcon { get; set; } = string.Empty;
+        public string WalletRules { get; set; } = string.Empty;
 
         // Amounts
         public decimal TargetAmount { get; set; }
@@ -280,6 +281,8 @@ public sealed class WalletDetails
                     CategoryId = wallet.CategoryId,
                     CategoryName = wallet.Category?.Name ?? "Other",
                     CategoryIcon = wallet.Category?.Icon ?? "FileText",
+
+                    WalletRules = rule.FrequencyConfig,
 
                     // Amounts
                     TargetAmount = wallet.TargetAmount.ToDecimal(),

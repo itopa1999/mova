@@ -9,28 +9,35 @@ namespace Mova.Infrastructure.Service;
 
 public sealed class WalletRuleService : IWalletRuleService
 {
+    private static readonly JsonSerializerOptions JsonOptions = BuildJsonOptions();
+
+    private static JsonSerializerOptions BuildJsonOptions()
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        return options;
+    }
+
     public Task<NextWalletRelease?> GetNextReleaseAsync(
         WalletRule rule,
         DateTimeOffset after,
         CancellationToken cancellationToken = default)
     {
         var configJson = FrequencyConfigHelper.NormalizeConfigJson(rule.FrequencyConfig);
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
-        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 
         var nextDate = rule.Frequency switch
         {
-            ReleaseFrequency.Once => NextOnce(configJson, options, after),
-            ReleaseFrequency.Daily => NextDaily(configJson, options, after),
-            ReleaseFrequency.Weekly => NextWeekly(configJson, options, after),
-            ReleaseFrequency.Monthly => NextMonthly(configJson, options, after),
-            ReleaseFrequency.Quarterly => NextQuarterly(configJson, options, after),
-            ReleaseFrequency.Yearly => NextYearly(configJson, options, after),
-            ReleaseFrequency.Custom => NextCustom(configJson, options, after),
-            ReleaseFrequency.Hourly => NextHourly(configJson, options, after),
+            ReleaseFrequency.Once => NextOnce(configJson, after),
+            ReleaseFrequency.Daily => NextDaily(configJson, after),
+            ReleaseFrequency.Weekly => NextWeekly(configJson, after),
+            ReleaseFrequency.Monthly => NextMonthly(configJson, after),
+            ReleaseFrequency.Quarterly => NextQuarterly(configJson, after),
+            ReleaseFrequency.Yearly => NextYearly(configJson, after),
+            ReleaseFrequency.Custom => NextCustom(configJson, after),
+            ReleaseFrequency.Hourly => NextHourly(configJson, after),
             _ => null
         };
 
@@ -47,18 +54,28 @@ public sealed class WalletRuleService : IWalletRuleService
         });
     }
 
-    private static DateTimeOffset? NextOnce(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // ONCE
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextOnce(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<OnceConfig>(json, options);
+        var config = JsonSerializer.Deserialize<OnceConfig>(json, JsonOptions);
         if (config is null || config.OnceDate == default)
             return null;
 
-        return ApplyTime(config.OnceDate, config.Time, after);
+        var candidate = FrequencyConfigHelper.ApplyTime(
+            config.OnceDate,
+            string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time);
+
+        return candidate > after ? candidate : null;
     }
 
-    private static DateTimeOffset? NextDaily(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // DAILY
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextDaily(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<DailyConfig>(json, options);
+        var config = JsonSerializer.Deserialize<DailyConfig>(json, JsonOptions);
         if (config is null)
             return null;
 
@@ -66,55 +83,106 @@ public sealed class WalletRuleService : IWalletRuleService
             ? Enumerable.Range(1, 7).ToHashSet()
             : config.DaysOfWeek.ToHashSet();
 
-        for (var date = after.Date.AddDays(1); date <= after.Date.AddDays(8); date = date.AddDays(1))
+        var time = string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time;
+
+        // Start from TODAY (not tomorrow) — matches Preview service
+        for (var date = after.Date; date <= after.Date.AddDays(7); date = date.AddDays(1))
         {
-            if (days.Contains(ToIsoDay(date.DayOfWeek)))
-            {
-                var candidate = ApplyTime(date, config.Time, after);
-                if (candidate is not null)
-                    return candidate;
-            }
+            if (!days.Contains(ToIsoDay(date.DayOfWeek)))
+                continue;
+
+            var candidate = FrequencyConfigHelper.ApplyTime(
+                new DateTimeOffset(date, after.Offset),
+                time);
+
+            if (candidate > after)
+                return candidate;
         }
 
         return null;
     }
 
-    private static DateTimeOffset? NextWeekly(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // WEEKLY
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextWeekly(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<WeeklyConfig>(json, options);
+        var config = JsonSerializer.Deserialize<WeeklyConfig>(json, JsonOptions);
         if (config is null || config.DaysOfWeek.Count == 0)
             return null;
 
         var days = config.DaysOfWeek.ToHashSet();
-        for (var date = after.Date.AddDays(1); date <= after.Date.AddDays(8); date = date.AddDays(1))
+        var time = string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time;
+
+        // Start from TODAY — matches Preview service
+        for (var date = after.Date; date <= after.Date.AddDays(7); date = date.AddDays(1))
         {
-            if (days.Contains(ToIsoDay(date.DayOfWeek)))
-            {
-                var candidate = ApplyTime(date, config.Time, after);
-                if (candidate is not null)
-                    return candidate;
-            }
+            if (!days.Contains(ToIsoDay(date.DayOfWeek)))
+                continue;
+
+            var candidate = FrequencyConfigHelper.ApplyTime(
+                new DateTimeOffset(date, after.Offset),
+                time);
+
+            if (candidate > after)
+                return candidate;
         }
 
         return null;
     }
 
-    private static DateTimeOffset? NextMonthly(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // MONTHLY
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextMonthly(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<MonthlyConfig>(json, options);
+        var config = JsonSerializer.Deserialize<MonthlyConfig>(json, JsonOptions);
         if (config is null)
             return null;
 
-        for (var month = new DateTime(after.Year, after.Month, 1).AddMonths(1); month <= after.Date.AddMonths(2); month = month.AddMonths(1))
+        var time = string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time;
+
+        // Walk forward from the CURRENT month — matches Preview service
+        var currentMonth = new DateTime(after.Year, after.Month, 1);
+        var endSearch = currentMonth.AddMonths(2);
+
+        for (var month = currentMonth; month <= endSearch; month = month.AddMonths(1))
         {
-            IEnumerable<int> days = config.IsLastDayOfMonth
-                ? new[] { DateTime.DaysInMonth(month.Year, month.Month) }
-                : config.DatesOfMonth.OrderBy(x => x);
+            IEnumerable<int> days;
+
+            if (config.IsLastDayOfMonth && !(config.DatesOfMonth?.Any() ?? false))
+            {
+                // Only the last day of month
+                days = new[] { DateTime.DaysInMonth(month.Year, month.Month) };
+            }
+            else if (config.DatesOfMonth != null && config.DatesOfMonth.Any())
+            {
+                // Specific dates
+                days = config.DatesOfMonth.OrderBy(x => x);
+
+                // Also include last day if flag set
+                if (config.IsLastDayOfMonth)
+                {
+                    var last = DateTime.DaysInMonth(month.Year, month.Month);
+                    days = days.Append(last).Distinct().OrderBy(x => x);
+                }
+            }
+            else
+            {
+                // Nothing configured
+                continue;
+            }
 
             foreach (var day in days)
             {
-                var candidate = ApplyTime(new DateTimeOffset(month.Year, month.Month, Math.Min(day, DateTime.DaysInMonth(month.Year, month.Month)), 0, 0, 0, after.Offset), config.Time, after);
-                if (candidate is not null)
+                var maxDay = DateTime.DaysInMonth(month.Year, month.Month);
+                var actualDay = Math.Min(day, maxDay);
+
+                var candidate = FrequencyConfigHelper.ApplyTime(
+                    new DateTimeOffset(month.Year, month.Month, actualDay, 0, 0, 0, after.Offset),
+                    time);
+
+                if (candidate > after)
                     return candidate;
             }
         }
@@ -122,21 +190,37 @@ public sealed class WalletRuleService : IWalletRuleService
         return null;
     }
 
-    private static DateTimeOffset? NextQuarterly(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // QUARTERLY
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextQuarterly(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<QuarterlyConfig>(json, options);
-        if (config is null)
+        var config = JsonSerializer.Deserialize<QuarterlyConfig>(json, JsonOptions);
+        if (config is null || config.Months.Count == 0 || config.DaysOfMonth.Count == 0)
             return null;
 
-        for (var month = new DateTime(after.Year, after.Month, 1).AddMonths(1); month <= after.Date.AddMonths(13); month = month.AddMonths(1))
+        var time = string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time;
+        var sortedDays = config.DaysOfMonth.OrderBy(x => x).ToList();
+
+        // Walk forward from the CURRENT month — matches Preview service
+        var currentMonth = new DateTime(after.Year, after.Month, 1);
+        var endSearch = currentMonth.AddMonths(13);
+
+        for (var month = currentMonth; month <= endSearch; month = month.AddMonths(1))
         {
             if (!config.Months.Contains(month.Month))
                 continue;
 
-            foreach (var day in config.DaysOfMonth.OrderBy(x => x))
+            foreach (var day in sortedDays)
             {
-                var candidate = ApplyTime(new DateTimeOffset(month.Year, month.Month, Math.Min(day, DateTime.DaysInMonth(month.Year, month.Month)), 0, 0, 0, after.Offset), config.Time, after);
-                if (candidate is not null)
+                var maxDay = DateTime.DaysInMonth(month.Year, month.Month);
+                var actualDay = Math.Min(day, maxDay);
+
+                var candidate = FrequencyConfigHelper.ApplyTime(
+                    new DateTimeOffset(month.Year, month.Month, actualDay, 0, 0, 0, after.Offset),
+                    time);
+
+                if (candidate > after)
                     return candidate;
             }
         }
@@ -144,39 +228,88 @@ public sealed class WalletRuleService : IWalletRuleService
         return null;
     }
 
-    private static DateTimeOffset? NextYearly(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // YEARLY
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextYearly(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<YearlyConfig>(json, options);
-        if (config is null)
+        var config = JsonSerializer.Deserialize<YearlyConfig>(json, JsonOptions);
+        if (config is null || config.Months.Count == 0 || config.DaysOfMonth.Count == 0)
             return null;
 
+        var time = string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time;
+        var sortedMonths = config.Months.OrderBy(x => x).ToList();
+        var sortedDays = config.DaysOfMonth.OrderBy(x => x).ToList();
+
+        // Walk forward from the CURRENT year — matches Preview service
         for (var year = after.Year; year <= after.Year + 2; year++)
         {
-            foreach (var month in config.Months.OrderBy(x => x))
-            foreach (var day in config.DaysOfMonth.OrderBy(x => x))
+            foreach (var month in sortedMonths)
             {
-                var candidate = ApplyTime(new DateTimeOffset(year, month, Math.Min(day, DateTime.DaysInMonth(year, month)), 0, 0, 0, after.Offset), config.Time, after);
-                if (candidate is not null)
-                    return candidate;
+                foreach (var day in sortedDays)
+                {
+                    var maxDay = DateTime.DaysInMonth(year, month);
+                    var actualDay = Math.Min(day, maxDay);
+
+                    var candidate = FrequencyConfigHelper.ApplyTime(
+                        new DateTimeOffset(year, month, actualDay, 0, 0, 0, after.Offset),
+                        time);
+
+                    if (candidate > after)
+                        return candidate;
+                }
             }
         }
 
         return null;
     }
 
-    private static DateTimeOffset? NextCustom(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // CUSTOM
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextCustom(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<CustomConfig>(json, options);
+        var config = JsonSerializer.Deserialize<CustomConfig>(json, JsonOptions);
         if (config is null || config.IntervalDays <= 0)
             return null;
 
-        var candidateDate = after.Date.AddDays(config.IntervalDays);
-        return ApplyTime(candidateDate, config.Time, after);
+        var time = string.IsNullOrWhiteSpace(config.Time) ? "00:00" : config.Time;
+
+        // The preview service anchors the FIRST release on `startDate`,
+        // then adds IntervalDays from there. Since we only get `after`,
+        // we treat today as the anchor and step forward by interval until
+        // we pass `after`.
+        var anchorDate = after.Date;
+
+        // Try today first
+        var candidate = FrequencyConfigHelper.ApplyTime(
+            new DateTimeOffset(anchorDate, after.Offset),
+            time);
+
+        if (candidate > after)
+            return candidate;
+
+        // Otherwise step forward — bounded to prevent infinite loop
+        for (var i = 0; i < 5000; i++)
+        {
+            anchorDate = anchorDate.AddDays(config.IntervalDays);
+            candidate = FrequencyConfigHelper.ApplyTime(
+                new DateTimeOffset(anchorDate, after.Offset),
+                time);
+
+            if (candidate > after)
+                return candidate;
+        }
+
+        return null;
     }
 
-    private static DateTimeOffset? NextHourly(string json, JsonSerializerOptions options, DateTimeOffset after)
+    // ─────────────────────────────────────────────────────────
+    // HOURLY
+    // ─────────────────────────────────────────────────────────
+    private static DateTimeOffset? NextHourly(string json, DateTimeOffset after)
     {
-        var config = JsonSerializer.Deserialize<HourlyConfig>(json, options);
+        var config = JsonSerializer.Deserialize<HourlyConfig>(json, JsonOptions);
         if (config is null || config.IntervalHours < 1)
             return null;
 
@@ -189,10 +322,7 @@ public sealed class WalletRuleService : IWalletRuleService
             anchorTime.Hours, anchorTime.Minutes, 0,
             after.Offset);
 
-        var step = TimeSpan.FromHours(config.IntervalHours);
-
-        // If the anchor for today is already in the past, roll forward by whole steps
-        // until we're strictly after `after`.
+        // If the anchor for today is at/before `after`, roll forward by whole steps.
         var candidate = baseAnchor;
         if (candidate <= after)
         {
@@ -204,11 +334,9 @@ public sealed class WalletRuleService : IWalletRuleService
         return candidate > after ? candidate : null;
     }
 
-    private static DateTimeOffset? ApplyTime(DateTimeOffset date, string time, DateTimeOffset after)
-    {
-        var candidate = FrequencyConfigHelper.ApplyTime(date, string.IsNullOrWhiteSpace(time) ? "00:00" : time);
-        return candidate > after ? candidate : null;
-    }
-
-    private static int ToIsoDay(DayOfWeek dayOfWeek) => dayOfWeek == DayOfWeek.Sunday ? 7 : (int)dayOfWeek;
+    // ─────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────
+    private static int ToIsoDay(DayOfWeek dayOfWeek) =>
+        dayOfWeek == DayOfWeek.Sunday ? 7 : (int)dayOfWeek;
 }

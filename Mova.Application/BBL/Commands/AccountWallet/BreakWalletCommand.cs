@@ -294,7 +294,7 @@ public sealed class BreakWalletCommand
 
             var emailMessage =
                 $"₦{amountReturned:N0} is on its way to your linked bank " +
-                $"account and should arrive within a few hours. " +
+                $"account and should arrive within a few minutes. " +
                 $"A break fee of ₦{breakFee:N0} was applied, and the " +
                 $"remaining ₦{amountReturned:N0} is being returned to you.";
 

@@ -195,10 +195,13 @@ public class Startup(IConfiguration configuration)
         //     job => job.ExecuteAsync(CancellationToken.None),
         //     Cron.MinuteInterval(2));
 
-        // recurringJobManager.AddOrUpdate<processPendingProcessingTransactions>(
-        //     "process-releases-payouts",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.HourInterval(6));
+        recurringJobManager.AddOrUpdate<ProcessPendingProcessingTransactions>(
+            "process-pending-processing-transactions",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
+
+
+        app.UseHangfireDashboard("/hangfire");
 
         app.UseCors("AllowSpecificOrigin");
 
@@ -244,13 +247,13 @@ public class Startup(IConfiguration configuration)
 
         app.UseRateLimiter();
 
-        app.UseHangfireDashboard("/hangfire", new DashboardOptions
-        {
-            Authorization = new[]
-            {
-                new HangfireDashboardAuthorizationFilter()
-            }
-        });
+        // app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        // {
+        //     Authorization = new[]
+        //     {
+        //         new HangfireDashboardAuthorizationFilter()
+        //     }
+        // });
 
         app.UseStaticFiles();
 
