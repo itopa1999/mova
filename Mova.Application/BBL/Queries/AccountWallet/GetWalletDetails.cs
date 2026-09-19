@@ -23,34 +23,36 @@ public sealed class WalletDetails
 
     public sealed class WalletDetailsResponseDto
     {
-        // Wallet Information
+        // Identity
         public long WalletId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string PayoutDestination { get; set; } = string.Empty;
+
+        // Category
         public long CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public string CategoryIcon { get; set; } = string.Empty;
-        public string WalletRules { get; set; } = string.Empty;
 
         // Amounts
         public decimal TargetAmount { get; set; }
         public decimal LockedAmount { get; set; }
-        public decimal ReleasedAmount { get; set; }
-        public decimal TotalWithdrawnAmount { get; set; }
+        public decimal TotalReleasedAmount { get; set; }
         public decimal AvailableAmount { get; set; }
         public decimal UnusedAmount { get; set; }
+        public decimal TotalWithdrawnAmount { get; set; }
         public decimal ProgressPercentage { get; set; }
-        public decimal SetAmountToBeRemoved {get; set;}
 
-        // Schedule Information
+        // Schedule
+        public decimal ReleaseAmount { get; set; }
         public string Frequency { get; set; } = string.Empty;
+        public string FrequencyConfig { get; set; } = string.Empty;
         public string ScheduleDescription { get; set; } = string.Empty;
         public DateTimeOffset StartDate { get; set; }
         public DateTimeOffset? EndDate { get; set; }
 
-        // Release Information
-        public ReleaseSummaryDto ReleaseSummary { get; set; } = new();
+        // Release timing
         public DateTimeOffset? NextReleaseDate { get; set; }
         public string NextReleaseDisplay { get; set; } = string.Empty;
         public DateTimeOffset? LastReleaseDate { get; set; }
@@ -58,10 +60,11 @@ public sealed class WalletDetails
         public DateTimeOffset? ProjectedEndDate { get; set; }
         public string ProjectedEndDateDisplay { get; set; } = string.Empty;
 
-        // Complete Schedule Preview (includes all releases - stored + projected)
+        // Summary + preview
+        public ReleaseSummaryDto ReleaseSummary { get; set; } = new();
         public List<SchedulePreviewItemDto> SchedulePreview { get; set; } = new();
 
-        // Dates
+        // Audit
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? UpdatedAt { get; set; }
     }
@@ -69,15 +72,14 @@ public sealed class WalletDetails
     public sealed class ReleaseSummaryDto
     {
         public int TotalReleases { get; set; }
-        public int CompletedReleases { get; set; }
-        public int ScheduledReleases { get; set; }
-        public int FailedReleases { get; set; }
-        public int ProjectedReleases { get; set; }
+        public int ReleasedCount { get; set; }
+        public int ScheduledCount { get; set; }
+        public int FailedCount { get; set; }
+        public int ProjectedCount { get; set; }
+        public int UpcomingReleases { get; set; }
         public decimal TotalReleasedAmount { get; set; }
-        public decimal AverageReleaseAmount { get; set; }
         public decimal RemainingAmount { get; set; }
-        public decimal AllReleases{get; set; }
-        public int RemainingReleases { get; set; }
+        public decimal AverageReleaseAmount { get; set; }
     }
 
     public sealed class SchedulePreviewItemDto
@@ -141,7 +143,7 @@ public sealed class WalletDetails
             try
             {
                 var wallet = await _unitOfWork.Query<Wallet>()
-                    .Where(w => w.Id == request.WalletId 
+                    .Where(w => w.Id == request.WalletId
                                 && w.UserPublicId == request.UserPublicId)
                     .Include(w => w.Rule)
                     .Include(w => w.Category)
@@ -155,7 +157,6 @@ public sealed class WalletDetails
                         "Wallet not found.");
                 }
 
-                // Get the schedule preview
                 var schedulePreviewResult = await _mediator.Send(
                     new GetWalletSchedulePreviewQuery.Query
                     {
@@ -165,76 +166,81 @@ public sealed class WalletDetails
                     cancellationToken);
 
                 var rule = wallet.Rule;
-                var SetAmountToBeRemoved = rule.Amount;
                 var releases = wallet.ScheduledReleases ?? new List<ScheduledRelease>();
 
-                // Calculate release summary
-                var completedReleases = releases.Where(r => r.Status == ReleaseStatus.Released).ToList();
-                var scheduledReleases = releases.Where(r => r.Status == ReleaseStatus.Scheduled).ToList();
-                var failedReleases = releases.Where(r => r.Status == ReleaseStatus.Failed).ToList();
+                var completedReleases = releases
+                    .Where(r => r.Status == ReleaseStatus.Released)
+                    .ToList();
 
-                // Get projected releases count from preview
-                var projectedReleases = schedulePreviewResult.IsSuccess && schedulePreviewResult.Data != null
+                var scheduledReleases = releases
+                    .Where(r => r.Status == ReleaseStatus.Scheduled)
+                    .ToList();
+
+                var failedReleases = releases
+                    .Where(r => r.Status == ReleaseStatus.Failed)
+                    .ToList();
+
+                var projectedReleases = schedulePreviewResult.IsSuccess
+                    && schedulePreviewResult.Data != null
                     ? schedulePreviewResult.Data.Releases.Count(r => r.IsProjected)
                     : 0;
 
-                var totalReleases = releases.Count;
-                var totalReleasedAmount = completedReleases.Sum(r => r.Amount.ToDecimal());
-                var averageReleaseAmount = completedReleases.Any() 
-                    ? Math.Round(totalReleasedAmount / completedReleases.Count, 2) 
+                var totalReleasedAmount = completedReleases
+                    .Sum(r => r.Amount.ToDecimal());
+
+                var averageReleaseAmount = completedReleases.Any()
+                    ? Math.Round(totalReleasedAmount / completedReleases.Count, 2)
                     : 0;
 
-                var remainingAmount = wallet.TargetAmount.ToDecimal() - totalReleasedAmount;
-                var remainingReleases = projectedReleases;
-                var AllReleases = scheduledReleases.Count + projectedReleases;
+                var remainingAmount =
+                    wallet.TargetAmount.ToDecimal() - totalReleasedAmount;
 
-                // Get next release date
+                var upcomingReleases =
+                    scheduledReleases.Count + projectedReleases;
+
                 var nextRelease = releases
-                    .Where(r => r.Status == ReleaseStatus.Scheduled 
+                    .Where(r => r.Status == ReleaseStatus.Scheduled
                                 && r.ScheduledFor > DateTimeOffset.UtcNow)
                     .OrderBy(r => r.ScheduledFor)
                     .FirstOrDefault();
 
-                // If no scheduled release, check projected releases
-                if (nextRelease == null && schedulePreviewResult.IsSuccess && schedulePreviewResult.Data != null)
+                DateTimeOffset? nextReleaseDate = nextRelease?.ScheduledFor;
+
+                if (nextReleaseDate is null
+                    && schedulePreviewResult.IsSuccess
+                    && schedulePreviewResult.Data != null)
                 {
                     var firstProjected = schedulePreviewResult.Data.Releases
-                        .FirstOrDefault(r => r.IsProjected);
-                    if (firstProjected != null)
-                    {
-                        nextRelease = new ScheduledRelease
-                        {
-                            ScheduledFor = firstProjected.ScheduledFor
-                        };
-                    }
+                        .Where(r => r.IsProjected)
+                        .OrderBy(r => r.ScheduledFor)
+                        .FirstOrDefault();
+
+                    nextReleaseDate = firstProjected?.ScheduledFor;
                 }
 
-                // Get last release date
                 var lastRelease = releases
-                    .Where(r => r.Status == ReleaseStatus.Released && r.ReleasedAt.HasValue)
+                    .Where(r => r.Status == ReleaseStatus.Released
+                                && r.ReleasedAt.HasValue)
                     .OrderByDescending(r => r.ReleasedAt)
                     .FirstOrDefault();
 
-                // Get projected end date from preview
                 DateTimeOffset? projectedEndDate = null;
-                if (schedulePreviewResult.IsSuccess && schedulePreviewResult.Data != null)
+                if (schedulePreviewResult.IsSuccess
+                    && schedulePreviewResult.Data != null)
                 {
                     var lastProjected = schedulePreviewResult.Data.Releases
                         .OrderByDescending(r => r.ScheduledFor)
                         .FirstOrDefault();
-                    
-                    if (lastProjected != null)
-                    {
-                        projectedEndDate = lastProjected.ScheduledFor;
-                    }
+
+                    projectedEndDate = lastProjected?.ScheduledFor;
                 }
 
-                // Calculate progress percentage
-                var progressPercentage = wallet.TargetAmount.ToDecimal() > 0 
-                    ? Math.Round((wallet.TotalReleasedAmount.ToDecimal() / wallet.TargetAmount.ToDecimal()) * 100, 2)
+                var progressPercentage = wallet.TargetAmount.ToDecimal() > 0
+                    ? Math.Round(
+                        wallet.TotalReleasedAmount.ToDecimal()
+                        / wallet.TargetAmount.ToDecimal() * 100, 2)
                     : 0;
 
-                // Get schedule description
                 string scheduleDescription = string.Empty;
                 if (rule != null && !string.IsNullOrEmpty(rule.FrequencyConfig))
                 {
@@ -250,9 +256,9 @@ public sealed class WalletDetails
                     }
                 }
 
-                // Build schedule preview from the query result
                 var schedulePreview = new List<SchedulePreviewItemDto>();
-                if (schedulePreviewResult.IsSuccess && schedulePreviewResult.Data != null)
+                if (schedulePreviewResult.IsSuccess
+                    && schedulePreviewResult.Data != null)
                 {
                     schedulePreview = schedulePreviewResult.Data.Releases
                         .Select(r => new SchedulePreviewItemDto
@@ -265,75 +271,74 @@ public sealed class WalletDetails
                             IsReleased = r.IsReleased,
                             IsProjected = r.IsProjected,
                             ReleasedAt = r.ReleasedAt,
-                            ReleasedAtDisplay = r.ReleasedAt.HasValue ? FormatDateDisplay(r.ReleasedAt.Value) : "Not released"
+                            ReleasedAtDisplay = r.ReleasedAt.HasValue
+                                ? FormatDateDisplay(r.ReleasedAt.Value)
+                                : "Not released"
                         })
                         .ToList();
                 }
 
                 var response = new WalletDetailsResponseDto
                 {
-                    // Wallet Information
                     WalletId = wallet.Id,
                     Name = wallet.Name,
                     Description = wallet.Description,
                     Status = wallet.Status.ToString(),
+                    PayoutDestination = wallet.PayoutDestination
+                        .ToString()
+                        .ToLowerInvariant(),
 
                     CategoryId = wallet.CategoryId,
                     CategoryName = wallet.Category?.Name ?? "Other",
                     CategoryIcon = wallet.Category?.Icon ?? "FileText",
 
-                    WalletRules = rule.FrequencyConfig,
-
-                    // Amounts
                     TargetAmount = wallet.TargetAmount.ToDecimal(),
                     LockedAmount = wallet.LockedAmount.ToDecimal(),
-                    ReleasedAmount = wallet.TotalReleasedAmount.ToDecimal(),
-                    TotalWithdrawnAmount = wallet.TotalWithdrawnAmount.ToDecimal(),
+                    TotalReleasedAmount = wallet.TotalReleasedAmount.ToDecimal(),
                     AvailableAmount = wallet.AvailableAmount.ToDecimal(),
                     UnusedAmount = wallet.UnusedAmount.ToDecimal(),
+                    TotalWithdrawnAmount = wallet.TotalWithdrawnAmount.ToDecimal(),
                     ProgressPercentage = progressPercentage,
-                    SetAmountToBeRemoved = SetAmountToBeRemoved.ToDecimal(),
 
-                    // Schedule Information
-                    Frequency = rule != null ? rule.Frequency.ToString() : "NotConfigured",
+                    ReleaseAmount = rule?.Amount.ToDecimal() ?? 0,
+                    Frequency = rule != null
+                        ? rule.Frequency.ToString()
+                        : "NotConfigured",
+                    FrequencyConfig = rule?.FrequencyConfig ?? string.Empty,
                     ScheduleDescription = scheduleDescription,
-                    StartDate = rule != null ? rule.StartDate : DateTimeOffset.UtcNow,
+                    StartDate = rule != null
+                        ? rule.StartDate
+                        : DateTimeOffset.UtcNow,
                     EndDate = rule?.EndDate,
 
-                    // Release Summary
                     ReleaseSummary = new ReleaseSummaryDto
                     {
-                        TotalReleases = totalReleases,
-                        CompletedReleases = completedReleases.Count,
-                        ScheduledReleases = scheduledReleases.Count,
-                        FailedReleases = failedReleases.Count,
-                        ProjectedReleases = projectedReleases,
+                        TotalReleases = releases.Count,
+                        ReleasedCount = completedReleases.Count,
+                        ScheduledCount = scheduledReleases.Count,
+                        FailedCount = failedReleases.Count,
+                        ProjectedCount = projectedReleases,
+                        UpcomingReleases = upcomingReleases,
                         TotalReleasedAmount = totalReleasedAmount,
-                        AverageReleaseAmount = averageReleaseAmount,
                         RemainingAmount = Math.Max(remainingAmount, 0),
-                        RemainingReleases = remainingReleases,
-                        AllReleases = AllReleases
+                        AverageReleaseAmount = averageReleaseAmount,
                     },
 
-                    // Next and Last Release
-                    NextReleaseDate = nextRelease?.ScheduledFor,
-                    NextReleaseDisplay = GetNextReleaseDisplay(nextRelease?.ScheduledFor),
+                    NextReleaseDate = nextReleaseDate,
+                    NextReleaseDisplay = GetNextReleaseDisplay(nextReleaseDate),
                     LastReleaseDate = lastRelease?.ReleasedAt,
-                    LastReleaseDisplay = lastRelease?.ReleasedAt.HasValue == true 
-                        ? FormatDateDisplay(lastRelease.ReleasedAt.Value) 
+                    LastReleaseDisplay = lastRelease?.ReleasedAt.HasValue == true
+                        ? FormatDateDisplay(lastRelease.ReleasedAt.Value)
                         : "No releases yet",
-
-                    // Projected End Date
                     ProjectedEndDate = projectedEndDate,
-                    ProjectedEndDateDisplay = projectedEndDate.HasValue 
-                        ? FormatDateDisplay(projectedEndDate.Value) 
+                    ProjectedEndDateDisplay = projectedEndDate.HasValue
+                        ? FormatDateDisplay(projectedEndDate.Value)
                         : "Not available",
 
-                    // Complete Schedule Preview
                     SchedulePreview = schedulePreview,
 
-                    // Dates
                     CreatedAt = wallet.CreatedAt,
+                    UpdatedAt = wallet.ModifiedAt,
                 };
 
                 return new BaseResult<WalletDetailsResponseDto>(
@@ -357,23 +362,12 @@ public sealed class WalletDetails
             var now = DateTimeOffset.UtcNow;
             var daysUntil = (nextReleaseDate.Value - now).Days;
 
-            if (daysUntil < 0)
-                return "Overdue";
-
-            if (daysUntil == 0)
-                return "Today";
-
-            if (daysUntil == 1)
-                return "Tomorrow";
-
-            if (daysUntil <= 7)
-                return $"{daysUntil} days";
-
-            if (daysUntil <= 14)
-                return "Next week";
-
-            if (daysUntil <= 30)
-                return $"{daysUntil / 7} weeks";
+            if (daysUntil < 0) return "Overdue";
+            if (daysUntil == 0) return "Today";
+            if (daysUntil == 1) return "Tomorrow";
+            if (daysUntil <= 7) return $"{daysUntil} days";
+            if (daysUntil <= 14) return "Next week";
+            if (daysUntil <= 30) return $"{daysUntil / 7} weeks";
 
             return nextReleaseDate.Value.ToString("MMM d, yyyy");
         }

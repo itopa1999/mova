@@ -607,7 +607,7 @@ namespace Mova.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("BankAccountId")
+                    b.Property<long?>("BankAccountId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
@@ -627,6 +627,9 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int>("Destination")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset?>("FailedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -642,6 +645,9 @@ namespace Mova.Infrastructure.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("MainCreditedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("ModifiedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1118,6 +1124,9 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
+                    b.Property<int>("PayoutDestination")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -1539,8 +1548,7 @@ namespace Mova.Infrastructure.Migrations
                     b.HasOne("Mova.Domain.Entities.BankAccount", "BankAccount")
                         .WithMany()
                         .HasForeignKey("BankAccountId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Mova.Domain.Entities.Wallet", "Wallet")
                         .WithMany()

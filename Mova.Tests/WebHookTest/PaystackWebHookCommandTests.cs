@@ -112,7 +112,7 @@ public sealed class PaystackWebHookCommandTests : BaseTest
     private void SetupUpdateBalance(bool success = true)
     {
         _identityService
-            .Setup(x => x.UpdateBalanceAsync(
+            .Setup(x => x.CreditBalanceAsync(
                 It.IsAny<string>(),
                 It.IsAny<decimal>(),
                 It.IsAny<CancellationToken>()))
@@ -437,7 +437,7 @@ public sealed class PaystackWebHookCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _identityService.Verify(
-            x => x.UpdateBalanceAsync(
+            x => x.CreditBalanceAsync(
                 It.IsAny<string>(),
                 It.IsAny<decimal>(),
                 It.IsAny<CancellationToken>()),
@@ -472,7 +472,7 @@ public sealed class PaystackWebHookCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _identityService.Verify(
-            x => x.UpdateBalanceAsync(
+            x => x.CreditBalanceAsync(
                 It.IsAny<string>(),
                 It.IsAny<decimal>(),
                 It.IsAny<CancellationToken>()),
@@ -514,7 +514,7 @@ public sealed class PaystackWebHookCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _identityService.Verify(
-            x => x.UpdateBalanceAsync(
+            x => x.CreditBalanceAsync(
                 UserPublicId,
                 Amount,
                 It.IsAny<CancellationToken>()),
@@ -591,7 +591,7 @@ public sealed class PaystackWebHookCommandTests : BaseTest
 
         // webhookData.Amount = 500_000 kobo → 5,000.00 NGN
         _identityService.Verify(
-            x => x.UpdateBalanceAsync(
+            x => x.CreditBalanceAsync(
                 UserPublicId,
                 5000m,
                 It.IsAny<CancellationToken>()),

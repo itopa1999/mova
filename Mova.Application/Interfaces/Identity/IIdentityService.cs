@@ -43,7 +43,7 @@ public interface IIdentityService
 
     Task<IList<string>> GetRolesAsync(long userId);
 
-    Task<bool> UpdateBalanceAsync(string UserPublicId, decimal Amount, CancellationToken cancellationToken);
+    Task<bool> CreditBalanceAsync(string UserPublicId, decimal Amount, CancellationToken cancellationToken);
 
     Task<bool> DebitBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken);
 }

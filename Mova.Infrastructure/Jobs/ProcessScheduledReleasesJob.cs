@@ -1,6 +1,7 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
@@ -17,17 +18,20 @@ public sealed class ProcessScheduledReleasesJob
     private readonly ILogger<ProcessScheduledReleasesJob> _logger;
     private readonly IWalletRuleService _walletRuleService;
     private readonly INotificationQueue _notificationQueue;
+    private readonly IIdentityService _identityService;
 
     public ProcessScheduledReleasesJob(
         ApplicationDbContext context,
         ILogger<ProcessScheduledReleasesJob> logger,
         IWalletRuleService walletRuleService,
-        INotificationQueue notificationQueue)
+        INotificationQueue notificationQueue,
+        IIdentityService identityService)
     {
         _context = context;
         _logger = logger;
         _walletRuleService = walletRuleService;
         _notificationQueue = notificationQueue;
+        _identityService = identityService;
     }
 
     [DisableConcurrentExecution(300)]
@@ -68,6 +72,7 @@ public sealed class ProcessScheduledReleasesJob
         long walletId = 0;
         decimal releasedAmount = 0m;
         bool wasProcessed = false;
+        PayoutDestination? releasedDestination = null;
 
         await using var transaction = await _context.Database
             .BeginTransactionAsync(cancellationToken);
@@ -148,10 +153,57 @@ public sealed class ProcessScheduledReleasesJob
             }
 
             scheduledRelease.Status = ReleaseStatus.Processing;
-            wallet.UnusedAmount += wallet.AvailableAmount;
+
+            // Locked amount always decreases; total released always increases.
             wallet.LockedAmount -= scheduledRelease.Amount;
-            wallet.AvailableAmount = scheduledRelease.Amount;
             wallet.TotalReleasedAmount += scheduledRelease.Amount;
+
+            
+            if (wallet.PayoutDestination == PayoutDestination.Wallet)
+            {
+                wallet.UnusedAmount += wallet.AvailableAmount;
+                wallet.AvailableAmount = scheduledRelease.Amount;
+                op.Success("Release kept in wallet available balance.");
+            }
+            else if (wallet.PayoutDestination == PayoutDestination.Bank
+                     || wallet.PayoutDestination == PayoutDestination.Main)
+            {
+                var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";
+
+                var payoutAlreadyExists = await _context.Set<Payout>()
+                    .AnyAsync(x => x.Reference == payoutReference, cancellationToken);
+
+                if (!payoutAlreadyExists)
+                {
+                    var payout = new Payout
+                    {
+                        UserPublicId = wallet.UserPublicId,
+                        WalletId = wallet.Id,
+                        BankAccountId = wallet.PayoutDestination == PayoutDestination.Bank
+                            ? wallet.BankAccountId
+                            : null,
+                        Destination = wallet.PayoutDestination,
+                        Amount = scheduledRelease.Amount,
+                        Fee = Money.FromNaira(0),
+                        NetAmount = scheduledRelease.Amount,
+                        Reference = payoutReference,
+                        Provider = null,
+                        ProviderReference = null,
+                        FailedAttempts = 0,
+                        Status = PayoutStatus.Pending,
+                        InitiatedAt = DateTimeOffset.UtcNow,
+                    };
+
+                    await _context.Set<Payout>().AddAsync(payout, cancellationToken);
+                }
+
+                op.Success($"Release queued as {wallet.PayoutDestination} payout.");
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Unsupported payout destination: {wallet.PayoutDestination}");
+            }
 
             var releaseTransaction = new Transaction
             {
@@ -178,45 +230,23 @@ public sealed class ProcessScheduledReleasesJob
 
             await _context.LedgerEntries.AddAsync(ledgerEntry, cancellationToken);
 
-            if (wallet.BankAccountId is null || wallet.BankAccountId <= 0)
+            var inAppDestination = wallet.PayoutDestination switch
             {
-                op.Success("Skipped payout: wallet has no linked bank account.");
-            }
-            else
-            {
-                var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";
-
-                var payoutAlreadyExists = await _context.Set<Payout>()
-                    .AnyAsync(x => x.Reference == payoutReference, cancellationToken);
-
-                if (!payoutAlreadyExists)
-                {
-                    var payout = new Payout
-                    {
-                        UserPublicId = wallet.UserPublicId,
-                        WalletId = wallet.Id,
-                        BankAccountId = wallet.BankAccountId.Value,
-                        Amount = scheduledRelease.Amount,
-                        Fee = Money.FromNaira(0),
-                        NetAmount = scheduledRelease.Amount,
-                        Reference = payoutReference,
-                        Provider = null,
-                        ProviderReference = null,
-                        FailedAttempts = 0,
-                        Status = PayoutStatus.Pending,
-                        InitiatedAt = DateTimeOffset.UtcNow
-                    };
-
-                    await _context.Set<Payout>().AddAsync(payout, cancellationToken);
-                }
-            }
+                PayoutDestination.Bank =>
+                    "and is on its way to your linked bank account.",
+                PayoutDestination.Wallet =>
+                    "and is now available in your wallet balance.",
+                PayoutDestination.Main =>
+                    "and has been added to your main MOVA balance.",
+                _ => "and has been released."
+            };
 
             var notification = new AppNotification
             {
                 UserPublicId = wallet.UserPublicId,
                 Type = NotificationType.Release,
                 Title = $"{wallet.Name} schedule released",
-                Message = $"₦{scheduledRelease.Amount.ToDecimal():N0} has been released from",
+                Message = $"₦{scheduledRelease.Amount.ToDecimal():N0} has been released from your {wallet.Name} wallet {inAppDestination}",
                 IsRead = false,
                 ActionUrl = $"/wallet/{wallet.Id}",
                 Metadata = null,
@@ -239,6 +269,7 @@ public sealed class ProcessScheduledReleasesJob
             walletName = wallet.Name;
             walletId = wallet.Id;
             releasedAmount = scheduledRelease.Amount.ToDecimal();
+            releasedDestination = wallet.PayoutDestination;
             wasProcessed = true;
 
             op.Success("Scheduled release processed.");
@@ -254,7 +285,7 @@ public sealed class ProcessScheduledReleasesJob
             throw;
         }
 
-        if (!wasProcessed)
+        if (!wasProcessed || releasedDestination is null)
         {
             return;
         }
@@ -266,7 +297,8 @@ public sealed class ProcessScheduledReleasesJob
                 walletName,
                 walletId,
                 releasedAmount,
-                releaseId);
+                releaseId,
+                releasedDestination.Value);
         }
         catch (Exception ex)
         {
@@ -282,20 +314,41 @@ public sealed class ProcessScheduledReleasesJob
         string walletName,
         long walletId,
         decimal amount,
-        long scheduledReleaseId)
+        long scheduledReleaseId,
+        PayoutDestination payoutDestination)
     {
-        var title = $"{walletName} schedule released";
+        var emailSubject = payoutDestination switch
+        {
+            PayoutDestination.Bank =>
+                $"Your {walletName} release is on the way",
+            PayoutDestination.Wallet =>
+                $"Your {walletName} release is now available",
+            PayoutDestination.Main =>
+                $"Your {walletName} release has been added to your main balance",
+            _ => $"Your {walletName} release"
+        };
 
-        var inAppMessage =
-            $"₦{amount:N0} has been released from your {walletName} wallet " +
-            $"and is on its way to your linked bank account.";
+        var emailMessage = payoutDestination switch
+        {
+            PayoutDestination.Bank =>
+                $"₦{amount:N0} has been released from your {walletName} wallet. " +
+                $"The money is on its way to your linked bank account and should " +
+                $"arrive within a few minutes. MOVA will handle the next release on schedule.",
 
-        var emailSubject = $"Your {walletName} release is on the way";
+            PayoutDestination.Wallet =>
+                $"₦{amount:N0} has been released from your {walletName} wallet. " +
+                $"The money is now available in your wallet balance and you can " +
+                $"withdraw it whenever you like. MOVA will handle the next release on schedule.",
 
-        var emailMessage =
-            $"₦{amount:N0} has been released from your {walletName} wallet. " +
-            $"The money is on its way to your linked bank account and should " +
-            $"arrive within a few minutes. MOVA will handle the next release on schedule.";
+            PayoutDestination.Main =>
+                $"₦{amount:N0} has been released from your {walletName} wallet. " +
+                $"The money is being added to your main MOVA balance. You can spend " +
+                $"it inside MOVA — please note it cannot be withdrawn to a bank account. " +
+                $"MOVA will handle the next release on schedule.",
+
+            _ =>
+                $"₦{amount:N0} has been released from your {walletName} wallet."
+        };
 
         try
         {

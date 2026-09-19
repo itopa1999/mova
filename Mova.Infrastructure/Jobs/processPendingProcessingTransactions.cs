@@ -168,14 +168,15 @@ public sealed class ProcessPendingProcessingTransactions
         //    but only after the grace period to let users finish checkout.
         if (!result.Found)
         {
-            var age = DateTimeOffset.UtcNow - transaction.CreatedAt;
+            // TODO uncomment this 
+            // var age = DateTimeOffset.UtcNow - transaction.CreatedAt;
 
-            if (age < NotFoundGracePeriod)
-            {
-                op.Success(
-                    $"Not found, but transaction is only {age.TotalMinutes:F0}m old. Waiting.");
-                return;
-            }
+            // if (age < NotFoundGracePeriod)
+            // {
+            //     op.Success(
+            //         $"Not found, but transaction is only {age.TotalMinutes:F0}m old. Waiting.");
+            //     return;
+            // }
 
             transaction.Status = TransactionStatus.Failed;
             transaction.FailureReason =

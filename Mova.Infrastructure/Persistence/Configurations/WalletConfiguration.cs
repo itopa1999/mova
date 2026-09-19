@@ -137,6 +137,10 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
                     .IsRequired();
             });
 
+        builder.Property(x => x.PayoutDestination)
+            .HasConversion<int>()
+            .IsRequired();
+
         builder.HasOne(x => x.Rule)
             .WithOne()
             .HasForeignKey<WalletRule>(x => x.WalletId)

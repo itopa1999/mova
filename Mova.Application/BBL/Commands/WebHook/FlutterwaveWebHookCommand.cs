@@ -399,7 +399,7 @@ public sealed class FlutterwaveWebHookCommand
                 }
 
                 var updated =
-                    await _identityService.UpdateBalanceAsync(
+                    await _identityService.CreditBalanceAsync(
                         freshTransaction.UserPublicId,
                         webhook.Amount,
                         cancellationToken);

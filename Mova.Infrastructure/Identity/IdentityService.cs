@@ -237,7 +237,7 @@ public sealed class IdentityService : IIdentityService
         return (true, string.Empty);
     }
 
-    public async Task<bool> UpdateBalanceAsync(string UserPublicId, decimal Amount, CancellationToken cancellationToken)
+    public async Task<bool> CreditBalanceAsync(string UserPublicId, decimal Amount, CancellationToken cancellationToken)
     {
         if (Amount <= 0)
             return false;

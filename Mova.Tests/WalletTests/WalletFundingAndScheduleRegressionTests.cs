@@ -218,7 +218,7 @@
 //     {
 //         public decimal Balance { get; private set; } = balance;
 //         public Task<bool> DebitBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken) => Task.FromResult(userExists && Balance >= amount && Debit(amount));
-//         public Task<bool> UpdateBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken)
+//         public Task<bool> CreditBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken)
 //         {
 //             if (!userExists || amount <= 0) return Task.FromResult(false);
 //             Balance += amount;

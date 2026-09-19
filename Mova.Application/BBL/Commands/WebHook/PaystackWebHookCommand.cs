@@ -352,7 +352,7 @@ public sealed class PaystackWebHookCommand
                 }
 
                 var updated =
-                    await _identityService.UpdateBalanceAsync(
+                    await _identityService.CreditBalanceAsync(
                         freshTransaction.UserPublicId,
                         amount,
                         cancellationToken);

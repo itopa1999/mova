@@ -1,6 +1,7 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
@@ -18,6 +19,7 @@ public sealed class ProcessPayoutsJob
     private readonly IPaystackService _paystackService;
     private readonly IMonnifyService _monnifyService;
     private readonly IFlutterwaveService _flutterwaveService;
+    private readonly IIdentityService _identityService;
 
     public ProcessPayoutsJob(
         ApplicationDbContext context,
@@ -25,7 +27,8 @@ public sealed class ProcessPayoutsJob
         IFeatureFlagService featureFlagService,
         IPaystackService paystackService,
         IMonnifyService monnifyService,
-        IFlutterwaveService flutterwaveService)
+        IFlutterwaveService flutterwaveService,
+        IIdentityService identityService)
     {
         _context = context;
         _logger = logger;
@@ -33,6 +36,7 @@ public sealed class ProcessPayoutsJob
         _paystackService = paystackService;
         _monnifyService = monnifyService;
         _flutterwaveService = flutterwaveService;
+        _identityService = identityService;
     }
 
     [DisableConcurrentExecution(300)]
@@ -109,21 +113,54 @@ public sealed class ProcessPayoutsJob
             return;
         }
 
-        if (payout.BankAccount is null)
-        {
-            await MarkFailedAsync(
-                payout,
-                "Bank account was not found.",
-                cancellationToken);
-
-            return;
-        }
-
         if (payout.Amount.MinorUnits <= 0)
         {
             await MarkFailedAsync(
                 payout,
                 "Payout amount must be greater than zero.",
+                cancellationToken);
+
+            return;
+        }
+
+        // ─── Route by destination ─────────────────────────────
+        switch (payout.Destination)
+        {
+            case PayoutDestination.Bank:
+                await ProcessBankPayoutAsync(
+                    payout,
+                    op,
+                    cancellationToken);
+                break;
+
+            case PayoutDestination.Main:
+                await ProcessMainPayoutAsync(
+                    payout,
+                    op,
+                    cancellationToken);
+                break;
+
+            default:
+                await MarkFailedAsync(
+                    payout,
+                    $"Unsupported payout destination: {payout.Destination}",
+                    cancellationToken);
+                break;
+        }
+    }
+
+    // ─── BANK ─────────────────────────────────────────────────
+
+    private async Task ProcessBankPayoutAsync(
+        Payout payout,
+        IDisposable op,
+        CancellationToken cancellationToken)
+    {
+        if (payout.BankAccount is null)
+        {
+            await MarkFailedAsync(
+                payout,
+                "Bank account was not found.",
                 cancellationToken);
 
             return;
@@ -141,6 +178,7 @@ public sealed class ProcessPayoutsJob
             return;
         }
 
+        // Already with the provider — verify status instead of re-sending.
         if (payout.Status == PayoutStatus.Processing)
         {
             await VerifyExistingTransferAsync(
@@ -155,8 +193,7 @@ public sealed class ProcessPayoutsJob
         payout.Provider = gateway.Value.ToString();
         payout.InitiatedAt ??= DateTimeOffset.UtcNow;
 
-        await _context.SaveChangesAsync(
-            cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
         try
         {
@@ -181,6 +218,10 @@ public sealed class ProcessPayoutsJob
                     "success",
                     StringComparison.OrdinalIgnoreCase))
             {
+                // NOTE: MarkSuccessfulAsync intentionally does NOT increment
+                // wallet.TotalWithdrawnAmount for Bank payouts — that happens
+                // on the webhook side, when the provider confirms the money
+                // actually left. See MarkSuccessfulAsync below.
                 await MarkSuccessfulAsync(
                     payout,
                     cancellationToken);
@@ -190,26 +231,101 @@ public sealed class ProcessPayoutsJob
 
             payout.Status = PayoutStatus.Processing;
 
-            await _context.SaveChangesAsync(
-                cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
 
-            op.Success(
-                $"Payout submitted to {gateway.Value}.");
+            _logger.LogInformation(
+                "Payout {PayoutId} submitted to {Gateway}.",
+                payout.Id,
+                gateway.Value);
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
-                "Error processing payout {PayoutId} via {Gateway}.",
+                "Error processing bank payout {PayoutId} via {Gateway}.",
                 payout.Id,
                 gateway.Value);
 
-            await _context.SaveChangesAsync(
-                cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
 
             throw;
         }
     }
+
+    // ─── MAIN ─────────────────────────────────────────────────
+
+    private async Task ProcessMainPayoutAsync(
+        Payout payout,
+        OperationLogger op,
+        CancellationToken cancellationToken)
+    {
+        if (payout.MainCreditedAt is not null)
+        {
+            payout.Provider = "MainBalance";
+            payout.ProviderReference ??= $"main-credit:{payout.Id}";
+
+            await MarkSuccessfulAsync(payout, cancellationToken);
+            op.Success("Main payout already credited — marked successful.");
+            return;
+        }
+
+        await using var tx = await _context.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            var credited = await _identityService.CreditBalanceAsync(
+                payout.UserPublicId,
+                payout.Amount.ToDecimal(),
+                cancellationToken);
+
+            if (!credited)
+            {
+                await tx.RollbackAsync(cancellationToken);
+
+                await MarkFailedAsync(
+                    payout,
+                    "Failed to credit main MOVA balance.",
+                    cancellationToken);
+
+                return;
+            }
+
+            payout.MainCreditedAt = DateTimeOffset.UtcNow;
+            payout.Provider = "MainBalance";
+            payout.ProviderReference = $"main-credit:{payout.Id}";
+
+            // Main payout also counts as money leaving the wallet.
+            // Increment TotalWithdrawnAmount here (Bank does it via webhook).
+            if (payout.Wallet is not null)
+            {
+                payout.Wallet.TotalWithdrawnAmount += payout.Amount;
+            }
+
+            if (payout.Status != PayoutStatus.Successful)
+            {
+                payout.Status = PayoutStatus.Successful;
+                payout.CompletedAt = DateTimeOffset.UtcNow;
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success("Release credited to main MOVA balance.");
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+
+            op.Fail(
+                $"Error processing main payout {payout.Id}.",
+                ex);
+
+            throw;
+        }
+    }
+
+    // ─── GATEWAY RESOLUTION ───────────────────────────────────
 
     private async Task<PaymentProvider?> ResolveGatewayAsync(
         CancellationToken cancellationToken)
@@ -238,6 +354,8 @@ public sealed class ProcessPayoutsJob
         return null;
     }
 
+    // ─── TRANSFER ─────────────────────────────────────────────
+
     private async Task<TransferResult> SendTransferAsync(
         PaymentProvider gateway,
         Payout payout,
@@ -247,21 +365,21 @@ public sealed class ProcessPayoutsJob
         {
             PaymentProvider.Paystack =>
                 await _paystackService.TransferAsync(
-                    payout.BankAccount,
+                    payout.BankAccount!,
                     payout.Amount,
                     payout.Reference,
                     cancellationToken),
 
             PaymentProvider.Monnify =>
                 await _monnifyService.TransferAsync(
-                    payout.BankAccount,
+                    payout.BankAccount!,
                     payout.Amount,
                     payout.Reference,
                     cancellationToken),
 
             PaymentProvider.Flutterwave =>
                 await _flutterwaveService.TransferAsync(
-                    payout.BankAccount,
+                    payout.BankAccount!,
                     payout.Amount,
                     payout.Reference,
                     cancellationToken),
@@ -292,8 +410,7 @@ public sealed class ProcessPayoutsJob
                 payout.FailedAt = DateTimeOffset.UtcNow;
             }
 
-            await _context.SaveChangesAsync(
-                cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
 
             return;
         }
@@ -320,8 +437,7 @@ public sealed class ProcessPayoutsJob
                 payout.FailureReason = result.Message;
                 payout.FailedAt = DateTimeOffset.UtcNow;
 
-                await _context.SaveChangesAsync(
-                    cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
                 break;
 
             case "pending":
@@ -330,8 +446,7 @@ public sealed class ProcessPayoutsJob
             case "processing":
                 payout.Status = PayoutStatus.Processing;
 
-                await _context.SaveChangesAsync(
-                    cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
                 break;
         }
     }
@@ -363,6 +478,8 @@ public sealed class ProcessPayoutsJob
         };
     }
 
+    // ─── STATUS TRANSITIONS ───────────────────────────────────
+
     private async Task MarkSuccessfulAsync(
         Payout payout,
         CancellationToken cancellationToken)
@@ -372,9 +489,7 @@ public sealed class ProcessPayoutsJob
 
         payout.Status = PayoutStatus.Successful;
         payout.CompletedAt = DateTimeOffset.UtcNow;
-
-        await _context.SaveChangesAsync(
-            cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task MarkFailedAsync(
@@ -392,7 +507,6 @@ public sealed class ProcessPayoutsJob
         if (payout.Status == PayoutStatus.Failed)
             payout.FailedAt = DateTimeOffset.UtcNow;
 
-        await _context.SaveChangesAsync(
-            cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }

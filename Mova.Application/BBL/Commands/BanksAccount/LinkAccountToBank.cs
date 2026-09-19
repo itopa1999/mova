@@ -101,6 +101,14 @@ public sealed class LinkAccountToBank
                         "Wallet not found.");
                 }
 
+                if (wallet.Status != WalletStatus.Active)
+                {
+                    op.Fail($"Wallet is not active. WalletId: {request.WalletId}, Status: {wallet.Status}");
+                    return new BaseResult<LinkAccountToBankDto>(
+                        HttpStatusCode.BadRequest,
+                        "This wallet is not active. Only active wallets can have a bank account linked.");
+                }
+
                 var bankAccount = await _unitOfWork
                     .Query<BankAccount>()
                     .FirstOrDefaultAsync(

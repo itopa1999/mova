@@ -41,6 +41,7 @@ public class Wallet : BaseEntity
     public Money UnusedAmount { get; set; } = Money.FromNaira(0);
     // The cumulative amount from previous release windows that was not withdrawn before the next release.
 
+    public PayoutDestination PayoutDestination { get; set; } = PayoutDestination.Bank;
     public WalletStatus Status { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
@@ -66,6 +67,6 @@ public class Wallet : BaseEntity
 
     public WalletCategory Category { get; set; } = null!;
 
-    public BankAccount BankAccount { get; set; } = null!;
+    public BankAccount? BankAccount { get; set; }
 
 }

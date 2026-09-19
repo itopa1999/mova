@@ -10,7 +10,9 @@ public class Payout : BaseEntity
 {
     public string UserPublicId { get; set; } = null!;
     public long WalletId { get; set; }
-    public long BankAccountId { get; set; }
+    public long? BankAccountId { get; set; }
+
+    public PayoutDestination Destination { get; set; } = PayoutDestination.Bank;
 
     public Money Amount { get; set; }
     public Money Fee { get; set; }
@@ -26,6 +28,7 @@ public class Payout : BaseEntity
     public DateTimeOffset? InitiatedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset? FailedAt { get; set; }
+    public DateTimeOffset? MainCreditedAt { get; set; }
     
     public int FailedAttempts { get; set; }
 
@@ -33,5 +36,5 @@ public class Payout : BaseEntity
 
     public Wallet Wallet { get; set; } = null!;
 
-    public BankAccount BankAccount { get; set; } = null!;
+    public BankAccount? BankAccount { get; set; }
 }

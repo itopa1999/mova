@@ -115,7 +115,7 @@ public sealed class FlutterwaveWebHookCommandTests : BaseTest
     private void SetupUpdateBalance(bool success = true)
     {
         _identityService
-            .Setup(x => x.UpdateBalanceAsync(
+            .Setup(x => x.CreditBalanceAsync(
                 It.IsAny<string>(),
                 It.IsAny<decimal>(),
                 It.IsAny<CancellationToken>()))
@@ -412,7 +412,7 @@ public sealed class FlutterwaveWebHookCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _identityService.Verify(
-            x => x.UpdateBalanceAsync(
+            x => x.CreditBalanceAsync(
                 It.IsAny<string>(),
                 It.IsAny<decimal>(),
                 It.IsAny<CancellationToken>()),
@@ -447,7 +447,7 @@ public sealed class FlutterwaveWebHookCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _identityService.Verify(
-            x => x.UpdateBalanceAsync(
+            x => x.CreditBalanceAsync(
                 It.IsAny<string>(),
                 It.IsAny<decimal>(),
                 It.IsAny<CancellationToken>()),
@@ -488,7 +488,7 @@ public sealed class FlutterwaveWebHookCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _identityService.Verify(
-            x => x.UpdateBalanceAsync(
+            x => x.CreditBalanceAsync(
                 UserPublicId,
                 Amount,
                 It.IsAny<CancellationToken>()),

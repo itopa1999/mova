@@ -76,6 +76,10 @@ public sealed class PayoutConfiguration : IEntityTypeConfiguration<Payout>
                     .IsRequired();
             });
 
+        builder.Property(x => x.Destination)
+            .HasConversion<int>()
+            .IsRequired();
+
         // FK relationships — explicit so EF doesn't create shadow properties
         builder.HasOne(x => x.Wallet)
             .WithMany()

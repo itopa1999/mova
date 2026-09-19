@@ -8,3 +8,10 @@ public enum WalletStatus
     Closed = 4,
     Broken = 5,
 }
+
+public enum PayoutDestination
+{
+    Bank = 1,
+    Wallet = 2,
+    Main = 3,
+}

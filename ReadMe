@@ -25,6 +25,14 @@
 and remove the try and catch the middleware should handle that please.
 4. i need redis to be added to like places that need it the most please. ans also set a 
 stabdard way of invalidating the record redis
+5. please check that verifying money evrything is good about the monry transaction, i don't wanna be in debt
+6. user wants to purchases and there's bad error and till the backedn os throwing 500, please fix that.
+7. add a throwerror to invocke the rollover transaction please. 
+8. for the rollback transaction to work please let one savechanges save all the stuff except exception flag it lemme confirm.
+9. please include all the index for every important frequenly queries please e.g espicially the jobs
+
+
+
 
 mark places that needs redis and also i need to mark out sending emails
 

@@ -46,6 +46,14 @@ public sealed class CreateWalletCommand
         public decimal AmountToBeReleased { get; set; }
 
         public DateTimeOffset StartDate { get; set; }
+
+        /// <summary>
+        /// Where scheduled releases should go.
+        /// "bank"   → sent straight to the linked bank account (BankAccountId required)
+        /// "wallet" → kept in the wallet's available balance, withdrawable anytime
+        /// "main"   → added to the user's main MOVA balance (non-withdrawable, spend-only)
+        /// </summary>
+        public string PayoutDestination { get; set; } = "bank";
     }
 
     public sealed class CreateWalletResponseDto
@@ -142,6 +150,27 @@ public sealed class CreateWalletCommand
                     "Frequency configuration is required.");
             }
 
+            // ─── Resolve payout destination ────────────────────────────
+            var destination = request.PayoutDestination?
+                .Trim()
+                .ToLowerInvariant() switch
+            {
+                "bank" => PayoutDestination.Bank,
+                "wallet" => PayoutDestination.Wallet,
+                "main" => PayoutDestination.Main,
+                _ => (PayoutDestination?)null,
+            };
+
+            if (destination is null)
+            {
+                op.Fail($"Invalid payout destination: {request.PayoutDestination}");
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Invalid payout destination. Must be one of: bank, wallet, main.");
+            }
+
+            var goingToBank = destination == PayoutDestination.Bank;
+
             var normalizedFrequencyConfig =
                 FrequencyConfigHelper.NormalizeConfigJson(request.FrequencyConfig);
 
@@ -175,35 +204,55 @@ public sealed class CreateWalletCommand
                     "The selected wallet category does not exist.");
             }
 
-            var bankAccount = await _unitOfWork.Query<BankAccount>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.Id == request.BankAccountId &&
-                         x.UserPublicId == request.UserPublicId,
-                    cancellationToken);
-
-            if (bankAccount == null)
+            // ─── Bank validation is driven by the payout destination ───
+            if (goingToBank)
             {
-                op.Fail($"Bank account not found for user: {request.BankAccountId}");
-                return new BaseResult<CreateWalletResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "The selected bank account does not exist or does not belong to you.");
+                if (request.BankAccountId <= 0)
+                {
+                    op.Fail("Payout destination is Bank but no bank account was provided.");
+                    return new BaseResult<CreateWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "Please select a bank account.");
+                }
+
+                var bankAccount = await _unitOfWork.Query<BankAccount>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x => x.Id == request.BankAccountId &&
+                             x.UserPublicId == request.UserPublicId,
+                        cancellationToken);
+
+                if (bankAccount == null)
+                {
+                    op.Fail($"Bank account not found for user: {request.BankAccountId}");
+                    return new BaseResult<CreateWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "The selected bank account does not exist or does not belong to you.");
+                }
+
+                if (!bankAccount.ConsentGiven)
+                {
+                    op.Fail($"Consent not given for bank account: {request.BankAccountId}");
+                    return new BaseResult<CreateWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "You have not given consent for this bank account. Please provide consent first.");
+                }
+
+                if (bankAccount.Status != BankAccountStatus.Active)
+                {
+                    op.Fail($"Bank account is not active: {request.BankAccountId} - Status: {bankAccount.Status}");
+                    return new BaseResult<CreateWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "The selected bank account is not active. Please verify your bank account first.");
+                }
             }
-
-            if (!bankAccount.ConsentGiven)
+            else if (request.BankAccountId > 0)
             {
-                op.Fail($"Consent not given for bank account: {request.BankAccountId}");
+                // Wallet/Main destination but a bank was provided — reject to keep intent unambiguous.
+                op.Fail($"Payout destination is {destination} but a bank account was provided.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "You have not given consent for this bank account. Please provide consent first.");
-            }
-
-            if (bankAccount.Status != BankAccountStatus.Active)
-            {
-                op.Fail($"Bank account is not active: {request.BankAccountId} - Status: {bankAccount.Status}");
-                return new BaseResult<CreateWalletResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "The selected bank account is not active. Please verify your bank account first.");
+                    "Bank account must not be provided for this payout destination.");
             }
 
             var previewResult = await _schedulePreviewService.PreviewScheduleAsync(
@@ -289,7 +338,10 @@ public sealed class CreateWalletCommand
                 {
                     UserPublicId = request.UserPublicId,
                     CategoryId = request.CategoryId,
-                    BankAccountId = request.BankAccountId,
+                    BankAccountId = goingToBank
+                        ? request.BankAccountId
+                        : null,
+                    PayoutDestination = destination.Value,
                     Name = walletName,
                     Description = string.IsNullOrWhiteSpace(request.Description)
                         ? null
@@ -299,9 +351,7 @@ public sealed class CreateWalletCommand
                     AvailableAmount = Money.FromNaira(0),
                     LockedAmount = targetMoney,
                     UnusedAmount = Money.FromNaira(0),
-                    Status = request.BankAccountId <= 0
-                        ? WalletStatus.Paused
-                        : WalletStatus.Active,
+                    Status = WalletStatus.Active,
                 };
 
                 await _unitOfWork.AddAsync(wallet, cancellationToken);
@@ -385,6 +435,12 @@ public sealed class CreateWalletCommand
             {
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
 
+                // Log the full exception so real causes (e.g. FK violations) are visible.
+                _logger.LogError(
+                    ex,
+                    "Error creating wallet for user {UserPublicId}.",
+                    request.UserPublicId);
+
                 op.Fail($"Error creating wallet: {ex.Message}");
 
                 return new BaseResult<CreateWalletResponseDto>(
@@ -400,7 +456,8 @@ public sealed class CreateWalletCommand
                     request.FirstName,
                     walletId,
                     walletName,
-                    firstReleaseDate);
+                    firstReleaseDate,
+                    destination.Value);
             }
             catch (Exception ex)
             {
@@ -427,19 +484,33 @@ public sealed class CreateWalletCommand
             string firstName,
             long walletId,
             string walletName,
-            DateTimeOffset firstReleaseDate)
+            DateTimeOffset firstReleaseDate,
+            PayoutDestination payoutDestination)
         {
             var title = $"{walletName} wallet created";
 
+            var destinationClause = payoutDestination switch
+            {
+                PayoutDestination.Bank =>
+                    "Releases will be sent to your linked bank account.",
+                PayoutDestination.Wallet =>
+                    "Releases will stay in your wallet available balance — withdraw anytime.",
+                PayoutDestination.Main =>
+                    "Releases will be added to your main MOVA balance (spend-only, non-withdrawable).",
+                _ => "Releases will be handled on schedule."
+            };
+
             var inAppMessage =
                 $"Your {walletName} wallet is now active. " +
-                $"First release scheduled for {firstReleaseDate:MMM d, yyyy}.";
+                $"First release scheduled for {firstReleaseDate:MMM d, yyyy}. " +
+                destinationClause;
 
             var emailSubject = $"Your {walletName} wallet is ready";
 
             var emailMessage =
                 $"Your {walletName} wallet has been created and is now active. " +
                 $"Your first release is scheduled for {firstReleaseDate:MMM d, yyyy}. " +
+                destinationClause + " " +
                 $"MOVA will handle the schedule from here.";
 
             try

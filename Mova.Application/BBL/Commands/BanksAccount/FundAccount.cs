@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -78,6 +79,7 @@ public sealed class FundAccount
         private readonly IMonnifyService _monnifyService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
+        private readonly IFeatureFlagService _featureFlagService;
 
         public Handler(
             IIdentityService identityService,
@@ -85,7 +87,8 @@ public sealed class FundAccount
             IFlutterwaveService flutterwaveService,
             IMonnifyService monnifyService,
             IUnitOfWork unitOfWork,
-            ILogger<Handler> logger)
+            ILogger<Handler> logger,
+            IFeatureFlagService featureFlagService)
         {
             _identityService = identityService;
             _paystackService = paystackService;
@@ -93,6 +96,7 @@ public sealed class FundAccount
             _monnifyService = monnifyService;
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _featureFlagService = featureFlagService;
         }
 
         public async Task<BaseResult<FundAccountDto>> Handle(
@@ -133,6 +137,16 @@ public sealed class FundAccount
                 ("Amount", request.Amount),
                 ("Provider", provider.ToString()));
 
+            if (!await _featureFlagService.IsEnabledAsync(
+                FeatureFlagName.AllowDepositFunds,
+                cancellationToken))
+            {
+                op.Success("Deposit are disabled");
+                return new BaseResult<FundAccountDto>(
+                    HttpStatusCode.BadRequest,
+                    "Payment cannot be completed at this time");
+            }
+
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -153,6 +167,16 @@ public sealed class FundAccount
             {
                 case PaymentProvider.Paystack:
                 {
+                    if (!await _featureFlagService.IsEnabledAsync(
+                        FeatureFlagName.DepositViaPaystack,
+                        cancellationToken))
+                    {
+                        op.Success("Paystack is disabled");
+                        return new BaseResult<FundAccountDto>(
+                            HttpStatusCode.BadRequest,
+                            "Payment cannot be completed at this time, please choose another gataway method");
+                    }
+
                     var response = await _paystackService.InitializePaymentAsync(
                         user.Email,
                         request.Amount,
@@ -173,6 +197,15 @@ public sealed class FundAccount
 
                 case PaymentProvider.Flutterwave:
                 {
+                    if (!await _featureFlagService.IsEnabledAsync(
+                        FeatureFlagName.DepositViaFlutterwave,
+                        cancellationToken))
+                    {
+                        op.Success("FlutterWave is disabled");
+                        return new BaseResult<FundAccountDto>(
+                            HttpStatusCode.BadRequest,
+                            "Payment cannot be completed at this time, please choose another gataway method");
+                    }
                     var response = await _flutterwaveService.InitializePaymentAsync(
                         user.Email,
                         request.Amount,
@@ -193,6 +226,15 @@ public sealed class FundAccount
 
                 case PaymentProvider.Monnify:
                 {
+                    if (!await _featureFlagService.IsEnabledAsync(
+                        FeatureFlagName.DepositViaMonnify,
+                        cancellationToken))
+                    {
+                        op.Success("Monnify is disabled");
+                        return new BaseResult<FundAccountDto>(
+                            HttpStatusCode.BadRequest,
+                            "Payment cannot be completed at this time, please choose another gataway method");
+                    }
                     var response = await _monnifyService.InitializePaymentAsync(
                         user.Email,
                         request.Amount,
