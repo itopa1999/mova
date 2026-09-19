@@ -101,12 +101,12 @@ public sealed class LinkAccountToBank
                         "Wallet not found.");
                 }
 
-                if (wallet.Status != WalletStatus.Active)
+                if (wallet.PayoutDestination == PayoutDestination.Main)
                 {
-                    op.Fail($"Wallet is not active. WalletId: {request.WalletId}, Status: {wallet.Status}");
+                    op.Fail($"Bank linking not applicable for Main destination. WalletId: {request.WalletId}");
                     return new BaseResult<LinkAccountToBankDto>(
                         HttpStatusCode.BadRequest,
-                        "This wallet is not active. Only active wallets can have a bank account linked.");
+                        "This wallet sends releases to your main MOVA balance. A bank account can't be linked.");
                 }
 
                 var bankAccount = await _unitOfWork

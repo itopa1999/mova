@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
@@ -20,6 +21,42 @@ public sealed class MonnifyService(
     private readonly IExternalApiClient _externalApiClient = externalApiClient;
     private readonly ExternalApiSettings _externalApiSettings =
         externalApiSettings.Value;
+
+
+
+    public async Task<bool> VerifyWebhookSignatureAsync(
+        byte[] rawBody,
+        string? signature)
+    {
+        if (rawBody.Length == 0 || string.IsNullOrWhiteSpace(signature))
+            return false;
+
+        var secret = _settings.SecretKey;
+
+        if (string.IsNullOrWhiteSpace(secret))
+            return false;
+
+        var secretBytes = Encoding.UTF8.GetBytes(secret);
+
+        using var hmac = new HMACSHA512(secretBytes);
+
+        var computedHash = hmac.ComputeHash(rawBody);
+
+        var computedHex = Convert
+            .ToHexString(computedHash)
+            .ToLowerInvariant();
+
+        var providedHex = signature
+            .Trim()
+            .ToLowerInvariant();
+
+        if (computedHex.Length != providedHex.Length)
+            return false;
+
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.ASCII.GetBytes(computedHex),
+            Encoding.ASCII.GetBytes(providedHex));
+    }
 
     public async Task<PaymentInitializationResultDto> InitializePaymentAsync(
         string email,

@@ -33,6 +33,7 @@ public sealed class GetWalletPayouts
         public decimal Amount { get; set; }
         public bool IsCredit { get; set; }
         public DateTimeOffset Date { get; set; }
+        public string Destination { get; set; } = string.Empty;
     }
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<List<WalletPayoutGroupDto>>>
@@ -57,6 +58,7 @@ public sealed class GetWalletPayouts
                 {
                     x.Id,
                     x.Status,
+                    x.Destination,
                     x.Amount,
                     x.Fee,
                     x.NetAmount,
@@ -83,15 +85,19 @@ public sealed class GetWalletPayouts
                     {
                         Id = x.Id,
                         Type = x.Status.ToString(),
-                        Title = GetTitle(x.Status),
+                        Title = GetTitle(x.Status, x.Destination),
                         Subtitle = GetSubtitle(
                             x.Status,
+                            x.Destination,
                             x.Provider,
                             x.ProviderReference,
                             x.FailureReason),
                         Amount = x.NetAmount.ToDecimal(),
                         IsCredit = x.Status == PayoutStatus.Successful,
-                        Date = timestamp
+                        Date = timestamp,
+                        Destination = x.Destination
+                            .ToString()
+                            .ToLowerInvariant()
                     };
                 })
                 .ToList();
@@ -114,38 +120,78 @@ public sealed class GetWalletPayouts
                 groupedActivities);
         }
 
-        private static string GetTitle(PayoutStatus status) => status switch
+        private static string GetTitle(
+            PayoutStatus status,
+            PayoutDestination destination)
         {
-            PayoutStatus.Pending => "Payout Pending",
-            PayoutStatus.Processing => "Payout Processing",
-            PayoutStatus.Successful => "Payout Successful",
-            PayoutStatus.Failed => "Payout Failed",
-            PayoutStatus.Reversed => "Payout Reversed",
-            _ => "Payout"
-        };
+            var destinationLabel = destination switch
+            {
+                PayoutDestination.Bank => "Bank",
+                PayoutDestination.Main => "Main Balance",
+                _ => "Payout"
+            };
+
+            var statusLabel = status switch
+            {
+                PayoutStatus.Pending => "Pending",
+                PayoutStatus.Processing => "Processing",
+                PayoutStatus.Successful => "Successful",
+                PayoutStatus.Failed => "Failed",
+                PayoutStatus.Reversed => "Reversed",
+                _ => "Payout"
+            };
+
+            return $"{destinationLabel} Payout {statusLabel}";
+        }
 
         private static string GetSubtitle(
             PayoutStatus status,
+            PayoutDestination destination,
             string? provider,
             string? providerReference,
             string? failureReason)
         {
-            return status switch
+            return (status, destination) switch
             {
-                PayoutStatus.Pending =>
+                // ─── Bank ──────────────────────────────────────
+                (PayoutStatus.Pending, PayoutDestination.Bank) =>
                     "Waiting to be sent to your bank",
-                PayoutStatus.Processing =>
+
+                (PayoutStatus.Processing, PayoutDestination.Bank) =>
                     "Sent to your bank, awaiting confirmation",
-                PayoutStatus.Successful =>
+
+                (PayoutStatus.Successful, PayoutDestination.Bank) =>
                     string.IsNullOrWhiteSpace(providerReference)
                         ? "Funds delivered to your bank"
                         : $"Ref: {providerReference}",
-                PayoutStatus.Failed =>
+
+                (PayoutStatus.Failed, PayoutDestination.Bank) =>
                     string.IsNullOrWhiteSpace(failureReason)
-                        ? "Payout failed"
+                        ? "Bank payout failed"
                         : failureReason!,
-                PayoutStatus.Reversed =>
-                    "Payout was reversed and returned to your wallet",
+
+                (PayoutStatus.Reversed, PayoutDestination.Bank) =>
+                    "Bank payout was reversed and returned to your wallet",
+
+                // ─── Main balance ──────────────────────────────
+                (PayoutStatus.Pending, PayoutDestination.Main) =>
+                    "Waiting to be added to your main MOVA balance",
+
+                (PayoutStatus.Processing, PayoutDestination.Main) =>
+                    "Adding to your main MOVA balance",
+
+                (PayoutStatus.Successful, PayoutDestination.Main) =>
+                    "Added to your main MOVA balance",
+
+                (PayoutStatus.Failed, PayoutDestination.Main) =>
+                    string.IsNullOrWhiteSpace(failureReason)
+                        ? "Failed to add to your main MOVA balance"
+                        : failureReason!,
+
+                (PayoutStatus.Reversed, PayoutDestination.Main) =>
+                    "Main balance credit was reversed",
+
+                // ─── Fallback ──────────────────────────────────
                 _ => string.IsNullOrWhiteSpace(provider)
                     ? "Payout"
                     : provider!

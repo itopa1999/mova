@@ -342,13 +342,11 @@ public sealed class FlutterwaveWebHookCommand
                         webhook.Amount * 100m,
                         MidpointRounding.AwayFromZero));
 
-            if (transaction.Amount.MinorUnits !=
-                receivedAmountMinorUnits)
+            if (receivedAmountMinorUnits < transaction.Amount.MinorUnits)
             {
                 op.Fail(
-                    $"Amount mismatch. " +
-                    $"Expected: {transaction.Amount.MinorUnits}, " +
-                    $"Received: {receivedAmountMinorUnits}, " +
+                    $"Webhook amount is less than expected. Expected at least: " +
+                    $"{transaction.Amount.MinorUnits}, Received: {receivedAmountMinorUnits}, " +
                     $"Reference: {webhook.TxRef}");
 
                 return Result(
@@ -401,7 +399,7 @@ public sealed class FlutterwaveWebHookCommand
                 var updated =
                     await _identityService.CreditBalanceAsync(
                         freshTransaction.UserPublicId,
-                        webhook.Amount,
+                        transaction.Amount.ToDecimal(),
                         cancellationToken);
 
                 if (!updated)

@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -15,96 +17,94 @@ using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.WebHook;
 
-public sealed class PaystackWebHookCommand
+public sealed class MonnifyWebHookCommand
 {
-    public sealed class Command : IRequest<BaseResult<PaystackWebHookResponseDto>>
+    public sealed class Command : IRequest<BaseResult<MonnifyWebHookResponseDto>>
     {
         public byte[] RawBody { get; init; } = Array.Empty<byte>();
 
         public string? Signature { get; init; }
     }
 
-    public sealed class PaystackWebHookResponseDto
+    public sealed class MonnifyWebHookResponseDto
     {
-        public string Event { get; set; } = string.Empty;
+        public string EventType { get; set; } = string.Empty;
 
-        public PaystackWebhookDataDto Data { get; set; } = new();
+        public MonnifyEventDataDto EventData { get; set; } = new();
     }
 
-    public sealed class PaystackWebhookDataDto
+    public sealed class MonnifyEventDataDto
     {
-        public long Id { get; set; }
+        public string ProductType { get; set; } = string.Empty;
 
-        public string Status { get; set; } = string.Empty;
+        public string TransactionReference { get; set; } = string.Empty;
 
-        public string Reference { get; set; } = string.Empty;
+        public string PaymentReference { get; set; } = string.Empty;
 
-        public long Amount { get; set; }
+        public decimal AmountPaid { get; set; }
+
+        public decimal SettlementAmount { get; set; }
+
+        public string PaymentStatus { get; set; } = string.Empty;
 
         public string Currency { get; set; } = string.Empty;
 
-        public string Channel { get; set; } = string.Empty;
+        public string PaymentMethod { get; set; } = string.Empty;
 
-        public PaystackCustomerDto Customer { get; set; } = new();
+        public string PaidOn { get; set; } = string.Empty;
 
-        public PaystackAuthorizationDto Authorization { get; set; } = new();
+        public MonnifyCustomerDto Customer { get; set; } = new();
+
+        public MonnifyProductDto Product { get; set; } = new();
     }
 
-    public sealed class PaystackCustomerDto
+    public sealed class MonnifyCustomerDto
     {
-        public long Id { get; set; }
-
-        public string CustomerCode { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
 
         public string Email { get; set; } = string.Empty;
     }
 
-    public sealed class PaystackAuthorizationDto
+    public sealed class MonnifyProductDto
     {
-        public string Channel { get; set; } = string.Empty;
+        public string Reference { get; set; } = string.Empty;
 
-        public string? SenderBank { get; set; }
-
-        public string? SenderBankAccountNumber { get; set; }
-
-        public string? SenderName { get; set; }
-
-        public string? ReceiverBankAccountNumber { get; set; }
+        public string Type { get; set; } = string.Empty;
     }
 
     public sealed class Handler
-        : IRequestHandler<Command, BaseResult<PaystackWebHookResponseDto>>
+        : IRequestHandler<Command, BaseResult<MonnifyWebHookResponseDto>>
     {
         private static readonly JsonSerializerOptions JsonOptions =
             new(JsonSerializerDefaults.Web);
 
-        private readonly IPaystackService _paystackService;
+        private readonly IMonnifyService _monnifyService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IPaystackService paystackService,
+            IMonnifyService monnifyService,
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
-            _paystackService = paystackService;
+            _monnifyService = monnifyService;
             _unitOfWork = unitOfWork;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
-        public async Task<BaseResult<PaystackWebHookResponseDto>> Handle(
+        public async Task<BaseResult<MonnifyWebHookResponseDto>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
                 _logger,
-                "PaystackWebHook",
+                "MonnifyWebHook",
                 (
                     "Signature",
                     !string.IsNullOrWhiteSpace(request.Signature)
@@ -116,7 +116,7 @@ public sealed class PaystackWebHookCommand
             {
                 op.Fail("Webhook signature is missing.");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.Unauthorized,
                     "Invalid webhook signature.",
                     null);
@@ -126,14 +126,14 @@ public sealed class PaystackWebHookCommand
             {
                 op.Fail("Webhook body is empty.");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Webhook body is empty.",
                     null);
             }
 
             var isValidSignature =
-                await _paystackService.VerifyWebhookSignatureAsync(
+                await _monnifyService.VerifyWebhookSignatureAsync(
                     request.RawBody,
                     request.Signature);
 
@@ -141,18 +141,18 @@ public sealed class PaystackWebHookCommand
             {
                 op.Fail("Invalid webhook signature.");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.Unauthorized,
                     "Invalid webhook signature.",
                     null);
             }
 
-            PaystackWebHookResponseDto? webhook;
+            MonnifyWebHookResponseDto? webhook;
 
             try
             {
                 webhook =
-                    JsonSerializer.Deserialize<PaystackWebHookResponseDto>(
+                    JsonSerializer.Deserialize<MonnifyWebHookResponseDto>(
                         request.RawBody,
                         JsonOptions);
             }
@@ -162,7 +162,7 @@ public sealed class PaystackWebHookCommand
                     $"Invalid JSON payload: {jsonEx.Message}",
                     jsonEx);
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid webhook payload.",
                     null);
@@ -172,91 +172,90 @@ public sealed class PaystackWebHookCommand
             {
                 op.Fail("Deserialized webhook payload is null.");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid webhook payload.",
                     null);
             }
 
-            if (string.IsNullOrWhiteSpace(webhook.Event))
+            if (string.IsNullOrWhiteSpace(webhook.EventType))
             {
-                op.Fail("Webhook event is missing.");
+                op.Fail("Webhook event type is missing.");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "Webhook event is required.",
+                    "Webhook event type is required.",
                     null);
             }
 
+            // Only handle successful collections (deposits).
             if (!string.Equals(
-                    webhook.Event,
-                    "charge.success",
+                    webhook.EventType,
+                    "SUCCESSFUL_TRANSACTION",
                     StringComparison.OrdinalIgnoreCase))
             {
-                op.Success($"Webhook event ignored: {webhook.Event}");
+                op.Success($"Webhook event ignored: {webhook.EventType}");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.OK,
                     "Webhook event ignored.",
                     webhook);
             }
 
-            var webhookData = webhook.Data;
+            var eventData = webhook.EventData;
 
-            if (webhookData is null)
+            if (eventData is null)
             {
-                op.Fail("Webhook data is missing.");
+                op.Fail("Webhook event data is missing.");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid webhook payload.",
                     null);
             }
 
             if (!string.Equals(
-                    webhookData.Status,
-                    "success",
+                    eventData.PaymentStatus,
+                    "PAID",
                     StringComparison.OrdinalIgnoreCase))
             {
                 op.Success(
-                    $"Charge event received but status is not successful: {webhookData.Status}");
+                    $"Transaction not paid. Status: {eventData.PaymentStatus}");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.OK,
-                    "Transaction is not successful.",
+                    "Transaction is not paid.",
                     webhook);
             }
 
-            if (string.IsNullOrWhiteSpace(webhookData.Reference))
+            if (string.IsNullOrWhiteSpace(eventData.PaymentReference))
             {
-                op.Fail("Transaction reference is missing.");
+                op.Fail("Payment reference is missing.");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "Transaction reference is required.",
+                    "Payment reference is required.",
                     null);
             }
 
-            if (webhookData.Amount <= 0)
+            if (eventData.AmountPaid <= 0)
             {
-                op.Fail(
-                    $"Invalid transaction amount: {webhookData.Amount}");
+                op.Fail($"Invalid amount: {eventData.AmountPaid}");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid transaction amount.",
                     null);
             }
 
             if (!string.Equals(
-                    webhookData.Currency,
+                    eventData.Currency,
                     "NGN",
                     StringComparison.OrdinalIgnoreCase))
             {
-                op.Fail(
-                    $"Unsupported currency: {webhookData.Currency}");
+                op.Fail($"Unsupported currency: {eventData.Currency}");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Unsupported transaction currency.",
                     null);
@@ -265,15 +264,15 @@ public sealed class PaystackWebHookCommand
             var transaction =
                 await _unitOfWork.Query<Transaction>()
                     .FirstOrDefaultAsync(
-                        x => x.Reference == webhookData.Reference,
+                        x => x.Reference == eventData.PaymentReference,
                         cancellationToken);
 
             if (transaction is null)
             {
                 op.Fail(
-                    $"Transaction not found for reference: {webhookData.Reference}");
+                    $"Transaction not found for reference: {eventData.PaymentReference}");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.NotFound,
                     "Transaction not found.",
                     null);
@@ -282,40 +281,41 @@ public sealed class PaystackWebHookCommand
             if (transaction.Status == TransactionStatus.Completed)
             {
                 op.Success(
-                    $"Duplicate webhook ignored. Reference: {webhookData.Reference}");
+                    $"Duplicate webhook ignored. Reference: {eventData.PaymentReference}");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.OK,
                     "Transaction already processed.",
                     webhook);
             }
 
-            if (webhookData.Amount < transaction.Amount.MinorUnits)
+            // Monnify sends amountPaid as the total the customer paid.
+            // Credit the transaction's own amount (the initiated amount)
+            // so fee handling doesn't inflate the user's balance.
+            if (eventData.AmountPaid < transaction.Amount.ToDecimal())
             {
                 op.Fail(
-                    $"Webhook amount is less than expected. Expected at least: " +
-                    $"{transaction.Amount.MinorUnits}, Received: {webhookData.Amount}, " +
-                    $"Reference: {webhookData.Reference}");
+                    $"Amount too low. Expected at least: {transaction.Amount.ToDecimal()}, " +
+                    $"Received: {eventData.AmountPaid}, Reference: {eventData.PaymentReference}");
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Transaction amount mismatch.",
                     null);
             }
 
-            var amount = transaction.Amount.ToDecimal();
-
-            if (amount <= 0)
+            if (eventData.AmountPaid != transaction.Amount.ToDecimal())
             {
-                op.Fail($"Invalid converted amount: {amount}");
-
-                return new BaseResult<PaystackWebHookResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Invalid transaction amount.",
-                    null);
+                _logger.LogInformation(
+                    "Monnify amountPaid {AmountPaid} exceeds initiated {InitiatedAmount} " +
+                    "(likely customer-paid fee). Crediting initiated amount. Reference: {Reference}.",
+                    eventData.AmountPaid,
+                    transaction.Amount.ToDecimal(),
+                    eventData.PaymentReference);
             }
 
             string creditedUserPublicId = string.Empty;
+            var creditedAmount = transaction.Amount.ToDecimal();
 
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
 
@@ -324,7 +324,7 @@ public sealed class PaystackWebHookCommand
                 var freshTransaction =
                     await _unitOfWork.Query<Transaction>()
                         .FirstOrDefaultAsync(
-                            x => x.Reference == webhookData.Reference,
+                            x => x.Reference == eventData.PaymentReference,
                             cancellationToken);
 
                 if (freshTransaction is null)
@@ -333,7 +333,7 @@ public sealed class PaystackWebHookCommand
 
                     op.Fail("Transaction disappeared inside transaction scope.");
 
-                    return new BaseResult<PaystackWebHookResponseDto>(
+                    return new BaseResult<MonnifyWebHookResponseDto>(
                         HttpStatusCode.NotFound,
                         "Transaction not found.",
                         null);
@@ -344,9 +344,9 @@ public sealed class PaystackWebHookCommand
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
 
                     op.Success(
-                        $"Duplicate webhook detected inside transaction. Reference: {webhookData.Reference}");
+                        $"Duplicate webhook detected inside transaction. Reference: {eventData.PaymentReference}");
 
-                    return new BaseResult<PaystackWebHookResponseDto>(
+                    return new BaseResult<MonnifyWebHookResponseDto>(
                         HttpStatusCode.OK,
                         "Transaction already processed.",
                         webhook);
@@ -355,7 +355,7 @@ public sealed class PaystackWebHookCommand
                 var updated =
                     await _identityService.CreditBalanceAsync(
                         freshTransaction.UserPublicId,
-                        amount,
+                        creditedAmount,
                         cancellationToken);
 
                 if (!updated)
@@ -365,7 +365,7 @@ public sealed class PaystackWebHookCommand
                     op.Fail(
                         $"Failed to update balance for user: {freshTransaction.UserPublicId}");
 
-                    return new BaseResult<PaystackWebHookResponseDto>(
+                    return new BaseResult<MonnifyWebHookResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Failed to update user balance.",
                         null);
@@ -379,7 +379,7 @@ public sealed class PaystackWebHookCommand
                 {
                     WalletId = null,
                     TransactionId = freshTransaction.Id,
-                    Amount = Money.FromNaira(amount),
+                    Amount = Money.FromNaira(creditedAmount),
                     IsCredit = true,
                 };
 
@@ -392,9 +392,9 @@ public sealed class PaystackWebHookCommand
                 creditedUserPublicId = freshTransaction.UserPublicId;
 
                 op.Success(
-                    $"Paystack webhook processed. " +
-                    $"Reference: {webhookData.Reference}, " +
-                    $"Amount: ₦{amount:N2}, " +
+                    $"Monnify webhook processed. " +
+                    $"Reference: {eventData.PaymentReference}, " +
+                    $"Amount: ₦{creditedAmount:N2}, " +
                     $"User: {creditedUserPublicId}");
             }
             catch (DbUpdateException dbEx)
@@ -405,26 +405,26 @@ public sealed class PaystackWebHookCommand
                     await _unitOfWork.Query<Transaction>()
                         .AsNoTracking()
                         .AnyAsync(
-                            x => x.Reference == webhookData.Reference
+                            x => x.Reference == eventData.PaymentReference
                                  && x.Status == TransactionStatus.Completed,
                             cancellationToken);
 
                 if (duplicate)
                 {
                     op.Success(
-                        $"Duplicate webhook ignored after DB constraint. Reference: {webhookData.Reference}");
+                        $"Duplicate webhook ignored after DB constraint. Reference: {eventData.PaymentReference}");
 
-                    return new BaseResult<PaystackWebHookResponseDto>(
+                    return new BaseResult<MonnifyWebHookResponseDto>(
                         HttpStatusCode.OK,
                         "Transaction already processed.",
                         webhook);
                 }
 
                 op.Fail(
-                    $"Database error processing Paystack webhook: {dbEx.Message}",
+                    $"Database error processing Monnify webhook: {dbEx.Message}",
                     dbEx);
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.Conflict,
                     "A database conflict occurred while processing the webhook.",
                     null);
@@ -434,10 +434,10 @@ public sealed class PaystackWebHookCommand
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken);
 
                 op.Fail(
-                    $"Error processing Paystack webhook: {ex.Message}",
+                    $"Error processing Monnify webhook: {ex.Message}",
                     ex);
 
-                return new BaseResult<PaystackWebHookResponseDto>(
+                return new BaseResult<MonnifyWebHookResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while processing the webhook.",
                     null);
@@ -447,18 +447,18 @@ public sealed class PaystackWebHookCommand
             {
                 await SendDepositNotificationsAsync(
                     creditedUserPublicId,
-                    amount,
-                    webhookData.Reference);
+                    creditedAmount,
+                    eventData.PaymentReference);
             }
             catch (Exception ex)
             {
                 _logger.LogError(
                     ex,
-                    "Notification block failed for Paystack webhook. Reference: {Reference}",
-                    webhookData.Reference);
+                    "Notification block failed for Monnify webhook. Reference: {Reference}",
+                    eventData.PaymentReference);
             }
 
-            return new BaseResult<PaystackWebHookResponseDto>(
+            return new BaseResult<MonnifyWebHookResponseDto>(
                 HttpStatusCode.OK,
                 "Webhook processed successfully.",
                 webhook);
@@ -495,7 +495,7 @@ public sealed class PaystackWebHookCommand
             {
                 _logger.LogError(
                     ex,
-                    "In-app notification failed for Paystack deposit. Reference: {Reference}",
+                    "In-app notification failed for Monnify deposit. Reference: {Reference}",
                     reference);
             }
 
@@ -542,7 +542,7 @@ public sealed class PaystackWebHookCommand
             {
                 _logger.LogError(
                     ex,
-                    "Email queue failed for Paystack deposit. Reference: {Reference}",
+                    "Email queue failed for Monnify deposit. Reference: {Reference}",
                     reference);
             }
         }
