@@ -90,14 +90,18 @@ public class WalletController(
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<GetAllWalletsResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> GetAllWallets([FromQuery] int page = 1, [FromQuery]int pageSize = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetAllWallets([FromQuery] int page = 1, 
+                [FromQuery] int pageSize = 10,
+                [FromQuery] string search = "",
+                CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(
             new GetAllWallets.Query
             {
                 Page = page,
                 PageSize = pageSize,
-                UserPublicId = UserPublicId ?? string.Empty
+                UserPublicId = UserPublicId ?? string.Empty,
+                Search = search
             },
             cancellationToken);
 

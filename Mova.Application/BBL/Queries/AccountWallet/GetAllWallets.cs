@@ -20,6 +20,11 @@ public sealed class GetAllWallets
 
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
+
+        /// <summary>
+        /// Optional. Case-insensitive search on wallet name and description.
+        /// </summary>
+        public string? Search { get; set; }
     }
 
     public sealed class GetAllWalletsResponseDto : BasePaginationResponse<WalletsDto>
@@ -88,10 +93,30 @@ public sealed class GetAllWallets
                     .Include(w => w.ScheduledReleases)
                     .AsQueryable();
 
+                // ─── Search filter ────────────────────────────
+                if (!string.IsNullOrWhiteSpace(request.Search))
+                {
+                    var term = request.Search.Trim().ToLowerInvariant();
+
+                    // Filter the enum in memory first, then use Contains() — EF Core
+                    // translates that to a simple "IN (...)" clause. Enum.ToString()
+                    // cannot be translated to SQL.
+                    var matchingStatuses = Enum.GetValues<WalletStatus>()
+                        .Where(s => s.ToString().ToLowerInvariant().Contains(term))
+                        .ToList();
+
+                    query = query.Where(w =>
+                        w.Name.ToLower().Contains(term) ||
+                        (w.Description != null && w.Description.ToLower().Contains(term)) ||
+                        (w.Category != null && w.Category.Name.ToLower().Contains(term)) ||
+                        matchingStatuses.Contains(w.Status));
+                }
+
                 var totalCount = await query.CountAsync(cancellationToken);
 
                 var allWallets = await query.ToListAsync(cancellationToken);
 
+                // Totals reflect the filtered set, not the entire wallet list.
                 var totalControlledAmount = allWallets.Sum(w => w.LockedAmount.ToDecimal());
                 var activeWalletCount = allWallets.Count(w => w.Status == WalletStatus.Active);
 
@@ -110,20 +135,20 @@ public sealed class GetAllWallets
                 var walletDtos = pagedWallets.Select(w =>
                 {
                     var rule = w.Rule;
-                    
+
                     DateTimeOffset? nextReleaseDate = null;
                     if (rule != null)
                     {
                         var nextRelease = w.ScheduledReleases?
-                            .Where(sr => sr.Status == ReleaseStatus.Scheduled 
+                            .Where(sr => sr.Status == ReleaseStatus.Scheduled
                                          && sr.ScheduledFor > DateTimeOffset.UtcNow)
                             .OrderBy(sr => sr.ScheduledFor)
                             .FirstOrDefault();
-                        
+
                         nextReleaseDate = nextRelease?.ScheduledFor;
                     }
 
-                    var progressPercentage = w.TargetAmount.ToDecimal() > 0 
+                    var progressPercentage = w.TargetAmount.ToDecimal() > 0
                         ? Math.Round((w.TotalReleasedAmount.ToDecimal() / w.TargetAmount.ToDecimal()) * 100, 2)
                         : 0;
 
@@ -177,6 +202,7 @@ public sealed class GetAllWallets
             }
             catch (Exception)
             {
+                
                 return new BaseResult<GetAllWalletsResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while retrieving your wallets. Please try again later.");

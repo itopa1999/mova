@@ -65,15 +65,18 @@ public sealed class ProcessPayoutsJob
             .Take(100)
             .ToListAsync(cancellationToken);
 
+        if (payoutIds.Count == 0)
+        {
+            op.Success("No pending payouts to process.");
+            return;
+        }
+
         foreach (var payoutId in payoutIds)
         {
             await ProcessPayoutAsync(
                 payoutId,
                 cancellationToken);
         }
-
-        op.Success(
-            $"Processed {payoutIds.Count} payout(s).");
     }
 
     private async Task ProcessPayoutAsync(

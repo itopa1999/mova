@@ -19,7 +19,7 @@ using static Mova.Application.BBL.Commands.BanksAccount.VerifyBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.DepositTransaction;
 using static Mova.Application.BBL.Queries.BanksAccount.GetAllBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.GetBanks;
-using static Mova.Application.BBL.Queries.BanksAccount.PaymentCallback;
+using static Mova.Application.BBL.Queries.BanksAccount.GetTransactions;
 
 namespace Mova.Api.Controllers.V1;
 
@@ -169,7 +169,7 @@ public class BankAccountController(
     [HttpGet("deposits")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(
-        typeof(BaseResult<List<TransactionDto>>),
+        typeof(BaseResult<List<DepositTransaction.TransactionDto>>),
         (int)HttpStatusCode.OK)]
     public async Task<IActionResult> GetUnassignedDepositTransactions(
         CancellationToken cancellationToken)
@@ -184,6 +184,18 @@ public class BankAccountController(
         return StatusCode(
             (int)result.StatusCode,
             result);
+    }
+
+    [HttpGet("transactions")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(
+        typeof(BaseResult<PaginatedTransactionsDto>),
+        (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> GetTransactions([FromQuery] GetTransactions.Query query)
+    {
+        query.UserPublicId = UserPublicId ?? string.Empty;
+        var result = await _mediator.Send(query);
+        return StatusCode((int)result.StatusCode, result);
     }
 
     [HttpPost("fund-account")]

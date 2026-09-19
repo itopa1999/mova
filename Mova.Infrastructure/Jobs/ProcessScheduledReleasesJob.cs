@@ -50,12 +50,17 @@ public sealed class ProcessScheduledReleasesJob
             .Take(100)
             .ToListAsync(cancellationToken);
 
+        if (releaseIds.Count == 0)
+        {
+            op.Success("No pending schedule to release.");
+            return;
+        }
+
         foreach (var releaseId in releaseIds)
         {
             await ProcessReleaseAsync(releaseId, cancellationToken);
         }
 
-        op.Success($"Processed {releaseIds.Count} scheduled release(s).");
     }
 
     private async Task ProcessReleaseAsync(
