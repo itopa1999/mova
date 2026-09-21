@@ -10,9 +10,14 @@ using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Shared.Common;
+using static Mova.Application.BBL.Commands.AccountWallet.CreateRenewalPolicyCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateWalletCommand;
+using static Mova.Application.BBL.Commands.AccountWallet.ToggleRenewalCommand;
+using static Mova.Application.BBL.Commands.AccountWallet.UpdateRenewalPolicyCommand;
 using static Mova.Application.BBL.MovaAPIs.GetReleasesQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
+using static Mova.Application.BBL.Queries.AccountWallet.GetRenewalEventsQuery;
+using static Mova.Application.BBL.Queries.AccountWallet.GetRenewalPolicyQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletActivities;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletAnalytics;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletPayouts;
@@ -295,4 +300,108 @@ public class WalletController(
 
         return StatusCode((int)result.StatusCode, result);
     }
+
+
+    [HttpPost("{walletId:long}/automation")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<CreateRenewalPolicyResponseDto>), (int)HttpStatusCode.Created)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> CreateRenewalPolicy(
+        long walletId,
+        [FromBody] CreateRenewalPolicyCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.WalletId = walletId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("{walletId:long}/automation")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<GetRenewalPolicyResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetRenewalPolicy(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetRenewalPolicyQuery.Query
+        {
+            WalletId = walletId,
+            UserPublicId = UserPublicId ?? string.Empty
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("{walletId:long}/automation/events")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<GetRenewalEventsResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetRenewalEvents(
+        long walletId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetRenewalEventsQuery.Query
+        {
+            WalletId = walletId,
+            Page = page,
+            PageSize = pageSize,
+            UserPublicId = UserPublicId ?? string.Empty
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPut("{walletId:long}/automation")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<UpdateRenewalPolicyResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> UpdateRenewalPolicy(
+        long walletId,
+        [FromBody] UpdateRenewalPolicyCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.WalletId = walletId;
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPut("{walletId:long}/automation/toggle")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(typeof(BaseResult<ToggleRenewalResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> ToggleRenewal(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var command = new ToggleRenewalCommand.Command
+        {
+            WalletId = walletId,
+            UserPublicId = UserPublicId ?? string.Empty,
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
 }

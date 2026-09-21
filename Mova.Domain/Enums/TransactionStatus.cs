@@ -7,7 +7,8 @@ public enum TransactionType
     Withdrawal = 3,
     Refund = 4,
     Reversal = 5,
-    Fee=6
+    Fee=6,
+    Refill=7
 }
 
 public enum TransactionStatus

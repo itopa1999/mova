@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<IFlutterwaveService, FlutterwaveService>();
         services.AddScoped<IFeatureFlagService, FeatureFlagService>();
         services.AddScoped<IBankService, BankService>();
+        services.AddScoped<IRenewalService, RenewalService>();
         services.AddNotificationServices(configuration);
         services.AddSingleton<TemplateRenderer>();
 

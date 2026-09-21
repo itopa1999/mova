@@ -48,6 +48,9 @@ public sealed class HomeQuery
         public string CategoryName { get; set; } = string.Empty;
         public string CategoryIcon { get; set; } = string.Empty;
         public decimal TargetAmount { get; set; }
+        public decimal ReleaseAmount { get; set; }
+        public bool HasAutomation { get; set; }
+        public string? AutomationStatus { get; set; }
     }
 
     public sealed class LockedAmountPoint
@@ -100,9 +103,23 @@ public sealed class HomeQuery
                     .Where(w => w.UserPublicId == request.UserPublicId
                                 && w.Status == WalletStatus.Active)
                     .Include(w => w.Category)
+                    .Include(w => w.Rule)
                     .OrderByDescending(w => w.CreatedAt)
                     .Take(6)
                     .ToListAsync(cancellationToken);
+
+                var walletIds = wallets.Select(w => w.Id).ToList();
+
+                var policies = await _unitOfWork.Query<RenewalPolicy>()
+                    .Where(p => walletIds.Contains(p.WalletId))
+                    .Select(p => new
+                    {
+                        p.WalletId,
+                        p.Status
+                    })
+                    .ToListAsync(cancellationToken);
+
+                var policyByWalletId = policies.ToDictionary(p => p.WalletId);
 
                 var today = DateTimeOffset.UtcNow.Date;
 
@@ -132,14 +149,22 @@ public sealed class HomeQuery
                 var totalAvailableAmount = allWallets.Sum(w => w.AvailableAmount.ToDecimal());
                 var totalLockedAmount = allWallets.Sum(w => w.LockedAmount.ToDecimal());
 
-                var walletSummaries = wallets.Select(w => new Wallets
+                var walletSummaries = wallets.Select(w =>
                 {
-                    Id = w.Id,
-                    WalletName = w.Name,
-                    CategoryId = w.CategoryId,
-                    CategoryName = w.Category?.Name ?? "Other",
-                    CategoryIcon = w.Category?.Icon ?? "FileText",
-                    TargetAmount = w.TargetAmount.ToDecimal()
+                    var hasPolicy = policyByWalletId.TryGetValue(w.Id, out var policy);
+
+                    return new Wallets
+                    {
+                        Id = w.Id,
+                        WalletName = w.Name,
+                        CategoryId = w.CategoryId,
+                        CategoryName = w.Category?.Name ?? "Other",
+                        CategoryIcon = w.Category?.Icon ?? "FileText",
+                        TargetAmount = w.TargetAmount.ToDecimal(),
+                        ReleaseAmount = w.Rule?.Amount.ToDecimal() ?? 0m,
+                        HasAutomation = hasPolicy,
+                        AutomationStatus = hasPolicy ? policy!.Status.ToString() : null
+                    };
                 }).ToList();
 
                 var lockedAmountHistory = await BuildLockedAmountHistoryAsync(

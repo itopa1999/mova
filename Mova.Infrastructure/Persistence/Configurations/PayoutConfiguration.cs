@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 
 namespace Mova.Infrastructure.Persistence.Configurations;
 
@@ -78,7 +79,8 @@ public sealed class PayoutConfiguration : IEntityTypeConfiguration<Payout>
 
         builder.Property(x => x.Destination)
             .HasConversion<int>()
-            .IsRequired();
+            .IsRequired()
+            .HasDefaultValue(PayoutDestination.Bank);
 
         // FK relationships — explicit so EF doesn't create shadow properties
         builder.HasOne(x => x.Wallet)

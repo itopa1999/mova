@@ -36,6 +36,8 @@ public sealed class ApplicationDbContext
     public DbSet<WalletCategory> WalletCategories => Set<WalletCategory>();
     public DbSet<AppNotification> AppNotifications => Set<AppNotification>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+    public DbSet<RenewalPolicy> RenewalPolicies => Set<RenewalPolicy>();
+    public DbSet<RenewalEvent> RenewalEvents => Set<RenewalEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

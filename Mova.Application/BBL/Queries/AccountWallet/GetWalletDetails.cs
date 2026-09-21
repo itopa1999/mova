@@ -64,6 +64,10 @@ public sealed class WalletDetails
         public ReleaseSummaryDto ReleaseSummary { get; set; } = new();
         public List<SchedulePreviewItemDto> SchedulePreview { get; set; } = new();
 
+        // Automation
+        public bool HasAutomation { get; set; }
+        public string? AutomationStatus { get; set; }
+
         // Audit
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? UpdatedAt { get; set; }
@@ -157,6 +161,10 @@ public sealed class WalletDetails
                         "Wallet not found.");
                 }
 
+                var renewalPolicy = await _unitOfWork.Query<RenewalPolicy>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.WalletId == wallet.Id, cancellationToken);
+
                 var schedulePreviewResult = await _mediator.Send(
                     new GetWalletSchedulePreviewQuery.Query
                     {
@@ -235,10 +243,28 @@ public sealed class WalletDetails
                     projectedEndDate = lastProjected?.ScheduledFor;
                 }
 
-                var progressPercentage = wallet.TargetAmount.ToDecimal() > 0
-                    ? Math.Round(
-                        wallet.TotalReleasedAmount.ToDecimal()
-                        / wallet.TargetAmount.ToDecimal() * 100, 2)
+                // ─── Progress: per-cycle ─────────────────────
+                // For Active + OnCompletion policies, use the policy's refill
+                // amount as the cycle total. Otherwise fall back to target.
+                decimal cycleTotal;
+
+                if (renewalPolicy is not null
+                    && renewalPolicy.Status == RenewalStatus.Active
+                    && renewalPolicy.TriggerType == RenewalTriggerType.OnCompletion)
+                {
+                    cycleTotal = renewalPolicy.RefillAmountType == RefillAmountType.Fixed
+                        ? wallet.TargetAmount.ToDecimal()
+                        : renewalPolicy.RefillAmount.ToDecimal();
+                }
+                else
+                {
+                    cycleTotal = wallet.TargetAmount.ToDecimal();
+                }
+
+                var progressPercentage = cycleTotal > 0
+                    ? Math.Max(0, Math.Min(100, Math.Round(
+                        (1 - (wallet.LockedAmount.ToDecimal() / cycleTotal)) * 100,
+                        2)))
                     : 0;
 
                 string scheduleDescription = string.Empty;
@@ -336,6 +362,9 @@ public sealed class WalletDetails
                         : "Not available",
 
                     SchedulePreview = schedulePreview,
+
+                    HasAutomation = renewalPolicy is not null,
+                    AutomationStatus = renewalPolicy?.Status.ToString(),
 
                     CreatedAt = wallet.CreatedAt,
                     UpdatedAt = wallet.ModifiedAt,

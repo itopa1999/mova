@@ -43,10 +43,13 @@ public sealed class GetAllWallets
         public decimal TargetAmount { get; set; }
         public decimal LockedAmount { get; set; }
         public decimal ProgressPercentage { get; set; }
+        public decimal ReleaseAmount { get; set; }
         public string Status { get; set; } = string.Empty;
         public string Frequency { get; set; } = string.Empty;
         public string ScheduleDescription { get; set; } = string.Empty;
         public string NextRelease { get; set; } = string.Empty;
+        public bool HasAutomation { get; set; }
+        public string? AutomationStatus { get; set; }
     }
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetAllWalletsResponseDto>>
@@ -132,6 +135,24 @@ public sealed class GetAllWallets
 
                 var totalPages = (int)Math.Ceiling((double)totalCount / request.PageSize);
 
+                // ─── Automation policies for the current page ─
+                var pagedWalletIds = pagedWallets.Select(w => w.Id).ToList();
+
+                var policies = await _unitOfWork.Query<RenewalPolicy>()
+                    .Where(p => pagedWalletIds.Contains(p.WalletId))
+                    .Select(p => new
+                    {
+                        p.WalletId,
+                        p.Status,
+                        p.IsEnabled,
+                        p.TriggerType,
+                        p.RefillAmountType,
+                        p.RefillAmount
+                    })
+                    .ToListAsync(cancellationToken);
+
+                var policyByWalletId = policies.ToDictionary(p => p.WalletId);
+
                 var walletDtos = pagedWallets.Select(w =>
                 {
                     var rule = w.Rule;
@@ -148,8 +169,28 @@ public sealed class GetAllWallets
                         nextReleaseDate = nextRelease?.ScheduledFor;
                     }
 
-                    var progressPercentage = w.TargetAmount.ToDecimal() > 0
-                        ? Math.Round((w.TotalReleasedAmount.ToDecimal() / w.TargetAmount.ToDecimal()) * 100, 2)
+                    // ─── Progress: per-cycle ──────────────────
+                    var hasPolicy = policyByWalletId.TryGetValue(w.Id, out var policy);
+
+                    decimal cycleTotal;
+
+                    if (hasPolicy
+                        && policy!.Status == RenewalStatus.Active
+                        && policy.TriggerType == RenewalTriggerType.OnCompletion)
+                    {
+                        cycleTotal = policy.RefillAmountType == RefillAmountType.Fixed
+                            ? w.TargetAmount.ToDecimal()
+                            : policy.RefillAmount.ToDecimal();
+                    }
+                    else
+                    {
+                        cycleTotal = w.TargetAmount.ToDecimal();
+                    }
+
+                    var progressPercentage = cycleTotal > 0
+                        ? Math.Max(0, Math.Min(100, Math.Round(
+                            (1 - (w.LockedAmount.ToDecimal() / cycleTotal)) * 100,
+                            2)))
                         : 0;
 
                     string scheduleDescription = string.Empty;
@@ -177,10 +218,13 @@ public sealed class GetAllWallets
                         TargetAmount = w.TargetAmount.ToDecimal(),
                         LockedAmount = w.LockedAmount.ToDecimal(),
                         ProgressPercentage = progressPercentage,
+                        ReleaseAmount = rule?.Amount.ToDecimal() ?? 0m,
                         Status = w.Status.ToString(),
                         Frequency = rule != null ? rule.Frequency.ToString() : "NotConfigured",
                         ScheduleDescription = scheduleDescription,
-                        NextRelease = GetNextReleaseDisplay(nextReleaseDate)
+                        NextRelease = GetNextReleaseDisplay(nextReleaseDate),
+                        HasAutomation = hasPolicy,
+                        AutomationStatus = hasPolicy ? policy!.Status.ToString() : null
                     };
                 }).ToList();
 
@@ -202,7 +246,6 @@ public sealed class GetAllWallets
             }
             catch (Exception)
             {
-                
                 return new BaseResult<GetAllWalletsResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while retrieving your wallets. Please try again later.");

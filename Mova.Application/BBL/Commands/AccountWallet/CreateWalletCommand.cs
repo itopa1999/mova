@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
+using Mova.Application.BBL.Shared;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -47,12 +47,6 @@ public sealed class CreateWalletCommand
 
         public DateTimeOffset StartDate { get; set; }
 
-        /// <summary>
-        /// Where scheduled releases should go.
-        /// "bank"   → sent straight to the linked bank account (BankAccountId required)
-        /// "wallet" → kept in the wallet's available balance, withdrawable anytime
-        /// "main"   → added to the user's main MOVA balance (non-withdrawable, spend-only)
-        /// </summary>
         public string PayoutDestination { get; set; } = "bank";
     }
 
@@ -64,29 +58,12 @@ public sealed class CreateWalletCommand
 
         public bool Notification { get; init; }
 
-        /// <summary>
-        /// The user's main MOVA balance after the upfront debit.
-        /// Authoritative — the FE uses this to sync its session balance.
-        /// </summary>
         public decimal NewMainBalance { get; init; }
     }
 
     public sealed class Handler
         : IRequestHandler<Command, BaseResult<CreateWalletResponseDto>>
     {
-        // ─── Fee constants ────────────────────────────────────
-        private const decimal CreationFeePercent = 0.013m;   // 1.3%
-        private const decimal CreationFeeFlat = 5m;           // +₦5
-
-        private const decimal PayoutTier1Max = 5_000m;        // ≤ ₦5,000
-        private const decimal PayoutTier2Max = 50_000m;       // ≤ ₦50,000
-        private const decimal PayoutTier1Fee = 10m;
-        private const decimal PayoutTier2Fee = 25m;
-        private const decimal PayoutTier3Fee = 50m;
-
-        private const decimal StampDutyThreshold = 10_000m;   // ≥ ₦10,000
-        private const decimal StampDutyAmount = 50m;
-
         private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
@@ -169,7 +146,6 @@ public sealed class CreateWalletCommand
                     "Frequency configuration is required.");
             }
 
-            // ─── Resolve payout destination ────────────────────────────
             var destination = request.PayoutDestination?
                 .Trim()
                 .ToLowerInvariant() switch
@@ -223,7 +199,6 @@ public sealed class CreateWalletCommand
                     "The selected wallet category does not exist.");
             }
 
-            // ─── Bank validation is driven by the payout destination ───
             if (goingToBank)
             {
                 if (request.BankAccountId <= 0)
@@ -295,7 +270,6 @@ public sealed class CreateWalletCommand
                     errorMessage);
             }
 
-            // ─── Compute the release schedule end date ─────────────────
             var ruleForEndDate = new WalletRule
             {
                 Amount = Money.FromNaira(request.AmountToBeReleased),
@@ -331,15 +305,12 @@ public sealed class CreateWalletCommand
             var targetMoney = Money.FromNaira(request.TargetAmount);
             var releaseMoney = Money.FromNaira(request.AmountToBeReleased);
 
-            // ─── Compute the MOVA fee ──────────────────────────────────
-            // releases is authoritative from the preview service — it accounts
-            // for fractional final releases correctly.
             var releases = previewResult.TotalReleases;
 
-            var fees = CalculateFees(
-                target: request.TargetAmount,
-                release: request.AmountToBeReleased,
-                destination: destination.Value,
+            var fees = WalletFeeHelper.Calculate(
+                targetAmount: request.TargetAmount,
+                releaseAmount: request.AmountToBeReleased,
+                payoutDestination: request.PayoutDestination ?? "bank",
                 releases: releases);
 
             var totalUpfrontCharge = fees.TotalUpfrontCharge;
@@ -357,7 +328,6 @@ public sealed class CreateWalletCommand
 
             try
             {
-                // Debit target + MOVA fee in one shot.
                 var balanceDebited = await _identityService.DebitBalanceAsync(
                     request.UserPublicId,
                     totalUpfrontCharge,
@@ -373,7 +343,6 @@ public sealed class CreateWalletCommand
                         "Insufficient account balance.");
                 }
 
-                // Only the target amount is locked in the wallet.
                 var wallet = new Wallet
                 {
                     UserPublicId = request.UserPublicId,
@@ -397,7 +366,6 @@ public sealed class CreateWalletCommand
                 await _unitOfWork.AddAsync(wallet, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // ─── Deposit transaction (target locked into wallet) ───
                 var walletTransaction = new Transaction
                 {
                     UserPublicId = request.UserPublicId,
@@ -424,7 +392,6 @@ public sealed class CreateWalletCommand
                 await _unitOfWork.AddAsync(ledgerEntry, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // ─── Fee transaction (MOVA Fee — one-time) ─────────────
                 var feeTransaction = new Transaction
                 {
                     UserPublicId = request.UserPublicId,
@@ -439,9 +406,6 @@ public sealed class CreateWalletCommand
 
                 await _unitOfWork.AddAsync(feeTransaction, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                // No ledger entry for the fee — money has left the user's
-                // balance and does not belong to any wallet.
 
                 var rule = new WalletRule
                 {
@@ -489,8 +453,6 @@ public sealed class CreateWalletCommand
                 walletId = wallet.Id;
                 firstReleaseDate = firstRelease.ScheduledFor;
 
-                // Read the user's new balance inside the same transaction
-                // context to return the authoritative post-debit value.
                 var userAfterDebit = await _identityService.GetByIdentifierAsync(
                     request.UserPublicId,
                     cancellationToken);
@@ -547,59 +509,6 @@ public sealed class CreateWalletCommand
                     Notification = true,
                     NewMainBalance = newMainBalance,
                 });
-        }
-
-        // ─── Fee calculation ──────────────────────────────────────
-        private static WalletFeeBreakdown CalculateFees(
-            decimal target,
-            decimal release,
-            PayoutDestination destination,
-            int releases)
-        {
-            var creationFee =
-                Math.Floor(target * CreationFeePercent) + CreationFeeFlat;
-
-            decimal payoutFeePerRelease = 0m;
-            decimal totalPayoutFee = 0m;
-
-            if (destination == PayoutDestination.Bank)
-            {
-                var baseFee = release <= PayoutTier1Max
-                    ? PayoutTier1Fee
-                    : release <= PayoutTier2Max
-                        ? PayoutTier2Fee
-                        : PayoutTier3Fee;
-
-                var stampDuty = release >= StampDutyThreshold
-                    ? StampDutyAmount
-                    : 0m;
-
-                payoutFeePerRelease = baseFee + stampDuty;
-                totalPayoutFee = payoutFeePerRelease * releases;
-            }
-
-            var totalMovaCharges = creationFee + totalPayoutFee;
-            var totalUpfrontCharge = target + totalMovaCharges;
-
-            return new WalletFeeBreakdown
-            {
-                Releases = releases,
-                CreationFee = creationFee,
-                PayoutFeePerRelease = payoutFeePerRelease,
-                TotalPayoutFee = totalPayoutFee,
-                TotalMovaCharges = totalMovaCharges,
-                TotalUpfrontCharge = totalUpfrontCharge,
-            };
-        }
-
-        private sealed class WalletFeeBreakdown
-        {
-            public int Releases { get; init; }
-            public decimal CreationFee { get; init; }
-            public decimal PayoutFeePerRelease { get; init; }
-            public decimal TotalPayoutFee { get; init; }
-            public decimal TotalMovaCharges { get; init; }
-            public decimal TotalUpfrontCharge { get; init; }
         }
 
         private async Task SendWalletCreatedNotificationsAsync(

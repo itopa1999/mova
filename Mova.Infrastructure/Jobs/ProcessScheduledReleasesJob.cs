@@ -1,7 +1,6 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
@@ -18,20 +17,20 @@ public sealed class ProcessScheduledReleasesJob
     private readonly ILogger<ProcessScheduledReleasesJob> _logger;
     private readonly IWalletRuleService _walletRuleService;
     private readonly INotificationQueue _notificationQueue;
-    private readonly IIdentityService _identityService;
+    private readonly IRenewalService _renewalService;
 
     public ProcessScheduledReleasesJob(
         ApplicationDbContext context,
         ILogger<ProcessScheduledReleasesJob> logger,
         IWalletRuleService walletRuleService,
         INotificationQueue notificationQueue,
-        IIdentityService identityService)
+        IRenewalService renewalService)
     {
         _context = context;
         _logger = logger;
         _walletRuleService = walletRuleService;
         _notificationQueue = notificationQueue;
-        _identityService = identityService;
+        _renewalService = renewalService;
     }
 
     [DisableConcurrentExecution(300)]
@@ -163,7 +162,7 @@ public sealed class ProcessScheduledReleasesJob
             wallet.LockedAmount -= scheduledRelease.Amount;
             wallet.TotalReleasedAmount += scheduledRelease.Amount;
 
-            
+
             if (wallet.PayoutDestination == PayoutDestination.Wallet)
             {
                 wallet.UnusedAmount += wallet.AvailableAmount;
@@ -261,6 +260,10 @@ public sealed class ProcessScheduledReleasesJob
 
             scheduledRelease.Status = ReleaseStatus.Released;
             scheduledRelease.ReleasedAt = DateTimeOffset.UtcNow;
+
+            await TryThresholdRenewalAsync(
+                wallet,
+                cancellationToken);
 
             await EnsureNextScheduledReleaseAsync(
                 wallet,
@@ -390,18 +393,36 @@ public sealed class ProcessScheduledReleasesJob
         ScheduledRelease processedRelease,
         CancellationToken cancellationToken)
     {
-        if (wallet.TotalReleasedAmount.MinorUnits >= wallet.TargetAmount.MinorUnits)
+        if (wallet.LockedAmount.MinorUnits <= 0 && wallet.TotalReleasedAmount.MinorUnits > 0)
         {
             if (wallet.Status != WalletStatus.Completed)
             {
                 wallet.Status = WalletStatus.Completed;
                 wallet.CompletedAt = DateTimeOffset.UtcNow;
             }
+
+            Console.WriteLine("i work reach here");
+
             using var op = OperationLogger.Start(
                 _logger,
                 "EnsureNextScheduledRelease",
                 ("WalletId", wallet.Id));
-            op.Success("Target amount reached. No more releases will be scheduled.");
+
+            var outcome = await _renewalService.TryRenewWalletAsync(
+                wallet.Id,
+                RenewalTriggerType.OnCompletion,
+                cancellationToken);
+
+            if (outcome.Executed)
+            {
+                op.Success("Wallet completed — renewal executed.");
+                return;
+            }
+
+            op.Success(
+                "Target amount reached. No more releases will be scheduled. " +
+                $"Renewal: {(outcome.Skipped ? outcome.SkipReason : "not executed")}");
+
             return;
         }
 
@@ -425,7 +446,7 @@ public sealed class ProcessScheduledReleasesJob
             .AnyAsync(
                 x => x.WalletRuleId == walletRule.Id
                      && x.ScheduledFor == nextScheduledForUtc
-                     && x.Status != ReleaseStatus.Cancelled,
+                     && x.Status == ReleaseStatus.Scheduled,
                 cancellationToken);
 
         if (alreadyScheduled)
@@ -442,8 +463,51 @@ public sealed class ProcessScheduledReleasesJob
                 WalletRuleId = walletRule.Id,
                 Amount = nextAmount,
                 ScheduledFor = nextRelease.ScheduledFor,
-                Status = ReleaseStatus.Scheduled
+                Status = ReleaseStatus.Scheduled,
+                ReleasedAt = null
             },
+            cancellationToken);
+    }
+
+    private async Task TryThresholdRenewalAsync(
+        Wallet wallet,
+        CancellationToken cancellationToken)
+    {
+        // Only consider when there is an active OnThreshold policy
+        var policy = await _context.Set<RenewalPolicy>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                p => p.WalletId == wallet.Id
+                     && p.IsEnabled
+                     && p.Status == RenewalStatus.Active
+                     && p.TriggerType == RenewalTriggerType.OnThreshold,
+                cancellationToken);
+
+        if (policy is null)
+            return;
+
+        var thresholdMinorUnits = policy.TriggerAmount.MinorUnits;
+
+        if (thresholdMinorUnits <= 0)
+            return;
+
+        // Fire only when the remaining locked amount has dropped
+        // to or below the user-defined threshold.
+        if (wallet.LockedAmount.MinorUnits > thresholdMinorUnits)
+            return;
+
+        using var op = OperationLogger.Start(
+            _logger,
+            "TryThresholdRenewal",
+            ("WalletId", wallet.Id));
+
+        op.Success(
+            $"Threshold hit — locked ₦{wallet.LockedAmount.ToDecimal():N0} " +
+            $"≤ trigger ₦{policy.TriggerAmount.ToDecimal():N0}");
+
+        await _renewalService.TryRenewWalletAsync(
+            wallet.Id,
+            RenewalTriggerType.OnThreshold,
             cancellationToken);
     }
 

@@ -628,7 +628,9 @@ namespace Mova.Infrastructure.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<int>("Destination")
-                        .HasColumnType("integer");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<DateTimeOffset?>("FailedAt")
                         .HasColumnType("timestamp with time zone");
@@ -811,6 +813,202 @@ namespace Mova.Infrastructure.Migrations
                     b.HasIndex("UserPublicId");
 
                     b.ToTable("refresh_tokens");
+                });
+
+            modelBuilder.Entity("Mova.Domain.Entities.RenewalEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long>("RenewalPolicyId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Result")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("TransactionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("UserPublicId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long>("WalletId")
+                        .HasColumnType("bigint");
+
+                    b.ComplexProperty<Dictionary<string, object>>("Amount", "Mova.Domain.Entities.RenewalEvent.Amount#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("amount_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("amount_minor_units");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RenewalPolicyId")
+                        .HasDatabaseName("ix_renewal_events_renewal_policy_id");
+
+                    b.HasIndex("TransactionId")
+                        .HasDatabaseName("ix_renewal_events_transaction_id");
+
+                    b.HasIndex("WalletId", "OccurredAt")
+                        .HasDatabaseName("ix_renewal_events_wallet_id_occurred_at");
+
+                    b.ToTable("renewal_events", (string)null);
+                });
+
+            modelBuilder.Entity("Mova.Domain.Entities.RenewalPolicy", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int?>("MaxRenewals")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("RefillAmountType")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RenewalsCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<int>("TriggerType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserPublicId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long>("WalletId")
+                        .HasColumnType("bigint");
+
+                    b.ComplexProperty<Dictionary<string, object>>("MinMainBalance", "Mova.Domain.Entities.RenewalPolicy.MinMainBalance#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("min_main_balance_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("min_main_balance_minor_units");
+                        });
+
+                    b.ComplexProperty<Dictionary<string, object>>("RefillAmount", "Mova.Domain.Entities.RenewalPolicy.RefillAmount#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("refill_amount_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("refill_amount_minor_units");
+                        });
+
+                    b.ComplexProperty<Dictionary<string, object>>("TriggerAmount", "Mova.Domain.Entities.RenewalPolicy.TriggerAmount#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("trigger_amount_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("trigger_amount_minor_units");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserPublicId")
+                        .HasDatabaseName("ix_renewal_policies_user_public_id");
+
+                    b.HasIndex("WalletId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_renewal_policies_wallet_id_active");
+
+                    b.ToTable("renewal_policies", (string)null);
                 });
 
             modelBuilder.Entity("Mova.Domain.Entities.ScheduledRelease", b =>
@@ -1561,6 +1759,43 @@ namespace Mova.Infrastructure.Migrations
                     b.Navigation("Wallet");
                 });
 
+            modelBuilder.Entity("Mova.Domain.Entities.RenewalEvent", b =>
+                {
+                    b.HasOne("Mova.Domain.Entities.RenewalPolicy", "RenewalPolicy")
+                        .WithMany("Events")
+                        .HasForeignKey("RenewalPolicyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Mova.Domain.Entities.Transaction", "Transaction")
+                        .WithMany()
+                        .HasForeignKey("TransactionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Mova.Domain.Entities.Wallet", "Wallet")
+                        .WithMany()
+                        .HasForeignKey("WalletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RenewalPolicy");
+
+                    b.Navigation("Transaction");
+
+                    b.Navigation("Wallet");
+                });
+
+            modelBuilder.Entity("Mova.Domain.Entities.RenewalPolicy", b =>
+                {
+                    b.HasOne("Mova.Domain.Entities.Wallet", "Wallet")
+                        .WithOne()
+                        .HasForeignKey("Mova.Domain.Entities.RenewalPolicy", "WalletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Wallet");
+                });
+
             modelBuilder.Entity("Mova.Domain.Entities.ScheduledRelease", b =>
                 {
                     b.HasOne("Mova.Domain.Entities.Wallet", null)
@@ -1608,6 +1843,11 @@ namespace Mova.Infrastructure.Migrations
                         .HasForeignKey("Mova.Domain.Entities.WalletRule", "WalletId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Mova.Domain.Entities.RenewalPolicy", b =>
+                {
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("Mova.Domain.Entities.Wallet", b =>
