@@ -1,12 +1,14 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Jobs;
@@ -18,19 +20,22 @@ public sealed class ProcessScheduledReleasesJob
     private readonly IWalletRuleService _walletRuleService;
     private readonly INotificationQueue _notificationQueue;
     private readonly IRenewalService _renewalService;
+    private readonly ICacheService _cache;
 
     public ProcessScheduledReleasesJob(
         ApplicationDbContext context,
         ILogger<ProcessScheduledReleasesJob> logger,
         IWalletRuleService walletRuleService,
         INotificationQueue notificationQueue,
-        IRenewalService renewalService)
+        IRenewalService renewalService,
+        ICacheService cache)
     {
         _context = context;
         _logger = logger;
         _walletRuleService = walletRuleService;
         _notificationQueue = notificationQueue;
         _renewalService = renewalService;
+        _cache = cache;
     }
 
     [DisableConcurrentExecution(300)]
@@ -59,7 +64,6 @@ public sealed class ProcessScheduledReleasesJob
         {
             await ProcessReleaseAsync(releaseId, cancellationToken);
         }
-
     }
 
     private async Task ProcessReleaseAsync(
@@ -158,10 +162,8 @@ public sealed class ProcessScheduledReleasesJob
 
             scheduledRelease.Status = ReleaseStatus.Processing;
 
-            // Locked amount always decreases; total released always increases.
             wallet.LockedAmount -= scheduledRelease.Amount;
             wallet.TotalReleasedAmount += scheduledRelease.Amount;
-
 
             if (wallet.PayoutDestination == PayoutDestination.Wallet)
             {
@@ -279,6 +281,20 @@ public sealed class ProcessScheduledReleasesJob
             releasedAmount = scheduledRelease.Amount.ToDecimal();
             releasedDestination = wallet.PayoutDestination;
             wasProcessed = true;
+
+            // ─── Invalidate notification cache after commit ───
+            try
+            {
+                await _cache.DeletePrefixAsync(
+                    CacheKeys.NotificationsPrefix(wallet.UserPublicId));
+            }
+            catch (Exception cacheEx)
+            {
+                _logger.LogWarning(
+                    cacheEx,
+                    "Failed to invalidate notification cache for user {UserPublicId}.",
+                    wallet.UserPublicId);
+            }
 
             op.Success("Scheduled release processed.");
         }
@@ -401,8 +417,6 @@ public sealed class ProcessScheduledReleasesJob
                 wallet.CompletedAt = DateTimeOffset.UtcNow;
             }
 
-            Console.WriteLine("i work reach here");
-
             using var op = OperationLogger.Start(
                 _logger,
                 "EnsureNextScheduledRelease",
@@ -473,7 +487,6 @@ public sealed class ProcessScheduledReleasesJob
         Wallet wallet,
         CancellationToken cancellationToken)
     {
-        // Only consider when there is an active OnThreshold policy
         var policy = await _context.Set<RenewalPolicy>()
             .AsNoTracking()
             .FirstOrDefaultAsync(
@@ -491,8 +504,6 @@ public sealed class ProcessScheduledReleasesJob
         if (thresholdMinorUnits <= 0)
             return;
 
-        // Fire only when the remaining locked amount has dropped
-        // to or below the user-defined threshold.
         if (wallet.LockedAmount.MinorUnits > thresholdMinorUnits)
             return;
 

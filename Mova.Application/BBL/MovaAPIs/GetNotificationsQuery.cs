@@ -1,14 +1,19 @@
 using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.MovaAPIs;
 
 public sealed class GetNotificationsQuery
 {
+    private static readonly TimeSpan NotificationsCacheTtl =
+        TimeSpan.FromSeconds(30);
+
     public sealed class Query
         : IRequest<BaseResult<List<NotificationDto>>>
     {
@@ -17,21 +22,14 @@ public sealed class GetNotificationsQuery
         public bool UnreadOnly { get; set; }
     }
 
-
     public sealed class NotificationDto
     {
         public long Id { get; set; }
-
         public string Type { get; set; } = string.Empty;
-
         public string Title { get; set; } = string.Empty;
-
         public string Message { get; set; } = string.Empty;
-
         public bool IsRead { get; set; }
-
         public string? ActionUrl { get; set; }
-
         public DateTimeOffset CreatedAt { get; set; }
     }
 
@@ -39,10 +37,14 @@ public sealed class GetNotificationsQuery
         : IRequestHandler<Query, BaseResult<List<NotificationDto>>>
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cache;
 
-        public Handler(IUnitOfWork unitOfWork)
+        public Handler(
+            IUnitOfWork unitOfWork,
+            ICacheService cache)
         {
             _unitOfWork = unitOfWork;
+            _cache = cache;
         }
 
         public async Task<BaseResult<List<NotificationDto>>> Handle(
@@ -56,16 +58,41 @@ public sealed class GetNotificationsQuery
                     "User ID is required.");
             }
 
-            var query = _unitOfWork.Query<AppNotification>()
-                .Where(x => x.UserPublicId == request.UserPublicId);
+            var cacheKey = CacheKeys.Notifications(
+                request.UserPublicId,
+                request.UnreadOnly);
 
-            if (request.UnreadOnly)
+            var notifications = await _cache.GetOrSetFastAsync(
+                cacheKey,
+                ct => LoadNotificationsFromDbAsync(
+                    request.UserPublicId,
+                    request.UnreadOnly,
+                    ct),
+                timeout: NotificationsCacheTtl,
+                cancellationToken: cancellationToken);
+
+            return new BaseResult<List<NotificationDto>>(
+                HttpStatusCode.OK,
+                "Notifications retrieved successfully.",
+                notifications ?? new List<NotificationDto>());
+        }
+
+        private async Task<List<NotificationDto>> LoadNotificationsFromDbAsync(
+            string userPublicId,
+            bool unreadOnly,
+            CancellationToken cancellationToken)
+        {
+            var query = _unitOfWork.Query<AppNotification>()
+                .AsNoTracking()
+                .Where(x => x.UserPublicId == userPublicId);
+
+            if (unreadOnly)
             {
                 query = query.Where(x => !x.IsRead);
             }
 
-            var notifications = await query
-                .OrderByDescending(x => x.Id) // TODO change to x.CreatedAt
+            return await query
+                .OrderByDescending(x => x.CreatedAt)
                 .Take(100)
                 .Select(x => new NotificationDto
                 {
@@ -78,11 +105,6 @@ public sealed class GetNotificationsQuery
                     CreatedAt = x.CreatedAt,
                 })
                 .ToListAsync(cancellationToken);
-
-            return new BaseResult<List<NotificationDto>>(
-                HttpStatusCode.OK,
-                "Notifications retrieved successfully.",
-                notifications);
         }
     }
 }

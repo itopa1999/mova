@@ -21,4 +21,23 @@ public static class CacheKeys
         $"banks:slug:{slug.Trim().ToLowerInvariant()}";
 
     public const string BanksPrefix = "banks:";
+
+    public static string FeatureFlags() => "feature_flags:map";
+    public static string FeatureFlagsList() => "feature_flags:list";
+
+    public const string FeatureFlagsPrefix = "feature_flags:";
+
+    public static string Notifications(string userPublicId, bool unreadOnly) =>
+        $"notifications:{userPublicId.Trim().ToLowerInvariant()}:{(unreadOnly ? "unread" : "all")}";
+
+    public static string NotificationsPrefix(string userPublicId) =>
+        $"notifications:{userPublicId.Trim().ToLowerInvariant()}:";
+
+    public static string WalletTemplates() => "wallet_templates:all";
+
+    public const string WalletTemplatesPrefix = "wallet_templates:";
+
+    public static string WalletCategories() => "wallet_categories:all";
+
+    public const string WalletCategoriesPrefix = "wallet_categories:";
 }

@@ -2,9 +2,11 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.MovaAPIs;
 
@@ -21,10 +23,14 @@ public sealed class MarkNotificationAsRead
     public sealed class Handler : IRequestHandler<Command, BaseResult>
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cache;
 
-        public Handler(IUnitOfWork unitOfWork)
+        public Handler(
+            IUnitOfWork unitOfWork,
+            ICacheService cache)
         {
             _unitOfWork = unitOfWork;
+            _cache = cache;
         }
 
         public async Task<BaseResult> Handle(
@@ -49,7 +55,11 @@ public sealed class MarkNotificationAsRead
             {
                 notification.IsRead = true;
                 notification.ReadAt = DateTimeOffset.UtcNow;
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                await _cache.DeletePrefixAsync(
+                    CacheKeys.NotificationsPrefix(request.UserPublicId));
             }
 
             return new BaseResult(

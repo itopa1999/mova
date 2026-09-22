@@ -1,8 +1,6 @@
 using System.Net;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
-using Mova.Application.Interfaces.Persistence;
-using Mova.Domain.Entities;
+using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 
@@ -14,6 +12,7 @@ public sealed class GetFeatureFlags
         : IRequest<BaseResult<List<FeatureFlagDto>>>
     {
     }
+
     public sealed class FeatureFlagDto
     {
         public long Id { get; set; }
@@ -28,20 +27,20 @@ public sealed class GetFeatureFlags
     public sealed class Handler
         : IRequestHandler<Query, BaseResult<List<FeatureFlagDto>>>
     {
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly IFeatureFlagService _featureFlagService;
 
-        public Handler(IUnitOfWork unitOfWork)
+        public Handler(IFeatureFlagService featureFlagService)
         {
-            _unitOfWork = unitOfWork;
+            _featureFlagService = featureFlagService;
         }
 
         public async Task<BaseResult<List<FeatureFlagDto>>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
-            var flags = await _unitOfWork.Query<FeatureFlag>()
-                .AsNoTracking()
-                .OrderBy(x => x.Name)
+            var snapshots = await _featureFlagService.GetAllAsync(cancellationToken);
+
+            var flags = snapshots
                 .Select(x => new FeatureFlagDto
                 {
                     Id = x.Id,
@@ -52,7 +51,7 @@ public sealed class GetFeatureFlags
                     CreatedAt = x.CreatedAt,
                     ModifiedAt = x.ModifiedAt,
                 })
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             return new BaseResult<List<FeatureFlagDto>>(
                 HttpStatusCode.OK,

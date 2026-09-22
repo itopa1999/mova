@@ -1,9 +1,10 @@
-using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Services.Security;
 
@@ -11,13 +12,16 @@ public class TransactionPinService : ITransactionPinService
 {
     private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly ICacheService _cache;
 
     public TransactionPinService(
         ApplicationDbContext context,
-        IPasswordHasher<User> passwordHasher)
+        IPasswordHasher<User> passwordHasher,
+        ICacheService cache)
     {
         _context = context;
         _passwordHasher = passwordHasher;
+        _cache = cache;
     }
 
     public async Task<bool> HasPinAsync(
@@ -60,6 +64,8 @@ public class TransactionPinService : ITransactionPinService
         user.TransactionPinSetAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await InvalidateUserCacheAsync(user);
     }
 
     public async Task<bool> VerifyPinAsync(
@@ -115,6 +121,29 @@ public class TransactionPinService : ITransactionPinService
         user.TransactionPinChangedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        await InvalidateUserCacheAsync(user);
+    }
+
+    public async Task<bool> ResetPinAsync(
+        string UserPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.PublicId == UserPublicId,
+                cancellationToken);
+
+        if (user is null) return false;
+
+        user.TransactionPinHash = null;
+        user.TransactionPinResetAt = DateTimeOffset.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        await InvalidateUserCacheAsync(user);
+
+        return true;
     }
 
     private static void ValidatePin(string pin)
@@ -132,19 +161,21 @@ public class TransactionPinService : ITransactionPinService
         }
     }
 
-    public async Task<bool> ResetPinAsync(string UserPublicId, CancellationToken cancellationToken = default)
+    private async Task InvalidateUserCacheAsync(User user)
     {
-        var user = await _context.Users
-            .FirstOrDefaultAsync(
-                x => x.PublicId == UserPublicId,
-                cancellationToken);
-        if (user is null) return false;
+        await _cache.DeleteAsync(
+            CacheKeys.ProfileByIdentifier(user.PublicId));
 
-        user.TransactionPinHash = null;
-        user.TransactionPinResetAt = DateTimeOffset.UtcNow;
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            await _cache.DeleteAsync(
+                CacheKeys.ProfileByIdentifier(user.Email));
+        }
 
-        await _context.SaveChangesAsync(cancellationToken);
-
-        return true;
+        if (!string.IsNullOrWhiteSpace(user.PhoneNumber))
+        {
+            await _cache.DeleteAsync(
+                CacheKeys.ProfileByIdentifier(user.PhoneNumber));
+        }
     }
 }

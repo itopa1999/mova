@@ -1,9 +1,11 @@
 using Hangfire;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Jobs;
@@ -14,17 +16,20 @@ public sealed class BackgroundNotificationJob
     private readonly ISmsService _smsService;
     private readonly ILogger<BackgroundNotificationJob> _logger;
     private readonly ApplicationDbContext _context;
+    private readonly ICacheService _cache;
 
     public BackgroundNotificationJob(
         IEmailService emailService,
         ISmsService smsService,
         ILogger<BackgroundNotificationJob> logger,
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        ICacheService cache)
     {
         _emailService = emailService;
         _smsService = smsService;
         _logger = logger;
         _context = context;
+        _cache = cache;
     }
 
     [AutomaticRetry(Attempts = 3)]
@@ -53,20 +58,6 @@ public sealed class BackgroundNotificationJob
             using var op = OperationLogger.Start(_logger, "BackgroundOtpEmail", ("Email", email));
             op.Fail("Background OTP email failed.", exception);
         }
-
-        // if (!string.IsNullOrWhiteSpace(phoneNumber))
-        // {
-        //     try
-        //     {
-        //         await _smsService.SendOtpAsync(phoneNumber, otp, cancellationToken);
-        //     }
-        //     catch (Exception exception)
-        //     {
-        //         failures.Add(exception);
-        //         using var op = OperationLogger.Start(_logger, "BackgroundOtpSms", ("PhoneNumber", phoneNumber));
-        //         op.Fail("Background OTP SMS failed.", exception);
-        //     }
-        // }
 
         if (failures.Count > 0)
             throw new AggregateException("One or more OTP notifications failed.", failures);
@@ -110,7 +101,6 @@ public sealed class BackgroundNotificationJob
             cancellationToken);
     }
 
-
     [AutomaticRetry(Attempts = 3)]
     public async Task SendNotificationEmailAsync(
         string firstName,
@@ -126,7 +116,6 @@ public sealed class BackgroundNotificationJob
             subject,
             cancellationToken);
     }
-
 
     [AutomaticRetry(Attempts = 3)]
     public async Task SendForgotPasswordOtpAsync(
@@ -147,20 +136,6 @@ public sealed class BackgroundNotificationJob
             using var op = OperationLogger.Start(_logger, "BackgroundPasswordResetEmail", ("Email", email));
             op.Fail("Background password-reset email failed.", exception);
         }
-
-        // if (!string.IsNullOrWhiteSpace(phoneNumber))
-        // {
-        //     try
-        //     {
-        //         await _smsService.SendOtpAsync(phoneNumber, otp, purpose, cancellationToken);
-        //     }
-        //     catch (Exception exception)
-        //     {
-        //         failures.Add(exception);
-        //         using var op = OperationLogger.Start(_logger, "BackgroundPasswordResetSms", ("PhoneNumber", phoneNumber));
-        //         op.Fail("Background password-reset SMS failed.", exception);
-        //     }
-        // }
 
         if (failures.Count > 0)
             throw new AggregateException("One or more password-reset notifications failed.", failures);
@@ -208,6 +183,8 @@ public sealed class BackgroundNotificationJob
                 .AddAsync(notification, cancellationToken);
 
             await _context.SaveChangesAsync(cancellationToken);
+
+            await _cache.DeletePrefixAsync(CacheKeys.NotificationsPrefix(userId));
 
             op.Success($"In-app notification saved. Id: {notification.Id}");
         }

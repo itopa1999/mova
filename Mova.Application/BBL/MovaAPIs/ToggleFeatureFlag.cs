@@ -1,10 +1,12 @@
 using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.Commands.FeatureFlags;
 
@@ -30,10 +32,14 @@ public sealed class ToggleFeatureFlag
         : IRequestHandler<Command, BaseResult<ToggleFeatureFlagDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cache;
 
-        public Handler(IUnitOfWork unitOfWork)
+        public Handler(
+            IUnitOfWork unitOfWork,
+            ICacheService cache)
         {
             _unitOfWork = unitOfWork;
+            _cache = cache;
         }
 
         public async Task<BaseResult<ToggleFeatureFlagDto>> Handle(
@@ -67,6 +73,8 @@ public sealed class ToggleFeatureFlag
             flag.IsEnabled = request.IsEnabled;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _cache.DeleteAsync(CacheKeys.FeatureFlags());
 
             return new BaseResult<ToggleFeatureFlagDto>(
                 HttpStatusCode.OK,

@@ -71,6 +71,29 @@ public sealed class DeleteBankAccount
                         "Bank account not found.");
                 }
 
+                // ─── Guard: is this bank account used by a live wallet? ───
+                var walletInUse = await _unitOfWork.Query<Wallet>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        w => w.BankAccountId == request.BankAccountId
+                             && w.Status != WalletStatus.Broken
+                             && w.Status != WalletStatus.Completed
+                             && w.Status != WalletStatus.Closed,
+                        cancellationToken);
+
+                if (walletInUse is not null)
+                {
+                    op.Fail(
+                        $"Bank account still linked to wallet: {walletInUse.Id} " +
+                        $"({walletInUse.Status})");
+
+                    return new BaseResult<object>(
+                        HttpStatusCode.Conflict,
+                        $"This bank account is linked to the active wallet " +
+                        $"\"{walletInUse.Name}\". Please change the wallet's payout " +
+                        $"destination or close the wallet first.");
+                }
+
                 account.IsDeleted = true;
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);

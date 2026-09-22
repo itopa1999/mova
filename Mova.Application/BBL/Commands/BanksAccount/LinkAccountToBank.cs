@@ -116,7 +116,8 @@ public sealed class LinkAccountToBank
                             b.Id == request.BankAccountId &&
                             b.UserPublicId == request.UserPublicId &&
                             b.ConsentGiven &&
-                            b.Status == BankAccountStatus.Active,
+                            b.Status == BankAccountStatus.Active &&
+                            b.IsDeleted == false,
                         cancellationToken);
 
                 if (bankAccount is null)
