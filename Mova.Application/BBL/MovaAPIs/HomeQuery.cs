@@ -49,6 +49,7 @@ public sealed class HomeQuery
         public string CategoryIcon { get; set; } = string.Empty;
         public decimal TargetAmount { get; set; }
         public decimal ReleaseAmount { get; set; }
+        public string Status { get; set; } = string.Empty;
         public bool HasAutomation { get; set; }
         public string? AutomationStatus { get; set; }
     }
@@ -100,12 +101,13 @@ public sealed class HomeQuery
             try
             {
                 var wallets = await _unitOfWork.Query<Wallet>()
-                    .Where(w => w.UserPublicId == request.UserPublicId
-                                && w.Status == WalletStatus.Active)
+                    .Where(w => w.UserPublicId == request.UserPublicId)
                     .Include(w => w.Category)
                     .Include(w => w.Rule)
-                    .OrderByDescending(w => w.CreatedAt)
-                    .Take(6)
+                    .OrderByDescending(w => w.Status == WalletStatus.Active)
+                    .ThenByDescending(w => w.Status == WalletStatus.Paused)
+                    .ThenByDescending(w => w.CreatedAt)
+                    .Take(8)
                     .ToListAsync(cancellationToken);
 
                 var walletIds = wallets.Select(w => w.Id).ToList();
@@ -143,7 +145,8 @@ public sealed class HomeQuery
 
                 var allWallets = await _unitOfWork.Query<Wallet>()
                     .Where(w => w.UserPublicId == request.UserPublicId
-                                && w.Status == WalletStatus.Active)
+                                && (w.Status == WalletStatus.Active
+                                    || w.Status == WalletStatus.Paused))
                     .ToListAsync(cancellationToken);
 
                 var totalAvailableAmount = allWallets.Sum(w => w.AvailableAmount.ToDecimal());
@@ -162,6 +165,7 @@ public sealed class HomeQuery
                         CategoryIcon = w.Category?.Icon ?? "FileText",
                         TargetAmount = w.TargetAmount.ToDecimal(),
                         ReleaseAmount = w.Rule?.Amount.ToDecimal() ?? 0m,
+                        Status = w.Status.ToString(),
                         HasAutomation = hasPolicy,
                         AutomationStatus = hasPolicy ? policy!.Status.ToString() : null
                     };
@@ -218,8 +222,6 @@ public sealed class HomeQuery
             var windowStart = currentMonthStart.AddMonths(-(months - 1));
             var windowEnd = currentMonthStart.AddMonths(1);
 
-            // Pull wallets created inside the window, with the fields we need
-            // to compute the per-month sum of TargetAmount.
             var wallets = await _unitOfWork.Query<Wallet>()
                 .Where(w => w.UserPublicId == userPublicId
                             && w.CreatedAt >= windowStart
@@ -231,7 +233,6 @@ public sealed class HomeQuery
                 })
                 .ToListAsync(cancellationToken);
 
-            // Group by the first day of the month the wallet was created in
             var byMonth = wallets
                 .GroupBy(w => new DateTimeOffset(
                     w.CreatedAt.Year, w.CreatedAt.Month, 1, 0, 0, 0, TimeSpan.Zero))

@@ -37,6 +37,17 @@ public interface IIdentityService
         string oldPassword,
         string newPassword);
 
+    Task<bool> UpdateNotificationPreferenceAsync(
+        string identifier,
+        string key,
+        bool enabled,
+        CancellationToken cancellationToken);
+
+    Task<bool> UpdateLastKnownDeviceAsync(
+        string identifier,
+        string deviceId,
+        CancellationToken cancellationToken);
+
     Task<bool> CheckPasswordAsync(long userId, string password);
 
     Task<bool> IsAccountVerifiedAsync(long userId);

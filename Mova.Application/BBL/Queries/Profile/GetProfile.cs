@@ -25,6 +25,17 @@ public sealed class GetProfile
         public string? ProfilePicture { get; set; } = string.Empty;
         public decimal Balance { get; set; }
         public bool HasPinSet { get; set; }
+
+        // ─── Notification preferences ─────────────────
+        public NotificationPreferencesDto Notifications { get; set; } = new();
+    }
+
+    public sealed class NotificationPreferencesDto
+    {
+        public bool Login { get; set; }
+        public bool Release { get; set; }
+        public bool Updates { get; set; }
+        public bool Promotions { get; set; }
     }
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetProfileDto>>
@@ -70,7 +81,15 @@ public sealed class GetProfile
                 Phone = user.PhoneNumber ?? string.Empty,
                 ProfilePicture = user.ProfilePicture,
                 Balance = user.Balance.ToDecimal(),
-                HasPinSet=!string.IsNullOrWhiteSpace(user.TransactionPinHash)
+                HasPinSet = !string.IsNullOrWhiteSpace(user.TransactionPinHash),
+
+                Notifications = new NotificationPreferencesDto
+                {
+                    Login = user.NotifyLoginAlerts,
+                    Release = user.NotifyReleaseAlerts,
+                    Updates = user.NotifyProductUpdates,
+                    Promotions = user.NotifyPromotions,
+                },
             };
 
             return new BaseResult<GetProfileDto>(

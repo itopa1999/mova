@@ -10,6 +10,12 @@ public interface ICacheService
         TimeSpan? maxWait = null,
         CancellationToken cancellationToken = default);
 
+    Task<T?> GetOrSetFastAsync<T>(
+        string key,
+        Func<CancellationToken, Task<T?>> callback,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default);
+
     Task<bool> DeleteAsync(
         string key,
         CancellationToken cancellationToken = default);

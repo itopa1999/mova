@@ -1,30 +1,55 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Mova.Application.Interfaces.Caching;
+using Mova.Application.Interfaces.ExternalAPI;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Infrastructure.ExternalAPI;
-using Microsoft.Extensions.Options;
-using Mova.Application.Interfaces.ExternalAPI;
+using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Payment;
 
 public sealed class BankService : IBankService
 {
+    private static readonly TimeSpan BankCacheTtl = TimeSpan.FromHours(6);
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IExternalApiClient _externalApiClient;
     private readonly ExternalApiSettings _externalApiSettings;
+    private readonly ICacheService _cache;
 
     public BankService(
         IUnitOfWork unitOfWork,
         IExternalApiClient externalApiClient,
-        IOptions<ExternalApiSettings> externalApiSettings)
+        IOptions<ExternalApiSettings> externalApiSettings,
+        ICacheService cache)
     {
         _unitOfWork = unitOfWork;
         _externalApiClient = externalApiClient;
         _externalApiSettings = externalApiSettings.Value;
+        _cache = cache;
     }
 
     public async Task<List<BankDto>> GetAllBanksAsync(string? name = null)
+    {
+        var hasFilter = !string.IsNullOrWhiteSpace(name);
+
+        var cacheKey = hasFilter
+            ? CacheKeys.BanksSearch(name!)
+            : CacheKeys.BanksAll();
+
+        var banks = await _cache.GetOrSetFastAsync(
+            cacheKey,
+            ct => GetBanksFromDbAsync(hasFilter ? name : null, ct),
+            timeout: BankCacheTtl);
+
+        return banks ?? new List<BankDto>();
+    }
+
+    private async Task<List<BankDto>> GetBanksFromDbAsync(
+        string? name,
+        CancellationToken cancellationToken)
     {
         var query = _unitOfWork.Query<Bank>()
             .AsNoTracking()
@@ -38,27 +63,49 @@ public sealed class BankService : IBankService
 
         var banks = await query
             .OrderBy(b => b.Name)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return banks.Select(MapToDto).ToList();
     }
 
     public async Task<BankDto?> GetBankByCodeAsync(string code)
     {
+        return await _cache.GetOrSetFastAsync(
+            CacheKeys.BankByCode(code),
+            ct => GetBankByCodeFromDbAsync(code, ct),
+            timeout: BankCacheTtl);
+    }
+
+    private async Task<BankDto?> GetBankByCodeFromDbAsync(
+        string code,
+        CancellationToken cancellationToken)
+    {
         var bank = await _unitOfWork.Query<Bank>()
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                b => b.Code == code && b.IsActive);
+                b => b.Code == code && b.IsActive,
+                cancellationToken);
 
         return bank is null ? null : MapToDto(bank);
     }
 
     public async Task<BankDto?> GetBankBySlugAsync(string slug)
     {
+        return await _cache.GetOrSetFastAsync(
+            CacheKeys.BankBySlug(slug),
+            ct => GetBankBySlugFromDbAsync(slug, ct),
+            timeout: BankCacheTtl);
+    }
+
+    private async Task<BankDto?> GetBankBySlugFromDbAsync(
+        string slug,
+        CancellationToken cancellationToken)
+    {
         var bank = await _unitOfWork.Query<Bank>()
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                b => b.Slug == slug && b.IsActive);
+                b => b.Slug == slug && b.IsActive,
+                cancellationToken);
 
         return bank is null ? null : MapToDto(bank);
     }
@@ -118,6 +165,9 @@ public sealed class BankService : IBankService
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // ─── Invalidate all bank caches after a successful refresh ───
+        await _cache.DeletePrefixAsync(CacheKeys.BanksPrefix);
     }
 
     private static BankDto MapToDto(Bank bank)

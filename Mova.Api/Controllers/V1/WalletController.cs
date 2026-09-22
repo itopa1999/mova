@@ -9,6 +9,7 @@ using Mova.Application.BBL.Commands.AccountWallet;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.BBL.Queries.SchedulePreview;
+using Mova.Application.BBL.Queries.WalletTemplates;
 using Mova.Shared.Common;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateRenewalPolicyCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateWalletCommand;
@@ -24,6 +25,7 @@ using static Mova.Application.BBL.Queries.AccountWallet.GetWalletPayouts;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletSchedulePreviewQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.WalletDetails;
 using static Mova.Application.BBL.Queries.SchedulePreview.SchedulePreviewQuery;
+using static Mova.Application.BBL.Queries.WalletTemplates.ListWalletTemplatesQuery;
 
 namespace Mova.Api.Controllers.V1;
 
@@ -404,4 +406,27 @@ public class WalletController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("templates")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<ListWalletTemplatesResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> ListWalletTemplates(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] long? categoryId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new ListWalletTemplatesQuery.Query
+        {
+            Page = page,
+            PageSize = pageSize,
+            Search = search,
+            CategoryId = categoryId,
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
 }

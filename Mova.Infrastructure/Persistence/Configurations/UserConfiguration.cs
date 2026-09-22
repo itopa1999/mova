@@ -21,6 +21,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.OtherNames)
                .HasMaxLength(100);
 
+        builder.Property(x => x.LastKnownDeviceId)
+               .HasMaxLength(200)
+               .IsRequired(false);
+
         builder.HasIndex(x => x.Email)
                .IsUnique();
 
@@ -28,9 +32,27 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
                .IsUnique();
 
         builder.HasIndex(x => x.PublicId)
-            .IsUnique();
+               .IsUnique();
 
-       builder.ComplexProperty(
+        // ─── Notification preferences ─────────────────
+        builder.Property(x => x.NotifyLoginAlerts)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(x => x.NotifyReleaseAlerts)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(x => x.NotifyProductUpdates)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(x => x.NotifyPromotions)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        // ─── Balance ──────────────────────────────────
+        builder.ComplexProperty(
             x => x.Balance,
             money =>
             {

@@ -16,6 +16,7 @@ using static Mova.Application.BBL.Commands.Authentication.LoginUserCommand;
 using static Mova.Application.BBL.Commands.Authentication.RefreshTokenCommand;
 using static Mova.Application.BBL.Commands.Authentication.RegisterCommand;
 using static Mova.Application.BBL.Commands.Authentication.ResendVerificationOtpCommand;
+using static Mova.Application.BBL.Commands.Authentication.UpdateNotificationPreferenceCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyAccountCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyPasswordTokenCommand;
 using static Mova.Application.BBL.Queries.Profile.GetProfile;
@@ -301,5 +302,24 @@ public class AuthenticationController(
         return StatusCode(
             (int)result.StatusCode,
             result);
+    }
+
+    [HttpPut("notification-preferences")]
+    [Authorize]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(
+        typeof(BaseResult<UpdateNotificationPreferenceResponseDto>),
+        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> UpdateNotificationPreference(
+        [FromBody] UpdateNotificationPreferenceCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
     }
 }

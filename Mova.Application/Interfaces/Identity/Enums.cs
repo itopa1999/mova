@@ -12,8 +12,13 @@ public sealed record UserIdentityDto(
     string? PhoneNumber,
     string? ProfilePicture,
     Money Balance,
-    string TransactionPinHash
-    )
+    string TransactionPinHash,
+    bool NotifyLoginAlerts,
+    bool NotifyReleaseAlerts,
+    bool NotifyProductUpdates,
+    bool NotifyPromotions,
+    string LastKnownDeviceId
+)
 {
     public string FullName =>
         string.Join(

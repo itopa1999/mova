@@ -1,21 +1,30 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Common;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Identity;
 
 public sealed class IdentityService : IIdentityService
 {
+    private static readonly TimeSpan ProfileCacheTtl = TimeSpan.FromSeconds(60);
+
     private readonly UserManager<User> _userManager;
     private readonly ApplicationDbContext _context;
+    private readonly ICacheService _cache;
 
-    public IdentityService(UserManager<User> userManager, ApplicationDbContext context)
+    public IdentityService(
+        UserManager<User> userManager,
+        ApplicationDbContext context,
+        ICacheService cache)
     {
         _userManager = userManager;
         _context = context;
+        _cache = cache;
     }
 
     public async Task<(bool Success, string ErrorMessage, string UserPublicId, long UserId)> CreateUserAsync(
@@ -48,13 +57,13 @@ public sealed class IdentityService : IIdentityService
 
         var updateResult = await _userManager.UpdateAsync(user);
 
-        if (!updateResult.Succeeded) 
-        { 
-            var errors = string.Join( ", ", updateResult.Errors.Select(x => x.Description));
-            return ( false, errors, string.Empty, 0); 
-        } 
-        
-        return ( true, string.Empty, user.PublicId, user.Id);
+        if (!updateResult.Succeeded)
+        {
+            var errors = string.Join(", ", updateResult.Errors.Select(x => x.Description));
+            return (false, errors, string.Empty, 0);
+        }
+
+        return (true, string.Empty, user.PublicId, user.Id);
     }
 
     public async Task<(bool Success, string ErrorMessage)> AddToRoleAsync(long userId, string role)
@@ -85,6 +94,18 @@ public sealed class IdentityService : IIdentityService
         }
 
         identifier = identifier.Trim();
+
+        return await _cache.GetOrSetFastAsync(
+            CacheKeys.ProfileByIdentifier(identifier),
+            ct => GetByIdentifierUncachedAsync(identifier, ct),
+            timeout: ProfileCacheTtl,
+            cancellationToken: cancellationToken);
+    }
+
+    private async Task<UserIdentityDto?> GetByIdentifierUncachedAsync(
+        string identifier,
+        CancellationToken cancellationToken)
+    {
         var normalizedEmail = identifier.ToUpperInvariant();
 
         return await _context.Users
@@ -103,7 +124,12 @@ public sealed class IdentityService : IIdentityService
                 x.PhoneNumber,
                 x.ProfilePicture,
                 x.Balance,
-                x.TransactionPinHash ?? string.Empty))
+                x.TransactionPinHash ?? string.Empty,
+                x.NotifyLoginAlerts,
+                x.NotifyReleaseAlerts,
+                x.NotifyProductUpdates,
+                x.NotifyPromotions,
+                x.LastKnownDeviceId ?? string.Empty))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -126,7 +152,6 @@ public sealed class IdentityService : IIdentityService
         return await query.AnyAsync(cancellationToken);
     }
 
-
     public async Task<bool> PhoneExistsAsync(
         string phoneNumber,
         long? excludeUserId = null,
@@ -144,26 +169,6 @@ public sealed class IdentityService : IIdentityService
         }
 
         return await query.AnyAsync(cancellationToken);
-    }
-
-
-    public async Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId)
-    {
-        var existingUser = await _userManager.FindByIdAsync(userId.ToString());
-        if (existingUser is null)
-        {
-            return (false, "User not Found");
-        }
-        existingUser.EmailConfirmed = true;
-        existingUser.PhoneNumberConfirmed = true;
-        var result = await _userManager.UpdateAsync(existingUser);
-
-        if (!result.Succeeded)
-        {
-            return (false, string.Join(", ", result.Errors.Select(x => x.Description)));
-        }
-
-        return (true, string.Empty);
     }
 
     public async Task<bool> CheckPasswordAsync(long userId, string password)
@@ -188,6 +193,29 @@ public sealed class IdentityService : IIdentityService
         if (existingUser is null) return new List<string>();
 
         return await _userManager.GetRolesAsync(existingUser);
+    }
+
+    public async Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId)
+    {
+        var existingUser = await _userManager.FindByIdAsync(userId.ToString());
+        if (existingUser is null)
+        {
+            return (false, "User not Found");
+        }
+
+        existingUser.EmailConfirmed = true;
+        existingUser.PhoneNumberConfirmed = true;
+
+        var result = await _userManager.UpdateAsync(existingUser);
+
+        if (!result.Succeeded)
+        {
+            return (false, string.Join(", ", result.Errors.Select(x => x.Description)));
+        }
+
+        await InvalidateUserCacheAsync(existingUser);
+
+        return (true, string.Empty);
     }
 
     public async Task<(bool Success, string ErrorMessage)> ResetPasswordAsync(long userId, string newPassword)
@@ -215,6 +243,8 @@ public sealed class IdentityService : IIdentityService
             return (false, errors);
         }
 
+        await InvalidateUserCacheAsync(user);
+
         return (true, string.Empty);
     }
 
@@ -234,6 +264,8 @@ public sealed class IdentityService : IIdentityService
         user.SecurityStamp = Guid.NewGuid().ToString();
         await _userManager.UpdateAsync(user);
 
+        await InvalidateUserCacheAsync(user);
+
         return (true, string.Empty);
     }
 
@@ -250,8 +282,9 @@ public sealed class IdentityService : IIdentityService
         if (user == null)
             return false;
 
-        user.Balance = Money.FromNaira(
-        user.Balance.ToDecimal() + Amount);
+        user.Balance = Money.FromNaira(user.Balance.ToDecimal() + Amount);
+
+        await InvalidateUserCacheAsync(user);
 
         return true;
     }
@@ -271,6 +304,114 @@ public sealed class IdentityService : IIdentityService
             return false;
 
         user.Balance = Money.FromNaira(user.Balance.ToDecimal() - amount);
+
+        await InvalidateUserCacheAsync(user);
+
         return true;
+    }
+
+    public async Task<bool> UpdateNotificationPreferenceAsync(
+        string identifier,
+        string key,
+        bool enabled,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(identifier))
+            return false;
+
+        identifier = identifier.Trim();
+        var normalizedEmail = identifier.ToUpperInvariant();
+
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.PublicId == identifier ||
+                    x.NormalizedEmail == normalizedEmail ||
+                    x.PhoneNumber == identifier,
+                cancellationToken);
+
+        if (user is null)
+            return false;
+
+        switch (key)
+        {
+            case "login":
+                user.NotifyLoginAlerts = enabled;
+                break;
+
+            case "release":
+                user.NotifyReleaseAlerts = enabled;
+                break;
+
+            case "updates":
+                user.NotifyProductUpdates = enabled;
+                break;
+
+            case "promotions":
+                user.NotifyPromotions = enabled;
+                break;
+
+            default:
+                return false;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        await InvalidateUserCacheAsync(user);
+
+        return true;
+    }
+
+    public async Task<bool> UpdateLastKnownDeviceAsync(
+        string identifier,
+        string deviceId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(identifier) ||
+            string.IsNullOrWhiteSpace(deviceId))
+        {
+            return false;
+        }
+
+        identifier = identifier.Trim();
+        var normalizedEmail = identifier.ToUpperInvariant();
+
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.PublicId == identifier ||
+                    x.NormalizedEmail == normalizedEmail ||
+                    x.PhoneNumber == identifier,
+                cancellationToken);
+
+        if (user is null)
+        {
+            return false;
+        }
+
+        if (user.LastKnownDeviceId == deviceId)
+        {
+            return true;
+        }
+
+        user.LastKnownDeviceId = deviceId;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        await InvalidateUserCacheAsync(user);
+
+        return true;
+    }
+
+    private async Task InvalidateUserCacheAsync(User user)
+    {
+        await _cache.DeleteAsync(CacheKeys.ProfileByIdentifier(user.PublicId));
+
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            await _cache.DeleteAsync(CacheKeys.ProfileByIdentifier(user.Email));
+        }
+
+        if (!string.IsNullOrWhiteSpace(user.PhoneNumber))
+        {
+            await _cache.DeleteAsync(CacheKeys.ProfileByIdentifier(user.PhoneNumber));
+        }
     }
 }

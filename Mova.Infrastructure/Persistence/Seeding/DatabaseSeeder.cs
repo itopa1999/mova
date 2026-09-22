@@ -16,6 +16,7 @@ public sealed class DatabaseSeeder
     {
         await SeedWalletCategoriesAsync(cancellationToken);
         await SeedFeatureFlagsAsync(cancellationToken);
+        await SeedWalletTemplatesAsync(cancellationToken);
     }
 
     private async Task SeedWalletCategoriesAsync(
@@ -65,6 +66,32 @@ public sealed class DatabaseSeeder
 
         await _dbContext.FeatureFlags.AddRangeAsync(
             flagsToAdd,
+            cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task SeedWalletTemplatesAsync(
+        CancellationToken cancellationToken)
+    {
+        var existingNames = (await _dbContext.WalletTemplates
+            .Select(x => x.Name)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        var defaultTemplates = DefaultWalletTemplates.Create();
+
+        var templatesToAdd = defaultTemplates
+            .Where(x => !existingNames.Contains(x.Name))
+            .ToList();
+
+        if (templatesToAdd.Count == 0)
+        {
+            return;
+        }
+
+        await _dbContext.WalletTemplates.AddRangeAsync(
+            templatesToAdd,
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);

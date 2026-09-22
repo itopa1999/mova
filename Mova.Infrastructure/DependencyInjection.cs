@@ -31,8 +31,8 @@ namespace Mova.Infrastructure;
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
-    this IServiceCollection services,
-    IConfiguration configuration)
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
         services.AddIdentityServices(configuration);
         services.AddJwtAuthentication(configuration);
@@ -51,13 +51,27 @@ public static class DependencyInjection
 
         services.AddHangfireServer();
 
-        var redisConnectionString = configuration.GetConnectionString("Redis")
-            ?? throw new InvalidOperationException("The Redis connection string is not configured.");
-        services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
+        // ─── Redis (required — fails startup if unreachable) ──
+        var redisConnectionString = configuration["Redis:URL"]
+            ?? throw new InvalidOperationException("Redis connection string is missing.");
+
+        var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
+        redisOptions.AbortOnConnectFail = true;
+        redisOptions.ConnectTimeout = 3000;
+
+        var redis = ConnectionMultiplexer.Connect(redisOptions);
+
+        if (!redis.IsConnected)
+        {
+            throw new InvalidOperationException(
+                $"Unable to connect to Redis at '{redisConnectionString}'.");
+        }
+
+        services.AddSingleton<IConnectionMultiplexer>(redis);
+        services.AddScoped<ICacheService, RedisCacheService>();
 
         services.AddHttpContextAccessor();
 
-        services.AddScoped<ICacheService, RedisCacheService>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<ITransactionPinService, TransactionPinService>();
@@ -80,7 +94,7 @@ public static class DependencyInjection
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         services.AddScoped<DatabaseSeeder>();
-        
+
         return services;
     }
 }

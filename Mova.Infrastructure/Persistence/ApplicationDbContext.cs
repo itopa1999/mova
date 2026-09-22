@@ -38,6 +38,7 @@ public sealed class ApplicationDbContext
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
     public DbSet<RenewalPolicy> RenewalPolicies => Set<RenewalPolicy>();
     public DbSet<RenewalEvent> RenewalEvents => Set<RenewalEvent>();
+    public DbSet<WalletTemplate> WalletTemplates => Set<WalletTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
