@@ -68,6 +68,9 @@ public sealed class WalletDetails
         public bool HasAutomation { get; set; }
         public string? AutomationStatus { get; set; }
 
+        // Lifecycle counters
+        public int RestartCount { get; set; }
+
         // Audit
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? UpdatedAt { get; set; }
@@ -365,6 +368,8 @@ public sealed class WalletDetails
 
                     HasAutomation = renewalPolicy is not null,
                     AutomationStatus = renewalPolicy?.Status.ToString(),
+
+                    RestartCount = wallet.RestartCount,
 
                     CreatedAt = wallet.CreatedAt,
                     UpdatedAt = wallet.ModifiedAt,

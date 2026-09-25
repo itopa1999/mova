@@ -71,7 +71,10 @@ public class Startup(IConfiguration configuration)
                         "https://localhost:3000", 
                         "http://localhost:5173",
                         "http://localhost:5174",
-                        "https://mova-frontend.luckystarboy01.workers.dev"
+                        "https://mova-frontend.luckystarboy01.workers.dev",
+                        "http://172.26.94.7:4173",
+                        "http://192.168.1.126:4173"
+
                         )
                         .AllowAnyHeader()
                         .AllowAnyMethod()

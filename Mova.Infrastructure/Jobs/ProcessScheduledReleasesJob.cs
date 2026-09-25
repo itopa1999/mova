@@ -2,6 +2,7 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Caching;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
@@ -21,6 +22,7 @@ public sealed class ProcessScheduledReleasesJob
     private readonly INotificationQueue _notificationQueue;
     private readonly IRenewalService _renewalService;
     private readonly ICacheService _cache;
+    private readonly IIdentityService _identityService;
 
     public ProcessScheduledReleasesJob(
         ApplicationDbContext context,
@@ -28,7 +30,8 @@ public sealed class ProcessScheduledReleasesJob
         IWalletRuleService walletRuleService,
         INotificationQueue notificationQueue,
         IRenewalService renewalService,
-        ICacheService cache)
+        ICacheService cache,
+        IIdentityService identityService)
     {
         _context = context;
         _logger = logger;
@@ -36,6 +39,7 @@ public sealed class ProcessScheduledReleasesJob
         _notificationQueue = notificationQueue;
         _renewalService = renewalService;
         _cache = cache;
+        _identityService = identityService;
     }
 
     [DisableConcurrentExecution(300)]
@@ -282,7 +286,6 @@ public sealed class ProcessScheduledReleasesJob
             releasedDestination = wallet.PayoutDestination;
             wasProcessed = true;
 
-            // ─── Invalidate notification cache after commit ───
             try
             {
                 await _cache.DeletePrefixAsync(
@@ -322,7 +325,8 @@ public sealed class ProcessScheduledReleasesJob
                 walletId,
                 releasedAmount,
                 releaseId,
-                releasedDestination.Value);
+                releasedDestination.Value,
+                cancellationToken);
         }
         catch (Exception ex)
         {
@@ -339,8 +343,40 @@ public sealed class ProcessScheduledReleasesJob
         long walletId,
         decimal amount,
         long scheduledReleaseId,
-        PayoutDestination payoutDestination)
+        PayoutDestination payoutDestination,
+        CancellationToken cancellationToken)
     {
+        // ─── Load user via identity service (cache-backed) ───
+        var user = await _identityService.GetByIdentifierAsync(
+            userPublicId,
+            cancellationToken);
+
+        if (user is null)
+        {
+            _logger.LogWarning(
+                "Skipped email for scheduled release {ScheduledReleaseId} — user {UserPublicId} not found.",
+                scheduledReleaseId,
+                userPublicId);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            _logger.LogWarning(
+                "Skipped email for scheduled release {ScheduledReleaseId} — no user email on record.",
+                scheduledReleaseId);
+            return;
+        }
+
+        if (!user.NotifyReleaseAlerts)
+        {
+            _logger.LogInformation(
+                "Skipped email for scheduled release {ScheduledReleaseId} — user {UserPublicId} has release alerts disabled.",
+                scheduledReleaseId,
+                userPublicId);
+            return;
+        }
+
         var emailSubject = payoutDestination switch
         {
             PayoutDestination.Bank =>
@@ -376,24 +412,11 @@ public sealed class ProcessScheduledReleasesJob
 
         try
         {
-            var user = await _context.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.PublicId == userPublicId);
-
-            if (user is null || string.IsNullOrWhiteSpace(user.Email))
-            {
-                _logger.LogWarning(
-                    "Skipped email for scheduled release {ScheduledReleaseId} — no user email on record.",
-                    scheduledReleaseId);
-            }
-            else
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    user.FirstName,
-                    user.Email,
-                    emailMessage,
-                    emailSubject);
-            }
+            _notificationQueue.QueueNotificationEmail(
+                user.FirstName,
+                user.Email,
+                emailMessage,
+                emailSubject);
         }
         catch (Exception ex)
         {

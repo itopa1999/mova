@@ -27,6 +27,7 @@ public class RenewalPolicy : BaseEntity
     public int? MaxRenewals { get; set; }
 
     public int RenewalsCount { get; set; }
+    public bool RefillUntilMainBalanceExhausted { get; set; }
 
     public Wallet Wallet { get; set; } = null!;
 

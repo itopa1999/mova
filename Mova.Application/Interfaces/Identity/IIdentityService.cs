@@ -16,7 +16,7 @@ public interface IIdentityService
     Task<UserIdentityDto?> GetByIdentifierAsync(
         string identifier,
         CancellationToken cancellationToken);
-
+        
     Task<bool> EmailExistsAsync(
         string email,
         long? excludeUserId = null,

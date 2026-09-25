@@ -13,6 +13,7 @@ using Mova.Application.BBL.Queries.WalletTemplates;
 using Mova.Shared.Common;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateRenewalPolicyCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateWalletCommand;
+using static Mova.Application.BBL.Commands.AccountWallet.RestartWalletCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.ToggleRenewalCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.UpdateRenewalPolicyCommand;
 using static Mova.Application.BBL.MovaAPIs.GetReleasesQuery;
@@ -427,6 +428,26 @@ public class WalletController(
 
         var result = await _mediator.Send(query, cancellationToken);
 
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPut("{walletId:long}/restart")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<RestartWalletResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> RestartWallet(
+        long walletId,
+        CancellationToken cancellationToken)
+    {
+        var command = new RestartWalletCommand.Command
+        {
+            WalletId = walletId,
+            UserPublicId = UserPublicId ?? string.Empty,
+            Email = UserEmail ?? string.Empty,
+            FirstName = UserFirstName ?? string.Empty
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
         return StatusCode((int)result.StatusCode, result);
     }
 }

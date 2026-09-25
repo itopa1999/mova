@@ -941,6 +941,9 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<int>("RefillAmountType")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("RefillUntilMainBalanceExhausted")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("RenewalsCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -1323,6 +1326,9 @@ namespace Mova.Infrastructure.Migrations
                         .HasColumnType("character varying(150)");
 
                     b.Property<int>("PayoutDestination")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RestartCount")
                         .HasColumnType("integer");
 
                     b.Property<int>("Status")

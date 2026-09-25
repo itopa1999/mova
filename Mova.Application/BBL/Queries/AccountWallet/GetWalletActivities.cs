@@ -11,11 +11,20 @@ namespace Mova.Application.BBL.Queries.AccountWallet;
 
 public sealed class GetWalletActivities
 {
-    public sealed class Query : IRequest<BaseResult<List<WalletActivityGroupDto>>>
+    public sealed class Query : IRequest<BaseResult<WalletActivitiesResponseDto>>
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+
         public long WalletId { get; init; }
+
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 20;
+    }
+
+    public sealed class WalletActivitiesResponseDto : BasePaginationResponse<WalletActivityGroupDto>
+    {
+        public int TotalActivities { get; set; }
     }
 
     public sealed class WalletActivityGroupDto
@@ -35,7 +44,8 @@ public sealed class GetWalletActivities
         public DateTimeOffset Date { get; set; }
     }
 
-    public sealed class Handler : IRequestHandler<Query, BaseResult<List<WalletActivityGroupDto>>>
+    public sealed class Handler
+        : IRequestHandler<Query, BaseResult<WalletActivitiesResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
 
@@ -44,10 +54,27 @@ public sealed class GetWalletActivities
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<BaseResult<List<WalletActivityGroupDto>>> Handle(
+        public async Task<BaseResult<WalletActivitiesResponseDto>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                return new BaseResult<WalletActivitiesResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "User public ID is required.");
+            }
+
+            if (request.WalletId <= 0)
+            {
+                return new BaseResult<WalletActivitiesResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Invalid wallet ID.");
+            }
+
+            var page = request.Page < 1 ? 1 : request.Page;
+            var pageSize = request.PageSize < 1 ? 20 : Math.Min(request.PageSize, 100);
+
             var wallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
@@ -57,48 +84,67 @@ public sealed class GetWalletActivities
 
             if (wallet is null)
             {
-                return new BaseResult<List<WalletActivityGroupDto>>(
+                return new BaseResult<WalletActivitiesResponseDto>(
                     HttpStatusCode.NotFound,
                     "Wallet not found.");
             }
 
-            var activities = await _unitOfWork.Query<Transaction>()
-        .AsNoTracking()
-        .Where(x =>
-            x.WalletId == wallet.Id &&
-            x.Status == TransactionStatus.Completed)
-        .OrderByDescending(x => x.CreatedAt)
-        .Select(x => new WalletActivityDto
-        {
-            Id = x.Id,
-            Type = x.Type.ToString(),
-            Title = x.Title,
-            Subtitle = x.Type.ToString(),
-            Amount = x.Amount.ToDecimal(),
-            IsCredit = x.Type == TransactionType.Deposit ||
-                    x.Type == TransactionType.Release ||
-                    x.Type == TransactionType.Refund,
-            Date = x.CompletedAt ?? x.CreatedAt
-        })
-        .ToListAsync(cancellationToken);
+            var baseQuery = _unitOfWork.Query<Transaction>()
+                .AsNoTracking()
+                .Where(x =>
+                    x.WalletId == wallet.Id &&
+                    x.Status == TransactionStatus.Completed);
 
-    var groupedActivities = activities
-        .GroupBy(x => x.Date.Date)
-        .OrderByDescending(x => x.Key)
-        .Select(x => new WalletActivityGroupDto
-        {
-            Date = x.Key,
-            Activities = x
-                .OrderByDescending(a => a.Date)
-                .ToList()
-        })
-        .ToList();
+            var totalActivities = await baseQuery.CountAsync(cancellationToken);
 
-    return new BaseResult<List<WalletActivityGroupDto>>(
-        HttpStatusCode.OK,
-        "Wallet activities retrieved successfully.",
-        groupedActivities);
-        
+            var pagedActivities = await baseQuery
+                .OrderByDescending(x => x.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new WalletActivityDto
+                {
+                    Id = x.Id,
+                    Type = x.Type.ToString(),
+                    Title = x.Title,
+                    Subtitle = x.Type.ToString(),
+                    Amount = x.Amount.ToDecimal(),
+                    IsCredit =
+                        x.Type == TransactionType.Deposit ||
+                        x.Type == TransactionType.Release ||
+                        x.Type == TransactionType.Refund,
+                    Date = x.CompletedAt ?? x.CreatedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            var groupedActivities = pagedActivities
+                .GroupBy(x => x.Date.Date)
+                .OrderByDescending(x => x.Key)
+                .Select(x => new WalletActivityGroupDto
+                {
+                    Date = x.Key,
+                    Activities = x
+                        .OrderByDescending(a => a.Date)
+                        .ToList()
+                })
+                .ToList();
+
+            var totalPages = (int)Math.Ceiling(
+                (double)totalActivities / pageSize);
+
+            var response = new WalletActivitiesResponseDto
+            {
+                TotalActivities = totalActivities,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalActivities,
+                TotalPages = totalPages,
+                Items = groupedActivities
+            };
+
+            return new BaseResult<WalletActivitiesResponseDto>(
+                HttpStatusCode.OK,
+                "Wallet activities retrieved successfully.",
+                response);
         }
     }
 }

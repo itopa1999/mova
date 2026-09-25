@@ -11,11 +11,20 @@ namespace Mova.Application.BBL.Queries.AccountWallet;
 
 public sealed class GetWalletPayouts
 {
-    public sealed class Query : IRequest<BaseResult<List<WalletPayoutGroupDto>>>
+    public sealed class Query : IRequest<BaseResult<WalletPayoutsResponseDto>>
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+
         public long WalletId { get; init; }
+
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 20;
+    }
+
+    public sealed class WalletPayoutsResponseDto : BasePaginationResponse<WalletPayoutGroupDto>
+    {
+        public int TotalPayouts { get; set; }
     }
 
     public sealed class WalletPayoutGroupDto
@@ -36,7 +45,8 @@ public sealed class GetWalletPayouts
         public string Destination { get; set; } = string.Empty;
     }
 
-    public sealed class Handler : IRequestHandler<Query, BaseResult<List<WalletPayoutGroupDto>>>
+    public sealed class Handler
+        : IRequestHandler<Query, BaseResult<WalletPayoutsResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
 
@@ -45,15 +55,52 @@ public sealed class GetWalletPayouts
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<BaseResult<List<WalletPayoutGroupDto>>> Handle(
+        public async Task<BaseResult<WalletPayoutsResponseDto>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
-            var payouts = await _unitOfWork.Query<Payout>()
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                return new BaseResult<WalletPayoutsResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "User public ID is required.");
+            }
+
+            if (request.WalletId <= 0)
+            {
+                return new BaseResult<WalletPayoutsResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Invalid wallet ID.");
+            }
+
+            var page = request.Page < 1 ? 1 : request.Page;
+            var pageSize = request.PageSize < 1 ? 20 : Math.Min(request.PageSize, 100);
+
+            var wallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
-                .Where(x => x.WalletId == request.WalletId &&
-                            x.UserPublicId == request.UserPublicId)
+                .FirstOrDefaultAsync(
+                    x => x.Id == request.WalletId &&
+                         x.UserPublicId == request.UserPublicId,
+                    cancellationToken);
+
+            if (wallet is null)
+            {
+                return new BaseResult<WalletPayoutsResponseDto>(
+                    HttpStatusCode.NotFound,
+                    "Wallet not found.");
+            }
+
+            var baseQuery = _unitOfWork.Query<Payout>()
+                .AsNoTracking()
+                .Where(x => x.WalletId == wallet.Id &&
+                            x.UserPublicId == request.UserPublicId);
+
+            var totalPayouts = await baseQuery.CountAsync(cancellationToken);
+
+            var pagedPayouts = await baseQuery
                 .OrderByDescending(x => x.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(x => new
                 {
                     x.Id,
@@ -72,7 +119,7 @@ public sealed class GetWalletPayouts
                 })
                 .ToListAsync(cancellationToken);
 
-            var activities = payouts
+            var activities = pagedPayouts
                 .Select(x =>
                 {
                     var timestamp =
@@ -114,10 +161,23 @@ public sealed class GetWalletPayouts
                 })
                 .ToList();
 
-            return new BaseResult<List<WalletPayoutGroupDto>>(
+            var totalPages = (int)Math.Ceiling(
+                (double)totalPayouts / pageSize);
+
+            var response = new WalletPayoutsResponseDto
+            {
+                TotalPayouts = totalPayouts,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalPayouts,
+                TotalPages = totalPages,
+                Items = groupedActivities
+            };
+
+            return new BaseResult<WalletPayoutsResponseDto>(
                 HttpStatusCode.OK,
                 "Wallet payouts retrieved successfully.",
-                groupedActivities);
+                response);
         }
 
         private static string GetTitle(
@@ -153,7 +213,6 @@ public sealed class GetWalletPayouts
         {
             return (status, destination) switch
             {
-                // ─── Bank ──────────────────────────────────────
                 (PayoutStatus.Pending, PayoutDestination.Bank) =>
                     "Waiting to be sent to your bank",
 
@@ -173,7 +232,6 @@ public sealed class GetWalletPayouts
                 (PayoutStatus.Reversed, PayoutDestination.Bank) =>
                     "Bank payout was reversed and returned to your wallet",
 
-                // ─── Main balance ──────────────────────────────
                 (PayoutStatus.Pending, PayoutDestination.Main) =>
                     "Waiting to be added to your main MOVA balance",
 
@@ -191,7 +249,6 @@ public sealed class GetWalletPayouts
                 (PayoutStatus.Reversed, PayoutDestination.Main) =>
                     "Main balance credit was reversed",
 
-                // ─── Fallback ──────────────────────────────────
                 _ => string.IsNullOrWhiteSpace(provider)
                     ? "Payout"
                     : provider!

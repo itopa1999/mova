@@ -88,21 +88,6 @@ public sealed class RenewalService : IRenewalService
             return new RenewalOutcome { Skipped = true, SkipReason = "Trigger mismatch." };
         }
 
-        // ─── Determine refill amount ─────────────────────────
-        var refillAmount = policy.RefillAmountType == RefillAmountType.Fixed
-            ? wallet.TargetAmount.ToDecimal()
-            : policy.RefillAmount.ToDecimal();
-
-        if (refillAmount <= 0)
-        {
-            op.Fail("Refill amount resolved to zero or less.");
-            await LogFailedAsync(
-                wallet, policy, firedBy,
-                Money.FromNaira(0),
-                "Refill amount is invalid.", cancellationToken);
-            return new RenewalOutcome { Skipped = true, SkipReason = "Invalid refill amount." };
-        }
-
         // ─── Guardrail: MaxRenewals ──────────────────────────
         if (policy.MaxRenewals.HasValue
             && policy.RenewalsCount >= policy.MaxRenewals.Value)
@@ -114,19 +99,57 @@ public sealed class RenewalService : IRenewalService
             return new RenewalOutcome { Skipped = true, SkipReason = "Max renewals reached." };
         }
 
-        // ─── Compute the fee for this cycle ──────────────────
+        // ─── Nominal refill amount (the policy's intent) ─────
+        var nominalRefill = policy.RefillAmountType == RefillAmountType.Fixed
+            ? wallet.TargetAmount.ToDecimal()
+            : policy.RefillAmount.ToDecimal();
+
+        if (nominalRefill <= 0)
+        {
+            op.Fail("Refill amount resolved to zero or less.");
+            await LogFailedAsync(
+                wallet, policy, firedBy,
+                Money.FromNaira(0),
+                "Refill amount is invalid.", cancellationToken);
+            return new RenewalOutcome { Skipped = true, SkipReason = "Invalid refill amount." };
+        }
+
+        // ─── Fetch user's main balance ───────────────────────
+        var user = await _identityService.GetByIdentifierAsync(
+            wallet.UserPublicId, cancellationToken);
+
+        if (user is null)
+        {
+            op.Fail("User not found.");
+            await LogFailedAsync(
+                wallet, policy, firedBy,
+                Money.FromNaira(nominalRefill),
+                "User account not found.", cancellationToken);
+            return new RenewalOutcome { Skipped = true, SkipReason = "User not found." };
+        }
+
+        var mainBalance = user.Balance.ToDecimal();
+
+        if (mainBalance <= 0)
+        {
+            var reason = "Main account balance is empty.";
+            op.Success($"Skipped — {reason}");
+            await LogSkippedAsync(wallet, policy, firedBy, reason, cancellationToken);
+            await NotifySkippedAsync(wallet, nominalRefill, reason, cancellationToken);
+            return new RenewalOutcome { Skipped = true, SkipReason = reason };
+        }
+
+        // ─── Wallet release amount ───────────────────────────
         var releaseAmount = wallet.Rule?.Amount.ToDecimal() ?? 0m;
         if (releaseAmount <= 0)
         {
             op.Fail("Wallet rule has invalid release amount.");
             await LogFailedAsync(
                 wallet, policy, firedBy,
-                Money.FromNaira(refillAmount),
+                Money.FromNaira(nominalRefill),
                 "Wallet release amount is invalid.", cancellationToken);
             return new RenewalOutcome { Skipped = true, SkipReason = "Invalid release amount." };
         }
-
-        var releases = (int)Math.Ceiling(refillAmount / releaseAmount);
 
         var payoutDestinationString = wallet.PayoutDestination switch
         {
@@ -136,6 +159,83 @@ public sealed class RenewalService : IRenewalService
             _ => "bank",
         };
 
+        // ─────────────────────────────────────────────────────
+        // Decide the actual principal that will land in the wallet.
+        // Fee is ALWAYS charged on this — never the target, never
+        // the existing locked amount. Only the delta we add.
+        // ─────────────────────────────────────────────────────
+
+        decimal refillAmount;
+        var isPartialRefill = false;
+
+        if (policy.RefillUntilMainBalanceExhausted)
+        {
+            refillAmount = Math.Min(nominalRefill, mainBalance);
+            isPartialRefill = refillAmount < nominalRefill;
+
+            if (isPartialRefill)
+            {
+                op.Success(
+                    $"Partial refill — main balance ₦{mainBalance:N0} is below " +
+                    $"nominal refill ₦{nominalRefill:N0}. Using ₦{refillAmount:N0}.");
+            }
+        }
+        else
+        {
+            refillAmount = nominalRefill;
+
+            // Preview fee against the refill amount only.
+            var releasesPreview = (int)Math.Ceiling(refillAmount / releaseAmount);
+            var feesPreview = WalletFeeHelper.Calculate(
+                targetAmount: refillAmount,
+                releaseAmount: releaseAmount,
+                payoutDestination: payoutDestinationString,
+                releases: releasesPreview);
+
+            var totalDebitPreview = refillAmount + feesPreview.TotalMovaCharges;
+            var mainAfterDebit = mainBalance - totalDebitPreview;
+            var minMain = policy.MinMainBalance.ToDecimal();
+
+            if (mainAfterDebit < minMain)
+            {
+                var reason =
+                    $"Main account would drop below your ₦{minMain:N0} floor " +
+                    $"(needed ₦{totalDebitPreview:N0}, available ₦{mainBalance:N0}).";
+
+                op.Success($"Skipped — {reason}");
+                await LogSkippedAsync(wallet, policy, firedBy, reason, cancellationToken);
+                await NotifySkippedAsync(wallet, refillAmount, reason, cancellationToken);
+                return new RenewalOutcome { Skipped = true, SkipReason = reason };
+            }
+        }
+
+        if (refillAmount <= 0)
+        {
+            var reason = "Resolved refill amount is zero.";
+            op.Success($"Skipped — {reason}");
+            await LogSkippedAsync(wallet, policy, firedBy, reason, cancellationToken);
+            return new RenewalOutcome { Skipped = true, SkipReason = reason };
+        }
+
+        // ─────────────────────────────────────────────────────
+        // Compute the fee ONCE, against the final refillAmount.
+        // If the fee won't fit inside the balance in partial mode,
+        // shrink the refill until it does, and recompute the fee
+        // against the new (smaller) refill. This is the only
+        // place fees are ever calculated, and it's always against
+        // the amount that lands in LockedAmount — nothing else.
+        // ─────────────────────────────────────────────────────
+
+        var releases = (int)Math.Ceiling(refillAmount / releaseAmount);
+
+        if (releases <= 0)
+        {
+            var reason = "Refill too small to cover one release.";
+            op.Success($"Skipped — {reason}");
+            await LogSkippedAsync(wallet, policy, firedBy, reason, cancellationToken);
+            return new RenewalOutcome { Skipped = true, SkipReason = reason };
+        }
+
         var fees = WalletFeeHelper.Calculate(
             targetAmount: refillAmount,
             releaseAmount: releaseAmount,
@@ -144,52 +244,56 @@ public sealed class RenewalService : IRenewalService
 
         var totalDebit = refillAmount + fees.TotalMovaCharges;
 
-        // ─── Guardrail: MinMainBalance ───────────────────────
-        var user = await _identityService.GetByIdentifierAsync(
-            wallet.UserPublicId, cancellationToken);
-
-        if (user is null)
+        if (policy.RefillUntilMainBalanceExhausted && totalDebit > mainBalance)
         {
-            op.Fail("User not found.");
-            await LogFailedAsync(
-                wallet, policy, firedBy,
-                Money.FromNaira(refillAmount),
-                "User account not found.", cancellationToken);
-            return new RenewalOutcome { Skipped = true, SkipReason = "User not found." };
-        }
+            var availableForRefill = mainBalance - fees.TotalMovaCharges;
 
-        var mainBalance = user.Balance.ToDecimal();
-        var mainAfterDebit = mainBalance - totalDebit;
-        var minMain = policy.MinMainBalance.ToDecimal();
+            if (availableForRefill <= 0)
+            {
+                var reason =
+                    $"Main balance ₦{mainBalance:N0} can't cover the " +
+                    $"₦{fees.TotalMovaCharges:N0} fee.";
 
-        if (mainAfterDebit < minMain)
-        {
-            var reason =
-                $"Main account would drop below your ₦{minMain:N0} floor " +
-                $"(needed ₦{totalDebit:N0}, available ₦{mainBalance:N0}).";
+                op.Success($"Skipped — {reason}");
+                await LogSkippedAsync(wallet, policy, firedBy, reason, cancellationToken);
+                await NotifySkippedAsync(wallet, refillAmount, reason, cancellationToken);
+                return new RenewalOutcome { Skipped = true, SkipReason = reason };
+            }
 
-            op.Success($"Skipped — {reason}");
+            refillAmount = availableForRefill;
+            releases = (int)Math.Ceiling(refillAmount / releaseAmount);
 
-            await LogSkippedAsync(
-                wallet, policy, firedBy, reason, cancellationToken);
+            if (releases <= 0)
+            {
+                var reason = "Refill too small to cover one release after fee.";
+                op.Success($"Skipped — {reason}");
+                await LogSkippedAsync(wallet, policy, firedBy, reason, cancellationToken);
+                return new RenewalOutcome { Skipped = true, SkipReason = reason };
+            }
 
-            await NotifySkippedAsync(
-                wallet, refillAmount, reason, cancellationToken);
+            // Recompute fee against the final refillAmount.
+            fees = WalletFeeHelper.Calculate(
+                targetAmount: refillAmount,
+                releaseAmount: releaseAmount,
+                payoutDestination: payoutDestinationString,
+                releases: releases);
 
-            return new RenewalOutcome { Skipped = true, SkipReason = reason };
+            totalDebit = refillAmount + fees.TotalMovaCharges;
+            isPartialRefill = true;
+
+            op.Success(
+                $"Partial refill adjusted for fee — refilling ₦{refillAmount:N0} " +
+                $"+ fee ₦{fees.TotalMovaCharges:N0} (total debit ₦{totalDebit:N0}).");
         }
 
         // ─── Execute the renewal ─────────────────────────────
         op.Success(
             $"Refilling ₦{refillAmount:N0} + fee ₦{fees.TotalMovaCharges:N0}. " +
-            $"Trigger: {firedBy}");
+            $"Trigger: {firedBy}. Partial: {isPartialRefill}");
 
         long? renewalEventId = null;
-        decimal refilledAmount = refillAmount;
         string? failureReason = null;
 
-        // If the caller already opened a transaction (e.g. the release job),
-        // participate in theirs. Otherwise, open our own.
         var ownsTransaction = _context.Database.CurrentTransaction is null;
 
         if (ownsTransaction)
@@ -212,9 +316,6 @@ public sealed class RenewalService : IRenewalService
                 failureReason = "Insufficient main account balance.";
                 op.Fail(failureReason);
 
-                // NOTE: LogFailedAsync writes a RenewalEvent. When the outer
-                // transaction is aborted, this write may not persist. The
-                // primary failure record is the `op.Fail` above.
                 try
                 {
                     await LogFailedAsync(
@@ -237,12 +338,13 @@ public sealed class RenewalService : IRenewalService
             }
 
             // ─── Refill wallet: add on top of existing locked ──
+            // This is the NEW locked amount delta, and it's exactly
+            // what the fee above was computed against.
             var refillMoney = Money.FromNaira(refillAmount);
 
             wallet.LockedAmount += refillMoney;
             wallet.FundedAmount += refillMoney;
 
-            // Re-activate if wallet had completed
             if (wallet.Status == WalletStatus.Completed)
             {
                 wallet.Status = WalletStatus.Active;
@@ -250,11 +352,15 @@ public sealed class RenewalService : IRenewalService
             }
 
             // ─── Refill transaction ──────────────────────────
+            var refillTitle = isPartialRefill
+                ? "Wallet Refilled (Partial)"
+                : "Wallet Refilled";
+
             var refillTx = new Transaction
             {
                 UserPublicId = wallet.UserPublicId,
                 WalletId = wallet.Id,
-                Title = "Wallet Refilled",
+                Title = refillTitle,
                 Amount = refillMoney,
                 Type = TransactionType.Refill,
                 Status = TransactionStatus.Completed,
@@ -276,6 +382,9 @@ public sealed class RenewalService : IRenewalService
             await _context.LedgerEntries.AddAsync(refillLedger, cancellationToken);
 
             // ─── Fee transaction ─────────────────────────────
+            // fees.TotalMovaCharges was computed against the FINAL
+            // refillAmount (the new locked amount delta), not the
+            // target and not the pre-existing locked balance.
             var feeTx = new Transaction
             {
                 UserPublicId = wallet.UserPublicId,
@@ -291,10 +400,6 @@ public sealed class RenewalService : IRenewalService
             await _context.Transactions.AddAsync(feeTx, cancellationToken);
 
             // ─── Schedule first release of the new cycle ─────
-            // Only for OnCompletion. For OnThreshold, the wallet keeps
-            // its existing cadence — we just added money on top, so the
-            // normal next release will happen on schedule. Scheduling
-            // here would double-fire.
             if (firedBy == RenewalTriggerType.OnCompletion)
             {
                 var rule = wallet.Rule;
@@ -331,6 +436,11 @@ public sealed class RenewalService : IRenewalService
             // ─── Increment counter + write event ─────────────
             policy.RenewalsCount += 1;
 
+            var eventReason = isPartialRefill
+                ? $"Partial refill — main balance was below the nominal amount. " +
+                  $"Refilled ₦{refillAmount:N0}."
+                : null;
+
             var renewalEvent = new RenewalEvent
             {
                 WalletId = wallet.Id,
@@ -338,7 +448,7 @@ public sealed class RenewalService : IRenewalService
                 UserPublicId = wallet.UserPublicId,
                 OccurredAt = DateTimeOffset.UtcNow,
                 Result = RenewalResult.Succeeded,
-                Reason = null,
+                Reason = eventReason,
                 Amount = refillMoney,
                 TransactionId = refillTx.Id,
             };
@@ -357,13 +467,12 @@ public sealed class RenewalService : IRenewalService
 
             op.Success(
                 $"Renewal succeeded. EventId: {renewalEventId}, " +
-                $"Refilled: ₦{refillAmount:N0}");
+                $"Refilled: ₦{refillAmount:N0}, Partial: {isPartialRefill}");
 
-            // ─── Post-commit notification ────────────────────
             try
             {
                 await NotifySucceededAsync(
-                    wallet, refillAmount, firedBy, cancellationToken);
+                    wallet, refillAmount, firedBy, isPartialRefill, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -391,7 +500,6 @@ public sealed class RenewalService : IRenewalService
                 $"Error during renewal for wallet {wallet.Id}.",
                 ex);
 
-            // Best-effort failure log
             try
             {
                 await LogFailedAsync(
@@ -472,6 +580,7 @@ public sealed class RenewalService : IRenewalService
         Wallet wallet,
         decimal amount,
         RenewalTriggerType firedBy,
+        bool isPartialRefill,
         CancellationToken cancellationToken)
     {
         var trigger = firedBy == RenewalTriggerType.OnThreshold
@@ -479,9 +588,13 @@ public sealed class RenewalService : IRenewalService
             : "your wallet completed a cycle";
 
         var title = $"{wallet.Name} wallet refilled";
-        var message =
-            $"₦{amount:N0} has been added to your {wallet.Name} wallet " +
-            $"because {trigger}. The schedule continues as before.";
+
+        var message = isPartialRefill
+            ? $"₦{amount:N0} has been added to your {wallet.Name} wallet " +
+              $"(a partial refill — your main balance was below the usual " +
+              $"refill amount) because {trigger}. The schedule continues as before."
+            : $"₦{amount:N0} has been added to your {wallet.Name} wallet " +
+              $"because {trigger}. The schedule continues as before.";
 
         _notificationQueue.InAppNotificationAsync(
             wallet.UserPublicId,

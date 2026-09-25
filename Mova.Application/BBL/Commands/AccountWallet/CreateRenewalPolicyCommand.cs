@@ -41,6 +41,8 @@ public sealed class CreateRenewalPolicyCommand
         public decimal MinMainBalance { get; set; }
 
         public int? MaxRenewals { get; set; }
+
+        public bool RefillUntilMainBalanceExhausted { get; set; }
     }
 
     public sealed class CreateRenewalPolicyResponseDto
@@ -203,7 +205,14 @@ public sealed class CreateRenewalPolicyCommand
                 }
             }
 
-            if (request.MinMainBalance < 0)
+            // When the user opted into "refill with whatever remains",
+            // the min-main-balance floor is meaningless — force it to 0
+            // so downstream logic can't accidentally re-apply it.
+            var effectiveMinMainBalance = request.RefillUntilMainBalanceExhausted
+                ? 0m
+                : request.MinMainBalance;
+
+            if (effectiveMinMainBalance < 0)
             {
                 op.Fail("Min main balance cannot be negative.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
@@ -263,10 +272,13 @@ public sealed class CreateRenewalPolicyCommand
                     RefillAmount = refillAmountType.Value == RefillAmountType.Custom
                         ? Money.FromNaira(request.RefillAmount)
                         : Money.FromNaira(0),
-                    MinMainBalance = Money.FromNaira(request.MinMainBalance),
+                    MinMainBalance = Money.FromNaira(effectiveMinMainBalance),
                     MaxRenewals = request.MaxRenewals,
                     RenewalsCount = 0,
-                    Status = RenewalStatus.Active
+                    Status = RenewalStatus.Active,
+
+                    RefillUntilMainBalanceExhausted =
+                        request.RefillUntilMainBalanceExhausted,
                 };
 
                 await _unitOfWork.AddAsync(policy, cancellationToken);
@@ -278,7 +290,8 @@ public sealed class CreateRenewalPolicyCommand
 
                 op.Success(
                     $"Renewal policy created. PolicyId: {policyId}, " +
-                    $"WalletId: {wallet.Id}");
+                    $"WalletId: {wallet.Id}, " +
+                    $"RefillUntilExhausted: {request.RefillUntilMainBalanceExhausted}");
             }
             catch (Exception ex)
             {
@@ -304,7 +317,8 @@ public sealed class CreateRenewalPolicyCommand
                     request.FirstName,
                     wallet.Id,
                     wallet.Name,
-                    triggerType.Value);
+                    triggerType.Value,
+                    request.RefillUntilMainBalanceExhausted);
             }
             catch (Exception ex)
             {
@@ -329,7 +343,8 @@ public sealed class CreateRenewalPolicyCommand
             string firstName,
             long walletId,
             string walletName,
-            RenewalTriggerType triggerType)
+            RenewalTriggerType triggerType,
+            bool refillUntilExhausted)
         {
             var title = $"Automation enabled for {walletName}";
 
@@ -342,13 +357,18 @@ public sealed class CreateRenewalPolicyCommand
                 _ => "MOVA will refill this wallet automatically."
             };
 
+            // Extra sentence when the user opted into partial refills.
+            var refillBehaviourClause = refillUntilExhausted
+                ? " Refills will use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
+                : string.Empty;
+
             var inAppMessage =
-                $"{triggerClause} You can pause or edit this anytime.";
+                $"{triggerClause}{refillBehaviourClause} You can pause or edit this anytime.";
 
             var emailSubject = $"Automation is on for {walletName}";
 
             var emailMessage =
-                $"{triggerClause} " +
+                $"{triggerClause}{refillBehaviourClause} " +
                 $"You can pause or edit this automation anytime from your wallet settings.";
 
             try

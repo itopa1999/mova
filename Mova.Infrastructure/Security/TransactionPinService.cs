@@ -161,21 +161,30 @@ public class TransactionPinService : ITransactionPinService
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // INVALIDATION — matches IdentityService.InvalidateUserCacheAsync
+    // so both services invalidate the exact same keys.
+    // ─────────────────────────────────────────────────────────────
     private async Task InvalidateUserCacheAsync(User user)
     {
-        await _cache.DeleteAsync(
-            CacheKeys.ProfileByIdentifier(user.PublicId));
+        // Single canonical profile key.
+        await _cache.DeleteAsync(CacheKeys.Profile(user.Id));
+
+        // Identifier index entries — short TTL anyway, deleted eagerly
+        // so the next lookup re-resolves cleanly.
+        if (!string.IsNullOrWhiteSpace(user.PublicId))
+        {
+            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PublicId));
+        }
 
         if (!string.IsNullOrWhiteSpace(user.Email))
         {
-            await _cache.DeleteAsync(
-                CacheKeys.ProfileByIdentifier(user.Email));
+            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.Email));
         }
 
         if (!string.IsNullOrWhiteSpace(user.PhoneNumber))
         {
-            await _cache.DeleteAsync(
-                CacheKeys.ProfileByIdentifier(user.PhoneNumber));
+            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PhoneNumber));
         }
     }
 }

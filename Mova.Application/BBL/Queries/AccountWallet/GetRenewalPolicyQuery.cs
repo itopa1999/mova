@@ -37,6 +37,9 @@ public sealed class GetRenewalPolicyQuery
         public decimal RefillAmount { get; init; }
         public decimal RefillAmountEffective { get; init; }
 
+        public bool RefillUntilMainBalanceExhausted { get; set; }
+
+
         public decimal MinMainBalance { get; init; }
 
         public int? MaxRenewals { get; init; }
@@ -122,6 +125,7 @@ public sealed class GetRenewalPolicyQuery
                 RefillAmount = policy.RefillAmount.ToDecimal(),
                 RefillAmountEffective = refillAmountEffective,
                 MinMainBalance = policy.MinMainBalance.ToDecimal(),
+                RefillUntilMainBalanceExhausted = policy.RefillUntilMainBalanceExhausted,
                 MaxRenewals = policy.MaxRenewals,
                 RenewalsCount = policy.RenewalsCount,
                 RenewalsRemaining = renewalsRemaining,

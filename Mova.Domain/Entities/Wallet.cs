@@ -42,6 +42,7 @@ public class Wallet : BaseEntity
     // The cumulative amount from previous release windows that was not withdrawn before the next release.
 
     public PayoutDestination PayoutDestination { get; set; } = PayoutDestination.Bank;
+    public int RestartCount { get; set; } = 0;
     public WalletStatus Status { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }

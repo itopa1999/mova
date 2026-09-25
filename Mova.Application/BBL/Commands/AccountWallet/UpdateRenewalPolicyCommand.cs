@@ -40,6 +40,8 @@ public sealed class UpdateRenewalPolicyCommand
         public decimal MinMainBalance { get; set; }
 
         public int? MaxRenewals { get; set; }
+
+        public bool RefillUntilMainBalanceExhausted { get; set; }
     }
 
     public sealed class UpdateRenewalPolicyResponseDto
@@ -52,13 +54,16 @@ public sealed class UpdateRenewalPolicyCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
+        private readonly INotificationQueue _notificationQueue;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            ILogger<Handler> logger)
+            ILogger<Handler> logger,
+            INotificationQueue notificationQueue)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _notificationQueue = notificationQueue;
         }
 
         public async Task<BaseResult<UpdateRenewalPolicyResponseDto>> Handle(
@@ -170,7 +175,11 @@ public sealed class UpdateRenewalPolicyCommand
                 }
             }
 
-            if (request.MinMainBalance < 0)
+            var effectiveMinMainBalance = request.RefillUntilMainBalanceExhausted
+                ? 0m
+                : request.MinMainBalance;
+
+            if (effectiveMinMainBalance < 0)
             {
                 op.Fail("Min main balance cannot be negative.");
                 return new BaseResult<UpdateRenewalPolicyResponseDto>(
@@ -198,15 +207,20 @@ public sealed class UpdateRenewalPolicyCommand
                 policy.RefillAmount = refillAmountType.Value == RefillAmountType.Custom
                     ? Money.FromNaira(request.RefillAmount)
                     : Money.FromNaira(0);
-                policy.MinMainBalance = Money.FromNaira(request.MinMainBalance);
+                policy.MinMainBalance = Money.FromNaira(effectiveMinMainBalance);
                 policy.MaxRenewals = request.MaxRenewals;
+                policy.RefillUntilMainBalanceExhausted =
+                    request.RefillUntilMainBalanceExhausted;
+                policy.ModifiedAt = DateTimeOffset.UtcNow;
 
                 _unitOfWork.Update(policy);
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                op.Success($"Renewal policy updated. PolicyId: {policy.Id}");
+                op.Success(
+                    $"Renewal policy updated. PolicyId: {policy.Id}, " +
+                    $"RefillUntilExhausted: {request.RefillUntilMainBalanceExhausted}");
             }
             catch (Exception ex)
             {
@@ -224,6 +238,24 @@ public sealed class UpdateRenewalPolicyCommand
                     "An error occurred while updating automation.");
             }
 
+            try
+            {
+                await SendRenewalPolicyUpdatedNotificationsAsync(
+                    request.UserPublicId,
+                    request.Email,
+                    request.FirstName,
+                    wallet.Id,
+                    wallet.Name,
+                    request.RefillUntilMainBalanceExhausted);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Notification block failed for updated renewal policy on wallet {WalletId}.",
+                    wallet.Id);
+            }
+
             return new BaseResult<UpdateRenewalPolicyResponseDto>(
                 HttpStatusCode.OK,
                 "Automation updated successfully.",
@@ -231,6 +263,67 @@ public sealed class UpdateRenewalPolicyCommand
                 {
                     WalletName = wallet.Name,
                 });
+        }
+
+        private async Task SendRenewalPolicyUpdatedNotificationsAsync(
+            string userPublicId,
+            string email,
+            string firstName,
+            long walletId,
+            string walletName,
+            bool refillUntilExhausted)
+        {
+            var title = $"{walletName} automation updated";
+
+            var refillBehaviourClause = refillUntilExhausted
+                ? " Refills will now use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
+                : string.Empty;
+
+            var inAppMessage =
+                $"Your automation settings for {walletName} have been updated." +
+                refillBehaviourClause;
+
+            var emailSubject = $"Automation updated for {walletName}";
+
+            var emailMessage =
+                $"Your automation settings for {walletName} have been updated. " +
+                $"You can review or change them anytime from the wallet settings." +
+                refillBehaviourClause;
+
+            try
+            {
+                _notificationQueue.InAppNotificationAsync(
+                    userPublicId,
+                    NotificationType.Wallet,
+                    title,
+                    inAppMessage,
+                    $"/wallet/{walletId}/automation",
+                    null,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "In-app notification failed for updated renewal policy on wallet {WalletId}.",
+                    walletId);
+            }
+
+            try
+            {
+                _notificationQueue.QueueNotificationEmail(
+                    firstName,
+                    email,
+                    emailMessage,
+                    emailSubject);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Email queue failed for updated renewal policy on wallet {WalletId}.",
+                    walletId);
+            }
         }
     }
 }
