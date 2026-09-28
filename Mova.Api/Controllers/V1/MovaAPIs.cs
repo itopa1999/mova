@@ -5,9 +5,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
+using Mova.Application.BBL.Commands.Admin;
 using Mova.Application.BBL.Commands.FeatureFlags;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Shared.Common;
+using static Mova.Application.BBL.Commands.Admin.CreateVirtualAccountForUserCommand;
 using static Mova.Application.BBL.Commands.FeatureFlags.ToggleFeatureFlag;
 using static Mova.Application.BBL.MovaAPIs.GetFeatureFlags;
 using static Mova.Application.BBL.MovaAPIs.GetNotificationsQuery;
@@ -124,6 +126,21 @@ public class MovaQueries(
             IsEnabled = isEnabled,
         };
 
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPost("admin/virtual-accounts")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(
+        typeof(BaseResult<CreateVirtualAccountForUserResponseDto>),
+        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> CreateVirtualAccountForUser(
+        [FromBody] CreateVirtualAccountForUserCommand.Command command,
+        CancellationToken cancellationToken)
+    {
         var result = await _mediator.Send(command, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);

@@ -14,6 +14,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
                .IsRequired()
                .HasMaxLength(100);
 
+        builder.Property(x => x.BvnHash)
+            .HasMaxLength(100)
+            .IsRequired(false);
+
         builder.Property(x => x.LastName)
                .IsRequired()
                .HasMaxLength(100);

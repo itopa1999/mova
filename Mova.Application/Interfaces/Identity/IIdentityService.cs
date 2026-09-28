@@ -7,6 +7,7 @@ public interface IIdentityService
         string lastName,
         string email,
         string phoneNumber,
+        string BVN,
         string password);
 
     Task<(bool Success, string ErrorMessage)> AddToRoleAsync(
@@ -19,6 +20,11 @@ public interface IIdentityService
         
     Task<bool> EmailExistsAsync(
         string email,
+        long? excludeUserId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> BvnExistsAsync(
+        string bvnHash,
         long? excludeUserId = null,
         CancellationToken cancellationToken = default);
 

@@ -22,15 +22,18 @@ public sealed class IdentityService : IIdentityService
 
     private readonly UserManager<User> _userManager;
     private readonly ApplicationDbContext _context;
+    private readonly IPasswordHasher<User> _passwordHasher;
     private readonly ICacheService _cache;
 
     public IdentityService(
         UserManager<User> userManager,
         ApplicationDbContext context,
+        IPasswordHasher<User> passwordHasher,
         ICacheService cache)
     {
         _userManager = userManager;
         _context = context;
+        _passwordHasher = passwordHasher;
         _cache = cache;
     }
 
@@ -39,6 +42,7 @@ public sealed class IdentityService : IIdentityService
         string lastName,
         string email,
         string phoneNumber,
+        string bvn,
         string password)
     {
         var user = new User
@@ -51,6 +55,8 @@ public sealed class IdentityService : IIdentityService
             PublicId = string.Empty,
             ProfilePicture = DefaultProfilePictures.PickRandom(),
         };
+
+        user.BvnHash = _passwordHasher.HashPassword(user, bvn);
 
         var result = await _userManager.CreateAsync(user, password);
 
@@ -189,6 +195,23 @@ public sealed class IdentityService : IIdentityService
         var query = _context.Users
             .AsNoTracking()
             .Where(x => x.NormalizedEmail == normalizedEmail);
+
+        if (excludeUserId.HasValue)
+        {
+            query = query.Where(x => x.Id != excludeUserId.Value);
+        }
+
+        return await query.AnyAsync(cancellationToken);
+    }
+
+    public async Task<bool> BvnExistsAsync(
+        string bvnHash,
+        long? excludeUserId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.Users
+            .AsNoTracking()
+            .Where(x => x.BvnHash == bvnHash);
 
         if (excludeUserId.HasValue)
         {

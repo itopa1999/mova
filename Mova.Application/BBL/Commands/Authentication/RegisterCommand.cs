@@ -36,6 +36,11 @@ public sealed class RegisterCommand
         [JsonPropertyName("phonenumber")]
         public string PhoneNumber { get; init; } = string.Empty;
 
+        [Required]
+        [RegularExpression(@"^\d{11}$", ErrorMessage = "BVN must be 11 digits.")]
+        [JsonPropertyName("bvn")]
+        public string Bvn { get; init; } = string.Empty;
+
         [MinLength(8)]
         [JsonPropertyName("password")]
         public string Password { get; init; } = string.Empty;
@@ -112,6 +117,18 @@ public sealed class RegisterCommand
                     "Email is already in use.");
             }
 
+            var bvnExists = await _identityService.BvnExistsAsync(
+                request.Bvn,
+                cancellationToken: cancellationToken);
+
+            if (bvnExists)
+            {
+                op.Fail("BVN already registered.");
+                return new BaseResult<RegistrationResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "This BVN is already registered to another account.");
+            }
+
             var phoneExists = await _identityService.PhoneExistsAsync(
                 normalizedPhoneNumber,
                 cancellationToken: cancellationToken);
@@ -136,6 +153,7 @@ public sealed class RegisterCommand
                     lastName,
                     normalizedEmail,
                     normalizedPhoneNumber,
+                    request.Bvn,
                     request.Password);
 
                 if (!success)
@@ -224,7 +242,7 @@ public sealed class RegisterCommand
                     Phone = normalizedPhoneNumber,
                     FullName = $"{firstName} {lastName}",
                     Data = "Account created. Please verify your email/phone with the OTP sent.",
-                    NextStep = "Email Verification"
+                    NextStep = NextSteps.EmailVerification
                 });
         }
     }

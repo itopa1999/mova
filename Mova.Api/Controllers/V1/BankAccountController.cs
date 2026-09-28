@@ -17,6 +17,7 @@ using static Mova.Application.BBL.Commands.BanksAccount.AddBankAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.FundAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.VerifyBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.DepositTransaction;
+using static Mova.Application.BBL.Queries.BanksAccount.GetAccountForFunding;
 using static Mova.Application.BBL.Queries.BanksAccount.GetAllBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.GetBanks;
 using static Mova.Application.BBL.Queries.BanksAccount.GetTransactions;
@@ -210,6 +211,23 @@ public class BankAccountController(
         var result = await _mediator.Send(command, cancellationToken);
         return StatusCode((int)result.StatusCode, result);
     }
+
+    [HttpGet("funding-method")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<GetAccountForFundingResponse>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetFundingMethod(CancellationToken cancellationToken)
+    {
+
+        var query = new GetAccountForFunding.Query
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
 
     [HttpGet("payment/callback")]
     [AllowAnonymous]

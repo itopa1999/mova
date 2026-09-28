@@ -94,4 +94,23 @@ public sealed class NotificationQueue : INotificationQueue
                 Metadata,
                 CancellationToken.None));
     }
+
+    public void QueueCreateVirtualAccount(
+        string userPublicId,
+        string firstName,
+        string lastName,
+        string email,
+        string phoneNumber)
+    {
+        _backgroundJobClient.Enqueue<BackgroundTaskJob>(
+            job => job.CreateVirtualAccountAsync(
+                userPublicId,
+                firstName,
+                lastName,
+                email,
+                phoneNumber,
+                CancellationToken.None));
+    }
+
+
 }

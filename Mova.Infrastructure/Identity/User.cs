@@ -28,7 +28,9 @@ public class User : IdentityUser<long>
     public string? ProfilePicture { get; set; } = string.Empty;
             
     public string? TransactionPinHash { get; set; }
-
+    
+    [MaxLength(100)]
+    public string? BvnHash { get; set; }
     public DateTimeOffset? TransactionPinSetAt { get; set; }
 
     public DateTimeOffset? TransactionPinResetAt { get; set; }

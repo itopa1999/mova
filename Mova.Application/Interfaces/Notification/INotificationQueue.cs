@@ -1,5 +1,4 @@
 using Mova.Domain.Enums;
-using Mova.Shared.Constants;
 
 namespace Mova.Application.Interfaces.Notification;
 
@@ -35,5 +34,13 @@ public interface INotificationQueue
         string? ActionUrl,
         string? Metadata,
         CancellationToken cancellationToken = default
+    );
+
+    void QueueCreateVirtualAccount(
+        string userPublicId,
+        string firstName,
+        string lastName,
+        string email,
+        string phoneNumber
     );
 }

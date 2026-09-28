@@ -144,12 +144,10 @@ public sealed class HomeQuery
                     .ToListAsync(cancellationToken);
 
                 var allWallets = await _unitOfWork.Query<Wallet>()
-                    .Where(w => w.UserPublicId == request.UserPublicId
-                                && (w.Status == WalletStatus.Active
-                                    || w.Status == WalletStatus.Paused))
+                    .Where(w => w.UserPublicId == request.UserPublicId)
                     .ToListAsync(cancellationToken);
 
-                var totalAvailableAmount = allWallets.Sum(w => w.AvailableAmount.ToDecimal());
+                var totalAvailableAmount = allWallets.Sum(w => w.AvailableAmount.ToDecimal() + w.UnusedAmount.ToDecimal());
                 var totalLockedAmount = allWallets.Sum(w => w.LockedAmount.ToDecimal());
 
                 var walletSummaries = wallets.Select(w =>
@@ -202,13 +200,6 @@ public sealed class HomeQuery
             }
         }
 
-        /// <summary>
-        /// For each of the last N months, returns the sum of TargetAmount
-        /// for wallets created in that month.
-        ///
-        /// Example output for months = 5 on Sep 2026:
-        ///   May 2026, Jun 2026, Jul 2026, Aug 2026, Sep 2026
-        /// </summary>
         private async Task<List<LockedAmountPoint>> BuildLockedAmountHistoryAsync(
             string userPublicId,
             int months,

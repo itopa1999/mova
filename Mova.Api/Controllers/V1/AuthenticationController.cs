@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.Authentication;
+using Mova.Application.BBL.Queries.Authentication;
 using Mova.Application.BBL.Queries.Profile;
 using Mova.Infrastructure.Authentication.Jwt;
 using Mova.Shared.Common;
@@ -19,6 +20,7 @@ using static Mova.Application.BBL.Commands.Authentication.ResendVerificationOtpC
 using static Mova.Application.BBL.Commands.Authentication.UpdateNotificationPreferenceCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyAccountCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyPasswordTokenCommand;
+using static Mova.Application.BBL.Queries.Authentication.CheckRegistrationAvailability;
 using static Mova.Application.BBL.Queries.Profile.GetProfile;
 
 namespace Mova.Api.Controllers.V1;
@@ -32,6 +34,24 @@ public class AuthenticationController(
 {
     private readonly IMediator _mediator = mediator;
     private readonly JwtSettings _jwt = jwtOptions.Value;
+
+    [HttpPost("check-availability")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
+    [ProducesResponseType(
+        typeof(BaseResult<CheckRegistrationAvailabilityResponseDto>),
+        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> CheckRegistrationAvailability(
+        [FromBody] CheckRegistrationAvailability.Query query,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
 
     [HttpPost("register")]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]

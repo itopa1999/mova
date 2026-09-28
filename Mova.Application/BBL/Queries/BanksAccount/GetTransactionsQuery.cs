@@ -16,29 +16,13 @@ public sealed class GetTransactions
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
         public int Page { get; set; } = 1;
-
-        /// <summary>Items per page. Capped at 100 server-side.</summary>
         public int PageSize { get; set; } = 20;
-
-        /// <summary>Optional. Filter by transaction type (Deposit, Release, Fee, ...).</summary>
         public TransactionType? Type { get; set; }
-
-        /// <summary>Optional. Filter by status (Pending, Completed, Failed, ...).</summary>
         public TransactionStatus? Status { get; set; }
-
-        /// <summary>Optional. Filter by wallet. Use 0 or null for "all wallets".</summary>
         public long? WalletId { get; set; }
-
-        /// <summary>Optional. Filter by provider (Paystack, Monnify, Flutterwave).</summary>
         public PaymentProvider? Provider { get; set; }
-
-        /// <summary>Optional. Only return transactions created on or after this date.</summary>
         public DateTimeOffset? FromDate { get; set; }
-
-        /// <summary>Optional. Only return transactions created on or before this date.</summary>
         public DateTimeOffset? ToDate { get; set; }
-
-        /// <summary>Optional. Case-insensitive search on title and reference.</summary>
         public string? Search { get; set; }
     }
 
@@ -84,17 +68,14 @@ public sealed class GetTransactions
             Query request,
             CancellationToken cancellationToken)
         {
-            // ─── Normalize pagination ─────────────────────────────
             var page = request.Page < 1 ? 1 : request.Page;
             var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
-            // ─── Base query: user-scoped, not deleted ─────────────
             var query = _unitOfWork.Query<Transaction>()
                 .AsNoTracking()
                 .Where(x => x.UserPublicId == request.UserPublicId);
 
-            // ─── Filters ──────────────────────────────────────────
             if (request.Type.HasValue)
             {
                 query = query.Where(x => x.Type == request.Type.Value);
@@ -135,7 +116,6 @@ public sealed class GetTransactions
                     (x.Reference != null && x.Reference.ToLower().Contains(term)));
             }
 
-            // ─── Total + page ─────────────────────────────────────
             var totalItems = await query.CountAsync(cancellationToken);
 
             var items = await query
