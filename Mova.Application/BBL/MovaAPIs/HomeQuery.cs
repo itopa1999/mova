@@ -147,7 +147,7 @@ public sealed class HomeQuery
                     .Where(w => w.UserPublicId == request.UserPublicId)
                     .ToListAsync(cancellationToken);
 
-                var totalAvailableAmount = allWallets.Sum(w => w.AvailableAmount.ToDecimal() + w.UnusedAmount.ToDecimal());
+                var totalAvailableAmount = allWallets.Sum(w => w.AvailableAmount.ToDecimal());
                 var totalLockedAmount = allWallets.Sum(w => w.LockedAmount.ToDecimal());
 
                 var walletSummaries = wallets.Select(w =>

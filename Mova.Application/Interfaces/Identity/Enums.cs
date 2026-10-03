@@ -17,7 +17,8 @@ public sealed record UserIdentityDto(
     bool NotifyReleaseAlerts,
     bool NotifyProductUpdates,
     bool NotifyPromotions,
-    string LastKnownDeviceId
+    string LastKnownDeviceId,
+    DateTimeOffset CreatedAt
 )
 {
     public string FullName =>

@@ -40,7 +40,7 @@ public sealed class WalletDetails
         public decimal LockedAmount { get; set; }
         public decimal TotalReleasedAmount { get; set; }
         public decimal AvailableAmount { get; set; }
-        public decimal UnusedAmount { get; set; }
+        public decimal ResetAmount { get; set; }
         public decimal TotalWithdrawnAmount { get; set; }
         public decimal ProgressPercentage { get; set; }
 
@@ -325,9 +325,10 @@ public sealed class WalletDetails
                     LockedAmount = wallet.LockedAmount.ToDecimal(),
                     TotalReleasedAmount = wallet.TotalReleasedAmount.ToDecimal(),
                     AvailableAmount = wallet.AvailableAmount.ToDecimal(),
-                    UnusedAmount = wallet.UnusedAmount.ToDecimal(),
                     TotalWithdrawnAmount = wallet.TotalWithdrawnAmount.ToDecimal(),
                     ProgressPercentage = progressPercentage,
+
+                    ResetAmount = wallet.ResetAmount.ToDecimal(),
 
                     ReleaseAmount = rule?.Amount.ToDecimal() ?? 0,
                     Frequency = rule != null

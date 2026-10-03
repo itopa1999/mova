@@ -98,9 +98,7 @@ public sealed class BreakWalletCommand
 
                 var totalWalletAmount =
                     wallet.LockedAmount +
-                    wallet.AvailableAmount +
-                    wallet.UnusedAmount;
-
+                    wallet.AvailableAmount;
                 if (totalWalletAmount.MinorUnits <= 0)
                 {
                     await _unitOfWork.RollbackTransactionAsync(cancellationToken);
@@ -218,7 +216,6 @@ public sealed class BreakWalletCommand
 
                 wallet.LockedAmount = Money.FromNaira(0);
                 wallet.AvailableAmount = Money.FromNaira(0);
-                wallet.UnusedAmount = Money.FromNaira(0);
                 wallet.Status = WalletStatus.Broken;
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);

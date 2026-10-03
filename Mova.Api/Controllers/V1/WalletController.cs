@@ -56,26 +56,26 @@ public class WalletController(
             result);
     }
 
-    [HttpPost("{walletId:long}/relock-unused")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> RelockUnusedFunds(
-        long walletId,
-        CancellationToken cancellationToken)
-    {
-        var command = new RelockUnusedFundsCommand.Command
-        {
-            WalletId = walletId,
-            UserPublicId = UserPublicId ?? string.Empty
-        };
+    // [HttpPost("{walletId:long}/relock-unused")]
+    // [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    // [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    // [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    // public async Task<IActionResult> RelockUnusedFunds(
+    //     long walletId,
+    //     CancellationToken cancellationToken)
+    // {
+    //     var command = new RelockUnusedFundsCommand.Command
+    //     {
+    //         WalletId = walletId,
+    //         UserPublicId = UserPublicId ?? string.Empty
+    //     };
 
-        var result = await _mediator.Send(command, cancellationToken);
+    //     var result = await _mediator.Send(command, cancellationToken);
 
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
-    }
+    //     return StatusCode(
+    //         (int)result.StatusCode,
+    //         result);
+    // }
 
     [HttpGet("{walletId:long}/schedule-preview")]
     [EnableRateLimiting(RateLimitPolicies.Read)]

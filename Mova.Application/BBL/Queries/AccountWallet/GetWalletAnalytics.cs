@@ -51,7 +51,6 @@ public sealed class GetWalletAnalytics
         public decimal Released { get; init; }
         public decimal Withdrawn { get; init; }
         public decimal Available { get; init; }
-        public decimal Unused { get; init; }
         public decimal Target { get; init; }
         public PayoutDestination Destination { get; init; }
         public long CategoryId { get; init; }
@@ -116,7 +115,6 @@ public sealed class GetWalletAnalytics
                     Released = x.TotalReleasedAmount.ToDecimal(),
                     Withdrawn = x.TotalWithdrawnAmount.ToDecimal(),
                     Available = x.AvailableAmount.ToDecimal(),
-                    Unused = x.UnusedAmount.ToDecimal(),
                     Target = x.TargetAmount.ToDecimal(),
                     Destination = x.PayoutDestination,
                     CategoryId = x.CategoryId

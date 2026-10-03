@@ -189,6 +189,7 @@ public sealed class RestartWalletCommand
                 wallet.TargetAmount = targetMoney;
                 wallet.FundedAmount += targetMoney;
                 wallet.LockedAmount += targetMoney;
+                wallet.ResetAmount = Money.FromNaira(0);
                 wallet.CompletedAt = null;
                 wallet.RestartCount += 1;
 

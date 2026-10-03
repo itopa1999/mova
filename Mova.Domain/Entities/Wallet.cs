@@ -38,8 +38,7 @@ public class Wallet : BaseEntity
     public Money FundedAmount { get; set; } = Money.FromNaira(0);
     // The total amount funded into this wallet.
 
-    public Money UnusedAmount { get; set; } = Money.FromNaira(0);
-    // The cumulative amount from previous release windows that was not withdrawn before the next release.
+    public Money ResetAmount { get; set; } = Money.FromNaira(0);
 
     public PayoutDestination PayoutDestination { get; set; } = PayoutDestination.Bank;
     public int RestartCount { get; set; } = 0;

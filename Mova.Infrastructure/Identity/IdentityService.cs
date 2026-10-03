@@ -181,7 +181,8 @@ public sealed class IdentityService : IIdentityService
                 x.NotifyReleaseAlerts,
                 x.NotifyProductUpdates,
                 x.NotifyPromotions,
-                x.LastKnownDeviceId ?? string.Empty))
+                x.LastKnownDeviceId ?? string.Empty,
+                x.CreatedAt.Value))
             .FirstOrDefaultAsync(cancellationToken);
     }
 

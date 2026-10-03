@@ -168,11 +168,11 @@ public sealed class ProcessScheduledReleasesJob
 
             wallet.LockedAmount -= scheduledRelease.Amount;
             wallet.TotalReleasedAmount += scheduledRelease.Amount;
+            wallet.ResetAmount += scheduledRelease.Amount;
 
             if (wallet.PayoutDestination == PayoutDestination.Wallet)
             {
-                wallet.UnusedAmount += wallet.AvailableAmount;
-                wallet.AvailableAmount = scheduledRelease.Amount;
+                wallet.AvailableAmount += scheduledRelease.Amount;
                 op.Success("Release kept in wallet available balance.");
             }
             else if (wallet.PayoutDestination == PayoutDestination.Bank

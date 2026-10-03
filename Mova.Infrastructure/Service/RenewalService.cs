@@ -344,6 +344,7 @@ public sealed class RenewalService : IRenewalService
 
             wallet.LockedAmount += refillMoney;
             wallet.FundedAmount += refillMoney;
+            wallet.ResetAmount = Money.FromNaira(0);
 
             if (wallet.Status == WalletStatus.Completed)
             {

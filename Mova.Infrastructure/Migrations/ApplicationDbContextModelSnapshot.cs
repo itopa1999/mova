@@ -1378,6 +1378,19 @@ namespace Mova.Infrastructure.Migrations
                                 .HasColumnName("locked_amount_minor_units");
                         });
 
+                    b.ComplexProperty<Dictionary<string, object>>("ResetAmount", "Mova.Domain.Entities.Wallet.ResetAmount#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("reset_amount_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("reset_amount_minor_units");
+                        });
+
                     b.ComplexProperty<Dictionary<string, object>>("TargetAmount", "Mova.Domain.Entities.Wallet.TargetAmount#Money", b1 =>
                         {
                             b1.Property<string>("Currency")
@@ -1415,19 +1428,6 @@ namespace Mova.Infrastructure.Migrations
                             b1.Property<long>("MinorUnits")
                                 .HasColumnType("bigint")
                                 .HasColumnName("total_withdrawn_amount_minor_units");
-                        });
-
-                    b.ComplexProperty<Dictionary<string, object>>("UnusedAmount", "Mova.Domain.Entities.Wallet.UnusedAmount#Money", b1 =>
-                        {
-                            b1.Property<string>("Currency")
-                                .IsRequired()
-                                .HasMaxLength(3)
-                                .HasColumnType("character varying(3)")
-                                .HasColumnName("unused_amount_currency");
-
-                            b1.Property<long>("MinorUnits")
-                                .HasColumnType("bigint")
-                                .HasColumnName("unused_amount_minor_units");
                         });
 
                     b.HasKey("Id");
@@ -1701,6 +1701,20 @@ namespace Mova.Infrastructure.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -1712,6 +1726,9 @@ namespace Mova.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("LastKnownDeviceId")
                         .HasMaxLength(200)
@@ -1727,6 +1744,13 @@ namespace Mova.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)

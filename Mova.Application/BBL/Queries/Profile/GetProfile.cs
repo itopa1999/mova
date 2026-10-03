@@ -25,6 +25,7 @@ public sealed class GetProfile
         public string? ProfilePicture { get; set; } = string.Empty;
         public decimal Balance { get; set; }
         public bool HasPinSet { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
 
         // ─── Notification preferences ─────────────────
         public NotificationPreferencesDto Notifications { get; set; } = new();

@@ -81,15 +81,15 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             });
 
         builder.ComplexProperty(
-            x => x.UnusedAmount,
+            x => x.ResetAmount,
             money =>
             {
                 money.Property(x => x.MinorUnits)
-                    .HasColumnName("unused_amount_minor_units")
+                    .HasColumnName("reset_amount_minor_units")
                     .IsRequired();
 
                 money.Property(x => x.Currency)
-                    .HasColumnName("unused_amount_currency")
+                    .HasColumnName("reset_amount_currency")
                     .HasMaxLength(3)
                     .IsRequired();
             });

@@ -359,7 +359,7 @@ public sealed class CreateWalletCommand
                     FundedAmount = targetMoney,
                     AvailableAmount = Money.FromNaira(0),
                     LockedAmount = targetMoney,
-                    UnusedAmount = Money.FromNaira(0),
+                    ResetAmount = Money.FromNaira(0),
                     Status = WalletStatus.Active,
                 };
 

@@ -53,4 +53,21 @@ public class User : IdentityUser<long>
     public bool NotifyPromotions { get; set; } = false;
 
     public Money Balance { get; set; } = Money.FromNaira(0); // The current balance of the user, representing the total amount of funds available for transactions
-}
+
+    public DateTimeOffset? CreatedAt { get; set; }
+
+    public DateTimeOffset? ModifiedAt { get; set; }
+
+    public bool IsDeleted { get; set; }
+
+    public DateTimeOffset? DeletedAt { get; set; }
+
+    [MaxLength(100)]
+    public string? CreatedBy { get; set; }
+
+    [MaxLength(100)]
+    public string? ModifiedBy { get; set; }
+
+    [MaxLength(100)]
+    public string? DeletedBy { get; set; }
+    }
