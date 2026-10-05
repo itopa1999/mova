@@ -18,8 +18,10 @@ public sealed class ResendVerificationOtpCommand
 {
     public class Command : IRequest<BaseResult<ResendVerificationOtpResponseDto>>
     {
-        [EmailAddress]
+        [Required, EmailAddress, MaxLength(100)]
         public string Email { get; init; } = string.Empty;
+
+        [Required, MaxLength(50)]
         public string Purpose { get; init; } = "account-verification";
     }
 

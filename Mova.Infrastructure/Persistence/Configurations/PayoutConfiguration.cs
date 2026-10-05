@@ -102,6 +102,10 @@ public sealed class PayoutConfiguration : IEntityTypeConfiguration<Payout>
         builder.HasIndex(x => x.Reference)
             .IsUnique();
 
+        builder.HasIndex(x => x.Id)
+            .HasDatabaseName("IX_payouts_ProcessingQueue")
+            .HasFilter("\"IsDeleted\" = FALSE AND (\"Status\" = 1 OR \"Status\" = 2)");
+
         builder.HasIndex(x => new
         {
             x.WalletId,

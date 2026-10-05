@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ public sealed class GetReleasesQuery
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+        [Range(1, 100)]
         public int UpcomingLimit { get; set; } = 3;
     }
 

@@ -18,7 +18,7 @@ public sealed class ForgotPasswordCommand
 {
     public class Command : IRequest<BaseResult<ForgotPasswordResponseDto>>
     {
-        [EmailAddress, MaxLength(100)]
+        [Required, EmailAddress, MaxLength(100)]
         public string? Email { get; init; }
     }
 

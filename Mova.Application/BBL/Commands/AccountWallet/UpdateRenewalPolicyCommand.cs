@@ -9,6 +9,7 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
+using System.ComponentModel.DataAnnotations;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 
@@ -27,18 +28,25 @@ public sealed class UpdateRenewalPolicyCommand
         [JsonIgnore]
         public string FirstName { get; set; } = string.Empty;
 
+        [Range(1, long.MaxValue)]
         public long WalletId { get; set; }
 
+        [Required, RegularExpression(@"(?i)^\s*(oncompletion|onthreshold)\s*$", ErrorMessage = "Trigger type must be oncompletion or onthreshold.")]
         public string TriggerType { get; set; } = string.Empty;
 
+        [Range(typeof(decimal), "0", "100000000")]
         public decimal TriggerAmount { get; set; }
 
+        [Required, RegularExpression(@"(?i)^\s*(fixed|custom)\s*$", ErrorMessage = "Refill amount type must be fixed or custom.")]
         public string RefillAmountType { get; set; } = string.Empty;
 
+        [Range(typeof(decimal), "0", "100000000")]
         public decimal RefillAmount { get; set; }
 
+        [Range(typeof(decimal), "0", "92233720368547758.07")]
         public decimal MinMainBalance { get; set; }
 
+        [Range(1, int.MaxValue)]
         public int? MaxRenewals { get; set; }
 
         public bool RefillUntilMainBalanceExhausted { get; set; }

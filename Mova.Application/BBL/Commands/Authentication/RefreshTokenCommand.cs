@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,7 +17,10 @@ public sealed class RefreshTokenCommand
 {
     public class Command : IRequest<BaseResult<RefreshTokenResponseDto>>
     {
+        [MaxLength(4096)]
         public string RefreshToken { get; set; } = string.Empty;
+
+        [Required, MaxLength(20)]
         public string Platform { get; init; } = Platforms.Mobile;
     }
 

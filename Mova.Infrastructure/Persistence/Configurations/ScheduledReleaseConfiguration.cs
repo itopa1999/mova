@@ -54,17 +54,19 @@ public class ScheduledReleaseConfiguration
         builder.HasIndex(x => new
         {
             x.Status,
-            x.ScheduledFor
-        });
+            x.ScheduledFor,
+            x.Id
+        })
+            .HasDatabaseName("IX_scheduled_releases_Status_ScheduledFor_Id");
 
         builder.HasIndex(x => new
         {
             x.WalletRuleId,
-            x.ScheduledFor
-        });
+            x.ScheduledFor,
+            x.Status
+        })
+            .HasDatabaseName("IX_scheduled_releases_WalletRuleId_ScheduledFor_Status");
 
         builder.HasIndex(x => x.WalletId);
-
-        builder.HasIndex(x => x.WalletRuleId);
     }
 }

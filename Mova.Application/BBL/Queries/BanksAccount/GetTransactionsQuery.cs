@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -6,23 +7,40 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Application.Validation;
 
 namespace Mova.Application.BBL.Queries.BanksAccount;
 
 public sealed class GetTransactions
 {
+    [DateRangeOrder(nameof(FromDate), nameof(ToDate))]
     public sealed class Query : IRequest<BaseResult<PaginatedTransactionsDto>>
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+        [Range(1, 1000000)]
         public int Page { get; set; } = 1;
+
+        [Range(1, 100)]
         public int PageSize { get; set; } = 20;
+
+        [EnumDataType(typeof(TransactionType))]
         public TransactionType? Type { get; set; }
+
+        [EnumDataType(typeof(TransactionStatus))]
         public TransactionStatus? Status { get; set; }
+
+        [Range(1, long.MaxValue)]
         public long? WalletId { get; set; }
+
+        [EnumDataType(typeof(PaymentProvider))]
         public PaymentProvider? Provider { get; set; }
+
         public DateTimeOffset? FromDate { get; set; }
+
         public DateTimeOffset? ToDate { get; set; }
+
+        [MaxLength(100)]
         public string? Search { get; set; }
     }
 

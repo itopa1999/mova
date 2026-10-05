@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -26,8 +27,10 @@ public sealed class LinkAccountToBank
         public string FirstName { get; set; } = string.Empty;
 
         [JsonIgnore]
+        [Range(1, long.MaxValue)]
         public long WalletId { get; set; } = 0;
 
+        [Range(1, long.MaxValue)]
         public long BankAccountId { get; set; }
     }
 

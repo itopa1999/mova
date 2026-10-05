@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Mova.Application.Interfaces.Payment;
 using Mova.Shared.Common;
@@ -8,6 +9,7 @@ public sealed class GetBanks
 {
     public sealed class Query : IRequest<BaseResult<GetBanksDto>>
     {
+        [MaxLength(100)]
         public string? Name { get; init; }
     }
 

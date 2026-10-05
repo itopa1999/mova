@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Payment;
@@ -11,7 +12,10 @@ public sealed class VerifyBankAccount
 {
     public sealed class Command : IRequest<BaseResult<VerifyBankAccountDto>>
     {
+        [Required, RegularExpression(@"^\d{10}$", ErrorMessage = "Account number must be exactly 10 digits.")]
         public string AccountNumber { get; init; } = string.Empty;
+
+        [Required, MaxLength(20), RegularExpression(@"^[a-zA-Z0-9]+$")]
         public string BankCode { get; init; } = string.Empty;
     }
 

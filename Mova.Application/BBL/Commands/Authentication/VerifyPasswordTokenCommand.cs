@@ -16,9 +16,10 @@ public sealed class VerifyPasswordTokenCommand
 {
     public class Command : IRequest<BaseResult<VerifyPasswordTokenResponseDto>>
     {
+        [Required, MaxLength(100)]
         public string UserPublicId { get; init; } = string.Empty;
 
-        [MinLength(6), MaxLength(6)]
+        [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "Verification code must be exactly 6 digits.")]
         public string Token { get; init; } = string.Empty;
     }
 

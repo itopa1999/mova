@@ -19,9 +19,7 @@ public sealed class SetPinCommand
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
 
-        [Required]
-        [MinLength(6, ErrorMessage = "PIN must be at least 6 characters.")]
-        [MaxLength(6, ErrorMessage = "PIN must be exactly 6 characters.")]
+        [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "PIN must be exactly 6 digits.")]
         public string Pin { get; init; } = string.Empty;
     }
 

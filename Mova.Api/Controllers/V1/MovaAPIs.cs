@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -117,13 +118,13 @@ public class MovaQueries(
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> Toggle(
         [FromQuery] long id,
-        [FromQuery] bool isEnabled,
+        [FromQuery, Required] bool? isEnabled,
         CancellationToken cancellationToken = default)
     {
         var command = new ToggleFeatureFlag.Command
         {
             Id = id,
-            IsEnabled = isEnabled,
+            IsEnabled = isEnabled!.Value,
         };
 
         var result = await _mediator.Send(command, cancellationToken);

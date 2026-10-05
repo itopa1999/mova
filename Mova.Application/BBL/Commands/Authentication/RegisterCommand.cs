@@ -21,18 +21,19 @@ public sealed class RegisterCommand
 {
     public class Command : IRequest<BaseResult<RegistrationResponseDto>>
     {
-        [MinLength(3), MaxLength(100)]
+        [Required, MinLength(3), MaxLength(100)]
         [JsonPropertyName("firstname")]
         public string FirstName { get; init; } = string.Empty;
 
-        [MinLength(3), MaxLength(100)]
+        [Required, MinLength(3), MaxLength(100)]
         [JsonPropertyName("lastname")]
         public string LastName { get; init; } = string.Empty;
 
-        [EmailAddress, MaxLength(100)]
+        [Required, EmailAddress, MaxLength(100)]
         [JsonPropertyName("email")]
         public string Email { get; init; } = string.Empty;
 
+        [Required, MaxLength(20)]
         [JsonPropertyName("phonenumber")]
         public string PhoneNumber { get; init; } = string.Empty;
 
@@ -41,7 +42,7 @@ public sealed class RegisterCommand
         [JsonPropertyName("bvn")]
         public string Bvn { get; init; } = string.Empty;
 
-        [MinLength(8)]
+        [Required, MinLength(8), MaxLength(256)]
         [JsonPropertyName("password")]
         public string Password { get; init; } = string.Empty;
     }

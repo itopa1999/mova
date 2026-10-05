@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Mova.Application.Interfaces.Identity;
@@ -16,9 +17,11 @@ public sealed class UpdateNotificationPreferenceCommand
         /// <summary>
         /// One of: login, release, updates, promotions
         /// </summary>
+        [Required, MaxLength(30)]
         public string Key { get; set; } = string.Empty;
 
-        public bool Enabled { get; set; }
+        [Required]
+        public bool? Enabled { get; set; }
     }
 
     public sealed class UpdateNotificationPreferenceResponseDto
@@ -63,6 +66,13 @@ public sealed class UpdateNotificationPreferenceCommand
                     "Notification key is required.");
             }
 
+            if (request.Enabled is null)
+            {
+                return new BaseResult<UpdateNotificationPreferenceResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Notification preference state is required.");
+            }
+
             var key = request.Key.Trim().ToLowerInvariant();
 
             if (!AllowedKeys.Contains(key))
@@ -75,7 +85,7 @@ public sealed class UpdateNotificationPreferenceCommand
             var updated = await _identityService.UpdateNotificationPreferenceAsync(
                 request.UserPublicId,
                 key,
-                request.Enabled,
+                request.Enabled.Value,
                 cancellationToken);
 
             if (!updated)
@@ -91,7 +101,7 @@ public sealed class UpdateNotificationPreferenceCommand
                 new UpdateNotificationPreferenceResponseDto
                 {
                     Key = key,
-                    Enabled = request.Enabled,
+                    Enabled = request.Enabled.Value,
                 });
         }
     }

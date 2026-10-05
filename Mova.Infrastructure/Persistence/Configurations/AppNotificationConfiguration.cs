@@ -35,10 +35,21 @@ public class NotificationConfiguration
         builder.Property(x => x.Metadata)
             .HasColumnType("jsonb");
 
-        builder.HasIndex(x => x.UserPublicId);
+        builder.HasIndex(x => new
+            {
+                x.UserPublicId,
+                x.CreatedAt
+            })
+            .IsDescending(false, true)
+            .HasDatabaseName("IX_notifications_UserPublicId_CreatedAt");
 
-        builder.HasIndex(x => new { x.UserPublicId, x.IsRead });
-
-        builder.HasIndex(x => x.CreatedAt);
+        builder.HasIndex(x => new
+            {
+                x.UserPublicId,
+                x.IsRead,
+                x.CreatedAt
+            })
+            .IsDescending(false, false, true)
+            .HasDatabaseName("IX_notifications_UserPublicId_IsRead_CreatedAt");
     }
 }

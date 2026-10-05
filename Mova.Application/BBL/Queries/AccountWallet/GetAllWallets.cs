@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -18,12 +19,16 @@ public sealed class GetAllWallets
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
 
+        [Range(1, 1000000)]
         public int Page { get; set; } = 1;
+
+        [Range(1, 100)]
         public int PageSize { get; set; } = 10;
 
         /// <summary>
         /// Optional. Case-insensitive search on wallet name and description.
         /// </summary>
+        [MaxLength(100)]
         public string? Search { get; set; }
     }
 

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Persistence;
@@ -15,6 +16,8 @@ public sealed class LogoutCommand
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+
+        [MaxLength(4096)]
         public string RefreshToken { get; set; } = string.Empty;
     }
 

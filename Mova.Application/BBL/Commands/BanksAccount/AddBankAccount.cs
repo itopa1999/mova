@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -26,8 +27,10 @@ public sealed class AddBankAccount
         [JsonIgnore]
         public string FirstName { get; set; } = string.Empty;
 
+        [Required, RegularExpression(@"^\d{10}$", ErrorMessage = "Account number must be exactly 10 digits.")]
         public string AccountNumber { get; init; } = string.Empty;
 
+        [Required, MaxLength(20), RegularExpression(@"^[a-zA-Z0-9]+$")]
         public string BankCode { get; init; } = string.Empty;
 
         public bool Consent { get; init; }

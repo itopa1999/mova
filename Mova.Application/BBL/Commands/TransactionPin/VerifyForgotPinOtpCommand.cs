@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -26,8 +27,10 @@ public sealed class VerifyForgotPinOtpCommand
         public long UserId { get; set; }
 
         [JsonPropertyName("password")]
+        [Required, MaxLength(256)]
         public string Password { get; set; } = string.Empty;
 
+        [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "OTP must be exactly 6 digits.")]
         public string Otp { get; set; } = string.Empty;
     }
 

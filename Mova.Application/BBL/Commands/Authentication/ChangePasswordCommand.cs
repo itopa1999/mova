@@ -19,13 +19,13 @@ public sealed class ChangePasswordCommand
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
 
-        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
+        [Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters."), MaxLength(256)]
         public string OldPassword { get; init; } = string.Empty;
 
-        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
+        [Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters."), MaxLength(256)]
         public string NewPassword { get; init; } = string.Empty;
 
-        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
+        [Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters."), MaxLength(256)]
         public string ConfirmPassword { get; init; } = string.Empty;
     }
 

@@ -37,6 +37,8 @@ public class Startup(IConfiguration configuration)
             cfg.RegisterServicesFromAssembly(
                 typeof(AssemblyReference).Assembly
             );
+            cfg.AddOpenBehavior(
+                typeof(Application.Behaviors.RequestValidationBehavior<,>));
         });
 
         // Model Behaviour setting

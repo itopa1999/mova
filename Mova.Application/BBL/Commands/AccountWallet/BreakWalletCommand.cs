@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +27,7 @@ public sealed class BreakWalletCommand
         [JsonIgnore]
         public string FirstName { get; set; } = string.Empty;
 
+        [Range(1, long.MaxValue)]
         public long WalletId { get; set; }
     }
 

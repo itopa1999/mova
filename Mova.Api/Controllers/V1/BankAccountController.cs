@@ -192,10 +192,12 @@ public class BankAccountController(
     [ProducesResponseType(
         typeof(BaseResult<PaginatedTransactionsDto>),
         (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> GetTransactions([FromQuery] GetTransactions.Query query)
+    public async Task<IActionResult> GetTransactions(
+        [FromQuery] GetTransactions.Query query,
+        CancellationToken cancellationToken)
     {
         query.UserPublicId = UserPublicId ?? string.Empty;
-        var result = await _mediator.Send(query);
+        var result = await _mediator.Send(query, cancellationToken);
         return StatusCode((int)result.StatusCode, result);
     }
 

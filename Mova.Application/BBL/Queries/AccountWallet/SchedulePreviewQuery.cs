@@ -1,7 +1,9 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Service;
+using Mova.Application.Validation;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 
@@ -11,11 +13,22 @@ public sealed class SchedulePreviewQuery
 {
     public sealed class Query : IRequest<BaseResult<SchedulePreviewResponseDto>>
     {
+        [Range(typeof(decimal), "0.01", "100000000")]
         public decimal TargetAmount { get; set; }
+
+        [Range(typeof(decimal), "0.01", "100000000")]
         public decimal ReleaseAmount { get; set; }
+
+        [EnumDataType(typeof(ReleaseFrequency))]
         public ReleaseFrequency FrequencyType { get; set; }
+
+        [Required, MaxLength(10000)]
         public string FrequencyConfig { get; set; } = string.Empty;
+
+        [NotDefault]
         public DateTimeOffset StartDate { get; set; }
+
+        [Range(1, 365)]
         public int MaxReleases { get; set; } = 50;
     }
 

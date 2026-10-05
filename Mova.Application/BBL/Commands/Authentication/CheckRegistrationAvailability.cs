@@ -13,14 +13,26 @@ namespace Mova.Application.BBL.Queries.Authentication;
 
 public sealed class CheckRegistrationAvailability
 {
-    public class Query : IRequest<BaseResult<CheckRegistrationAvailabilityResponseDto>>
+    public class Query : IRequest<BaseResult<CheckRegistrationAvailabilityResponseDto>>, IValidatableObject
     {
-        [EmailAddress]
+        [EmailAddress, MaxLength(100)]
         [JsonPropertyName("email")]
         public string? Email { get; init; }
 
+        [MaxLength(20)]
         [JsonPropertyName("phonenumber")]
         public string? PhoneNumber { get; init; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (string.IsNullOrWhiteSpace(Email) &&
+                string.IsNullOrWhiteSpace(PhoneNumber))
+            {
+                yield return new ValidationResult(
+                    "Provide an email address or phone number.",
+                    [nameof(Email), nameof(PhoneNumber)]);
+            }
+        }
     }
 
     public class CheckRegistrationAvailabilityResponseDto

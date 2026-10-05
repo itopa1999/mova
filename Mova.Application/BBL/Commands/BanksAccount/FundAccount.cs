@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -21,8 +22,10 @@ public sealed class FundAccount
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
 
+        [Range(typeof(decimal), "1000", "100000000")]
         public decimal Amount { get; init; }
 
+        [Required, MaxLength(20), RegularExpression(@"(?i)^\s*(paystack|flutterwave|monnify|1|2|3)\s*$")]
         public string Provider { get; init; } = "paystack";
     }
 

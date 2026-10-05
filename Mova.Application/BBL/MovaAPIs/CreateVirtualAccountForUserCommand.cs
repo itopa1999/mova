@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ public sealed class CreateVirtualAccountForUserCommand
 {
     public sealed class Command : IRequest<BaseResult<CreateVirtualAccountForUserResponseDto>>
     {
+        [Required, MaxLength(100)]
         public string UserPublicId { get; set; } = string.Empty;
     }
 

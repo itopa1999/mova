@@ -19,12 +19,13 @@ public sealed class VerifyAccountCommand
 {
     public class Command : IRequest<BaseResult<VerifyAccountResponseDto>>
     {
-        [EmailAddress]
+        [EmailAddress, MaxLength(100)]
         public string? Email { get; init; }
 
-        [MinLength(6), MaxLength(6)]
+        [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "OTP must be exactly 6 digits.")]
         public string OtpCode { get; init; } = string.Empty;
 
+        [Required, MaxLength(20)]
         public string Platform { get; init; } = Platforms.Mobile;
     }
 

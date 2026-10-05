@@ -1,9 +1,11 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.BBL.Shared;
+using Mova.Application.Validation;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -29,24 +31,34 @@ public sealed class CreateWalletCommand
         [JsonIgnore]
         public string FirstName { get; set; } = string.Empty;
 
+        [Required, StringLength(150, MinimumLength = 1)]
         public string Name { get; set; } = string.Empty;
 
+        [MaxLength(2000)]
         public string? Description { get; set; }
 
+        [Range(1, long.MaxValue)]
         public long CategoryId { get; set; }
 
+        [Range(0, long.MaxValue)]
         public long BankAccountId { get; set; }
 
+        [Range(typeof(decimal), "2000", "100000000")]
         public decimal TargetAmount { get; set; }
 
+        [EnumDataType(typeof(ReleaseFrequency))]
         public ReleaseFrequency Frequency { get; set; }
 
+        [Required, MaxLength(10000)]
         public string FrequencyConfig { get; set; } = string.Empty;
 
+        [Range(typeof(decimal), "100", "100000000")]
         public decimal AmountToBeReleased { get; set; }
 
+        [NotDefault]
         public DateTimeOffset StartDate { get; set; }
 
+        [Required, RegularExpression(@"(?i)^\s*(bank|wallet|main)\s*$", ErrorMessage = "Payout destination must be bank, wallet, or main.")]
         public string PayoutDestination { get; set; } = "bank";
     }
 

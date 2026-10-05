@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Caching;
@@ -15,6 +16,7 @@ public sealed class ToggleFeatureFlag
     public sealed class Command
         : IRequest<BaseResult<ToggleFeatureFlagDto>>
     {
+        [Range(1, long.MaxValue)]
         public long Id { get; init; }
 
         public bool IsEnabled { get; init; }

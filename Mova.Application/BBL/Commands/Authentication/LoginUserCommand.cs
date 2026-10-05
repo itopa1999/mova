@@ -19,13 +19,14 @@ public sealed class LoginUserCommand
 {
     public class Command : IRequest<BaseResult<LoginResponseDto>>
     {
-        [Required]
+        [Required, MaxLength(254)]
         [JsonPropertyName("emailOrPhone")]
         public string Identifier { get; init; } = string.Empty;
 
-        [MinLength(8)]
+        [Required, MinLength(8), MaxLength(256)]
         public string Password { get; init; } = string.Empty;
 
+        [Required, MaxLength(20)]
         public string Platform { get; init; } = Platforms.Mobile;
 
         [MaxLength(200)]

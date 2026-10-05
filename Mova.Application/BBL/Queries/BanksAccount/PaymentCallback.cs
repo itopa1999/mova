@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Persistence;
@@ -11,6 +12,7 @@ public sealed class PaymentCallback
 {
     public sealed class Query : IRequest<BaseResult<PaymentCallbackDto>>
     {
+        [Required, MaxLength(500)]
         public string? Reference { get; init; }
     }
 

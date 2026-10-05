@@ -1,4 +1,5 @@
 using System.Net;
+using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Caching;
@@ -15,9 +16,16 @@ public sealed class ListWalletTemplatesQuery
 
     public sealed class Query : IRequest<BaseResult<ListWalletTemplatesResponseDto>>
     {
+        [Range(1, 1000000)]
         public int Page { get; set; } = 1;
+
+        [Range(1, 100)]
         public int PageSize { get; set; } = 20;
+
+        [MaxLength(100)]
         public string? Search { get; set; }
+
+        [Range(1, long.MaxValue)]
         public long? CategoryId { get; set; }
     }
 
