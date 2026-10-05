@@ -74,6 +74,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IOtpService, OtpService>();
+        services.AddScoped<ITransactionPinAttemptStore, RedisTransactionPinAttemptStore>();
         services.AddScoped<ITransactionPinService, TransactionPinService>();
         services.AddScoped<ISchedulePreviewService, SchedulePreviewService>();
         services.AddScoped<IWalletRuleService, WalletRuleService>();

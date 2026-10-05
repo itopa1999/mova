@@ -71,4 +71,13 @@ public static string HomeDashboardPrefix(string userPublicId) =>
     $"home:dashboard:{userPublicId.Trim().ToLowerInvariant()}";
 
 public const string HomeDashboardGlobalPrefix = "home:dashboard:";
+
+// ─────────────────────────────────────────────────────────────
+// Transaction PIN verification
+// ─────────────────────────────────────────────────────────────
+public static string TransactionPinAttempts(string userPublicId) =>
+    $"mova:security:pin:attempts:{userPublicId.Trim().ToLowerInvariant()}";
+
+public static string TransactionPinLock(string userPublicId) =>
+    $"mova:security:pin:lock:{userPublicId.Trim().ToLowerInvariant()}";
 }

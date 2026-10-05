@@ -4,7 +4,8 @@ public static class RateLimitPolicies
 {
     /// <summary>
     /// Strict limits for brute-forceable endpoints:
-    /// login, register, verify-email, resend-otp, forgot-password.
+    /// login, register, account/transaction-PIN verification, resend-otp,
+    /// and password recovery.
     /// </summary>
     public const string AuthStrict = "auth-strict";
 

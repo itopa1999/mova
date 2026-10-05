@@ -13,15 +13,18 @@ public class TransactionPinService : ITransactionPinService
     private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly ICacheService _cache;
+    private readonly ITransactionPinAttemptStore _pinAttemptStore;
 
     public TransactionPinService(
         ApplicationDbContext context,
         IPasswordHasher<User> passwordHasher,
-        ICacheService cache)
+        ICacheService cache,
+        ITransactionPinAttemptStore pinAttemptStore)
     {
         _context = context;
         _passwordHasher = passwordHasher;
         _cache = cache;
+        _pinAttemptStore = pinAttemptStore;
     }
 
     public async Task<bool> HasPinAsync(
@@ -66,6 +69,7 @@ public class TransactionPinService : ITransactionPinService
         await _context.SaveChangesAsync(cancellationToken);
 
         await InvalidateUserCacheAsync(user);
+        await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
     }
 
     public async Task<bool> VerifyPinAsync(
@@ -73,6 +77,13 @@ public class TransactionPinService : ITransactionPinService
         string pin,
         CancellationToken cancellationToken = default)
     {
+        if (await _pinAttemptStore.IsLockedAsync(
+                UserPublicId,
+                cancellationToken))
+        {
+            return false;
+        }
+
         var user = await _context.Users
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
@@ -89,8 +100,17 @@ public class TransactionPinService : ITransactionPinService
             user.TransactionPinHash,
             pin);
 
-        return result == PasswordVerificationResult.Success ||
-               result == PasswordVerificationResult.SuccessRehashNeeded;
+        var isValid = result == PasswordVerificationResult.Success ||
+                      result == PasswordVerificationResult.SuccessRehashNeeded;
+
+        if (isValid)
+        {
+            await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
+            return true;
+        }
+
+        await _pinAttemptStore.RecordFailureAsync(UserPublicId, cancellationToken);
+        return false;
     }
 
     public async Task ChangePinAsync(
@@ -123,6 +143,7 @@ public class TransactionPinService : ITransactionPinService
         await _context.SaveChangesAsync(cancellationToken);
 
         await InvalidateUserCacheAsync(user);
+        await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
     }
 
     public async Task<bool> ResetPinAsync(
@@ -142,19 +163,19 @@ public class TransactionPinService : ITransactionPinService
         await _context.SaveChangesAsync(cancellationToken);
 
         await InvalidateUserCacheAsync(user);
+        await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
 
         return true;
     }
 
     private static void ValidatePin(string pin)
     {
-        if (string.IsNullOrWhiteSpace(pin))
+        if (string.IsNullOrEmpty(pin))
         {
             throw new ArgumentException("PIN is required.");
         }
 
-        if (pin.Length != 6 ||
-            !pin.All(char.IsDigit))
+        if (pin.Length != 6 || pin.Any(c => c < '0' || c > '9'))
         {
             throw new ArgumentException(
                 "PIN must contain exactly 6 digits.");
