@@ -44,15 +44,8 @@ public sealed class GetTransactions
         public string? Search { get; set; }
     }
 
-    public sealed class PaginatedTransactionsDto
+    public sealed class PaginatedTransactionsDto : BasePaginationResponse<TransactionDto>
     {
-        public List<TransactionDto> Items { get; set; } = new();
-        public int Page { get; set; }
-        public int PageSize { get; set; }
-        public int TotalItems { get; set; }
-        public int TotalPages { get; set; }
-        public bool HasNextPage { get; set; }
-        public bool HasPreviousPage { get; set; }
     }
 
     public sealed class TransactionDto
@@ -169,10 +162,8 @@ public sealed class GetTransactions
                     Items = items,
                     Page = page,
                     PageSize = pageSize,
-                    TotalItems = totalItems,
+                    TotalCount = totalItems,
                     TotalPages = totalPages,
-                    HasNextPage = page < totalPages,
-                    HasPreviousPage = page > 1,
                 });
         }
     }

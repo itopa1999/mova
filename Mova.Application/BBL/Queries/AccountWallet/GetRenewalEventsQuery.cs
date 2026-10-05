@@ -39,16 +39,10 @@ public sealed class GetRenewalEventsQuery
     }
 
     public sealed class GetRenewalEventsResponseDto
+        : BasePaginationResponse<RenewalEventDto>
     {
         public long WalletId { get; init; }
         public string WalletName { get; init; } = string.Empty;
-
-        public int Page { get; init; }
-        public int PageSize { get; init; }
-        public int TotalCount { get; init; }
-        public int TotalPages { get; init; }
-
-        public List<RenewalEventDto> Events { get; init; } = new();
     }
 
     public sealed class Handler
@@ -128,7 +122,7 @@ public sealed class GetRenewalEventsQuery
                 PageSize = pageSize,
                 TotalCount = totalCount,
                 TotalPages = totalPages,
-                Events = events,
+                Items = events,
             };
 
             op.Success(
