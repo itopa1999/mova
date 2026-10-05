@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -64,6 +65,16 @@ public class RecordingUnitOfWork : IUnitOfWork
     {
         BeginCount++;
         _transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+    }
+
+    public async Task BeginTransactionAsync(
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default)
+    {
+        BeginCount++;
+        _transaction = await _context.Database.BeginTransactionAsync(
+            isolationLevel,
+            cancellationToken);
     }
 
     public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)

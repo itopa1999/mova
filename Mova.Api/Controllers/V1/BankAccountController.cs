@@ -21,6 +21,8 @@ using static Mova.Application.BBL.Queries.BanksAccount.GetAccountForFunding;
 using static Mova.Application.BBL.Queries.BanksAccount.GetAllBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.GetBanks;
 using static Mova.Application.BBL.Queries.BanksAccount.GetTransactions;
+using WithdrawalRequest = Mova.Application.BBL.Commands.BanksAccount.WithdrawalCommand.Command;
+using WithdrawalResponse = Mova.Application.BBL.Commands.BanksAccount.WithdrawalCommand.WithdrawalResponse;
 
 namespace Mova.Api.Controllers.V1;
 
@@ -217,6 +219,27 @@ public class BankAccountController(
             },
             cancellationToken);
 
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Debits the selected wallet's available balance. External bank and utility payout
+    /// processing is not performed by this endpoint yet.
+    /// </summary>
+    [HttpPost("withdrawal")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(
+        typeof(BaseResult<WithdrawalResponse>),
+        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    public async Task<IActionResult> Withdraw(
+        [FromBody] WithdrawalRequest command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        var result = await _mediator.Send(command, cancellationToken);
         return StatusCode((int)result.StatusCode, result);
     }
 

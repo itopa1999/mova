@@ -1,3 +1,5 @@
+using System.Data;
+
 namespace Mova.Application.Interfaces.Persistence;
 
 public interface IUnitOfWork
@@ -16,6 +18,10 @@ public interface IUnitOfWork
         CancellationToken cancellationToken = default);
 
     Task BeginTransactionAsync(
+        CancellationToken cancellationToken = default);
+
+    Task BeginTransactionAsync(
+        IsolationLevel isolationLevel,
         CancellationToken cancellationToken = default);
 
     Task CommitTransactionAsync(

@@ -1,3 +1,5 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Persistence;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -47,6 +49,14 @@ public sealed class UnitOfWork : IUnitOfWork
     {
         _transaction = await _context.Database
             .BeginTransactionAsync(cancellationToken);
+    }
+
+    public async Task BeginTransactionAsync(
+        IsolationLevel isolationLevel,
+        CancellationToken cancellationToken = default)
+    {
+        _transaction = await _context.Database
+            .BeginTransactionAsync(isolationLevel, cancellationToken);
     }
 
     public async Task CommitTransactionAsync(
