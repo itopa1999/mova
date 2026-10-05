@@ -28,8 +28,8 @@ public sealed class RefreshTokenCommand
         public string FullName { get; set; } = string.Empty;
         public string? ProfilePicture { get; set; } = string.Empty;
         public decimal Balance { get; set; }
-        public string AccessToken { get; set; } = string.Empty;
-        public string RefreshToken { get; set; } = string.Empty;
+        public string? AccessToken { get; set; }
+        public string? RefreshToken { get; set; }
         public string Platform { get; set; } = Platforms.Mobile;
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
     }
@@ -151,11 +151,6 @@ public sealed class RefreshTokenCommand
 
                 op.Success($"Token refreshed successfully for user {refreshToken.UserPublicId}");
 
-                var isWeb = string.Equals(
-                    request.Platform,
-                    Platforms.Web.ToString(),
-                    StringComparison.OrdinalIgnoreCase);
-
                 return new BaseResult<RefreshTokenResponseDto>(
                     HttpStatusCode.OK,
                     "Token refreshed successfully.",
@@ -168,11 +163,9 @@ public sealed class RefreshTokenCommand
                         ProfilePicture = user.ProfilePicture,
                         Balance = user.Balance.ToDecimal(),
                         Platform = request.Platform,
-                        AccessToken = isWeb ? null : accessToken,
-                        RefreshToken = isWeb ? null : newToken,
-                        AccessTokenExpiresAt = isWeb
-                            ? null
-                            : DateTimeOffset.UtcNow.AddMinutes(15),
+                        AccessToken = accessToken,
+                        RefreshToken = newToken,
+                        AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
                     });
             }
             catch (Exception ex)

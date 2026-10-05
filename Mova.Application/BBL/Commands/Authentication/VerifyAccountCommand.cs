@@ -38,8 +38,8 @@ public sealed class VerifyAccountCommand
         public string? ProfilePicture { get; set; } = string.Empty;
         public decimal Balance { get; set; }
         public string Platform { get; set; } = Platforms.Mobile;
-        public string AccessToken { get; set; } = string.Empty;
-        public string RefreshToken { get; set; } = string.Empty;
+        public string? AccessToken { get; set; }
+        public string? RefreshToken { get; set; }
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
         public string NextStep { get; set; } = string.Empty;
 
@@ -285,11 +285,6 @@ public sealed class VerifyAccountCommand
                     Provider = createdVirtualAccount.Provider.ToString(),
                 };
 
-            var isWeb = string.Equals(
-                request.Platform,
-                Platforms.Web.ToString(),
-                StringComparison.OrdinalIgnoreCase);
-
             return new BaseResult<VerifyAccountResponseDto>(
                 HttpStatusCode.OK,
                 "Account verified successfully.",
@@ -303,11 +298,9 @@ public sealed class VerifyAccountCommand
                     ProfilePicture = user.ProfilePicture,
                     Balance = user.Balance.ToDecimal(),
                     Platform = request.Platform,
-                    AccessToken = isWeb ? null : accessToken,
-                    RefreshToken = isWeb ? null : refreshToken,
-                    AccessTokenExpiresAt = isWeb
-                        ? null
-                        : DateTimeOffset.UtcNow.AddMinutes(15),
+                    AccessToken = accessToken,
+                    RefreshToken = refreshToken,
+                    AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
                     NextStep = NextSteps.CreateTransactionPin,
                     VirtualAccount = virtualAccountDto,
                 });

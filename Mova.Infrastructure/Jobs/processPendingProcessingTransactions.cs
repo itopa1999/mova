@@ -141,7 +141,16 @@ public sealed class ProcessPendingProcessingTransactions
         }
 
         // 1. Provider reports success → mark completed.
-        if (result.Found && result.Status == "success")
+        var status = result.LocalStatus ?? result.Status.ToLowerInvariant() switch
+        {
+            "success" => TransactionStatus.Completed,
+            "failed" => TransactionStatus.Failed,
+            "reversed" => TransactionStatus.Reversed,
+            "processing" => TransactionStatus.Processing,
+            _ => TransactionStatus.Pending
+        };
+
+        if (result.Found && status == TransactionStatus.Completed)
         {
             transaction.Status = TransactionStatus.Completed;
             transaction.CompletedAt = DateTimeOffset.UtcNow;
@@ -153,7 +162,7 @@ public sealed class ProcessPendingProcessingTransactions
         }
 
         // 2. Provider reports a hard failure → mark failed.
-        if (result.Found && result.Status == "failed")
+        if (result.Found && status == TransactionStatus.Failed)
         {
             transaction.Status = TransactionStatus.Failed;
             transaction.FailureReason =
@@ -166,6 +175,16 @@ public sealed class ProcessPendingProcessingTransactions
 
         // 3. Provider has never seen this reference → mark failed,
         //    but only after the grace period to let users finish checkout.
+        if (result.Found && status == TransactionStatus.Reversed)
+        {
+            transaction.Status = TransactionStatus.Reversed;
+            transaction.FailureReason = result.Message ?? "Payment was reversed at gateway.";
+
+            await _context.SaveChangesAsync(cancellationToken);
+            op.Success("Marked reversed (gateway reported reversal).");
+            return;
+        }
+
         if (!result.Found)
         {
             // TODO uncomment this 

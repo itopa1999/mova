@@ -80,9 +80,16 @@ public class AuthenticationController(
             result.Data is not null &&
             string.Equals(result.Data.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
         {
-            SetAuthenticationCookies(
+            RemoveAuthenticationTokensFromResponse(
                 result.Data.AccessToken,
-                result.Data.RefreshToken);
+                result.Data.RefreshToken,
+                SetAuthenticationCookies,
+                () =>
+                {
+                    result.Data.AccessToken = null;
+                    result.Data.RefreshToken = null;
+                    result.Data.AccessTokenExpiresAt = null;
+                });
         }
 
         return StatusCode(
@@ -117,9 +124,16 @@ public class AuthenticationController(
             result.Data is not null &&
             string.Equals(result.Data.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
         {
-            SetAuthenticationCookies(
+            RemoveAuthenticationTokensFromResponse(
                 result.Data.AccessToken,
-                result.Data.RefreshToken);
+                result.Data.RefreshToken,
+                SetAuthenticationCookies,
+                () =>
+                {
+                    result.Data.AccessToken = null;
+                    result.Data.RefreshToken = null;
+                    result.Data.AccessTokenExpiresAt = null;
+                });
         }
 
         return StatusCode(
@@ -149,9 +163,16 @@ public class AuthenticationController(
         {
             if (result.IsSuccess && result.Data is not null)
             {
-                SetAuthenticationCookies(
+                RemoveAuthenticationTokensFromResponse(
                     result.Data.AccessToken,
-                    result.Data.RefreshToken);
+                    result.Data.RefreshToken,
+                    SetAuthenticationCookies,
+                    () =>
+                    {
+                        result.Data.AccessToken = null;
+                        result.Data.RefreshToken = null;
+                        result.Data.AccessTokenExpiresAt = null;
+                    });
             }
             else
             {
@@ -288,6 +309,24 @@ public class AuthenticationController(
         Response.Cookies.Append("refresh_token", refreshToken, refreshTokenOptions);
 
     }
+
+    private void RemoveAuthenticationTokensFromResponse(
+        string? accessToken,
+        string? refreshToken,
+        Action<string, string> setCookies,
+        Action removeTokens)
+    {
+        if (string.IsNullOrWhiteSpace(accessToken) ||
+            string.IsNullOrWhiteSpace(refreshToken))
+        {
+            throw new InvalidOperationException(
+                "Authentication tokens are required to establish web cookies.");
+        }
+
+        setCookies(accessToken, refreshToken);
+        removeTokens();
+    }
+
     private void ClearAuthenticationCookies()
     {
         var cookieOptions = new CookieOptions
