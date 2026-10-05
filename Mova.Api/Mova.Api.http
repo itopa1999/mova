@@ -4,3 +4,9 @@ GET {{Mova.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+### Check backend readiness
+GET {{Mova.Api_HostAddress}}/health/ready
+Accept: application/json
+
+###

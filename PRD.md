@@ -2,23 +2,23 @@
 
 **Status:** Draft, derived from the current codebase  
 **Generated:** 2026-10-05  
-**Product:** Mova scheduled wallets
+**Product:** MOVA controlled-access wallets
 
 ## 1. Summary
 
-Mova helps customers plan and control how money is made available over time. Customers fund a main account, create goal-oriented wallets, and choose a release schedule. Mova reserves wallet funds, releases them according to the schedule, records the resulting financial activity, and can route funds to a wallet, the customer's main balance, or a linked bank account.
+MOVA helps customers control when they can access their money. Customers fund a main account, move money into wallets, set their own release rules and schedules, and MOVA keeps that money unavailable until a release is due. When it is due, MOVA releases the money to the configured destination, including a linked bank account.
 
 The product combines account funding and payment-provider integrations with wallet management, a schedule engine, transaction history, and asynchronous payout and notification processing. This document describes the product implied by the implemented domain model, application flows, API surface, and project walkthrough. It is not a substitute for legal, compliance, or payment-provider approval.
 
 ## 2. Problem and opportunity
 
-Customers need a reliable way to earmark money for planned expenses and make it available on a predictable cadence without manually transferring it each time. A single undifferentiated balance makes it harder to separate spending goals, follow a release plan, and understand where money went.
+When all of a customer's money is available at once, it is easy to spend money meant for later. Impulse purchases can leave little or nothing when the money is actually needed. A single available balance does not give the customer control over when they can spend.
 
 Mova addresses this by providing:
 
-- A funded main account and purpose-specific wallets.
-- Configurable release rules and a preview before wallet creation.
-- A visible lifecycle for locked, released, unused, and withdrawn funds.
+- A funded main account and wallets that keep money unavailable until release.
+- Customer-defined release rules, schedules, and a preview before wallet creation.
+- A clear view of money that is locked, released, unused, or withdrawn.
 - Payment and ledger records that explain account activity.
 - Optional automation for replenishing wallets.
 
@@ -31,10 +31,10 @@ Mova addresses this by providing:
 | Payment/banking providers | Deliver funding, verification, and payout outcomes through authenticated provider integrations. |
 | Mova background services | Process due releases, payouts, retries, and notifications reliably without requiring a customer to keep the application open. |
 
-## 4. Product goals
+## 4. Product principles
 
-1. Let a customer turn available main-account funds into one or more scheduled wallets.
-2. Make each wallet's target, release plan, status, destination, and balance movements understandable.
+1. Let a customer move available main-account funds into wallets with controlled access.
+2. Make each wallet's release rules, schedule, status, destination, and balance movements understandable.
 3. Process deposits and releases exactly once from the customer's perspective.
 4. Keep the customer's total funds accounted for through every state transition.
 5. Support bank-linked funding and payout, while retaining wallet and main-balance destinations.

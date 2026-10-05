@@ -11,6 +11,7 @@ using Mova.Application;
 using Mova.Infrastructure;
 using Mova.Infrastructure.Jobs;
 using Mova.Api.RateLimiting;
+using Mova.Api.HealthChecks;
 
 namespace Mova.Api;
 
@@ -30,6 +31,11 @@ public class Startup(IConfiguration configuration)
                 options.JsonSerializerOptions.Converters.Add(
                     new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
             });
+
+        services.AddHealthChecks()
+            .AddCheck<BackendReadinessHealthCheck>(
+                "backend-readiness",
+                tags: ["ready"]);
         
         // CQRS (MediatR)
         services.AddMediatR(cfg =>

@@ -29,13 +29,13 @@ public static class DefaultWalletTemplates
         },
 
         // ─────────────────────────────────────────────────────────
-        // 2. Ada's monthly rent savings.
-        //    ₦120k goal, ₦30k released on the 1st of each month.
+        // 2. Ada's monthly rent release plan.
+        //    ₦120k controlled amount, ₦30k released on the 1st of each month.
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
-            Name = "Rent Savings",
-            Description = "Save for rent — released at the start of each month.",
+            Name = "Rent Release Plan",
+            Description = "Keep rent money aside and release it at the start of each month.",
             CategoryId = 3, // Rent & Housing
             DefaultTargetAmount = Money.FromNaira(120_000),
             DefaultReleaseAmount = Money.FromNaira(30_000),
@@ -43,7 +43,7 @@ public static class DefaultWalletTemplates
             DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
             DefaultPayoutDestination = PayoutDestination.Wallet,
             IconName = "Home",
-            Tags = new[] { "rent", "housing", "monthly", "savings", "home" },
+            Tags = new[] { "rent", "housing", "monthly", "release", "home" },
             SortOrder = 2,
             IsActive = true,
         },
@@ -95,15 +95,15 @@ public static class DefaultWalletTemplates
         new WalletTemplate
         {
             Name = "Emergency Fund",
-            Description = "Build a safety net with small monthly deposits.",
-            CategoryId = 17, // Savings
+            Description = "Keep emergency money aside and release it on your monthly rule.",
+            CategoryId = 17, // Controlled Access
             DefaultTargetAmount = Money.FromNaira(100_000),
             DefaultReleaseAmount = Money.FromNaira(20_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
             DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
             DefaultPayoutDestination = PayoutDestination.Wallet,
             IconName = "Shield",
-            Tags = new[] { "emergency", "savings", "safety", "fund", "backup" },
+            Tags = new[] { "emergency", "release", "safety", "fund", "backup" },
             SortOrder = 5,
             IsActive = true,
         },
@@ -195,7 +195,7 @@ public static class DefaultWalletTemplates
         new WalletTemplate
         {
             Name = "Holiday Fund",
-            Description = "Set aside money for that trip or vacation.",
+            Description = "Keep travel money separate and release it on your monthly schedule.",
             CategoryId = 11, // Travel
             DefaultTargetAmount = Money.FromNaira(200_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
@@ -203,7 +203,7 @@ public static class DefaultWalletTemplates
             DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
             DefaultPayoutDestination = PayoutDestination.Wallet,
             IconName = "Plane",
-            Tags = new[] { "holiday", "travel", "vacation", "savings", "trip" },
+            Tags = new[] { "holiday", "travel", "vacation", "release", "trip" },
             SortOrder = 10,
             IsActive = true,
         },
@@ -289,13 +289,13 @@ public static class DefaultWalletTemplates
         },
 
         // ─────────────────────────────────────────────────────────
-        // 15. Ada's wedding savings.
+        // 15. Ada's wedding release plan.
         //     ₦500k for the big day, ₦50k set aside every month.
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
-            Name = "Wedding Savings",
-            Description = "Set aside money for that special day.",
+            Name = "Wedding Release Plan",
+            Description = "Keep event money aside and release it when your schedule says so.",
             CategoryId = 9, // Family
             DefaultTargetAmount = Money.FromNaira(500_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
@@ -303,7 +303,7 @@ public static class DefaultWalletTemplates
             DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
             DefaultPayoutDestination = PayoutDestination.Wallet,
             IconName = "HeartHandshake",
-            Tags = new[] { "wedding", "events", "savings", "celebration", "marriage" },
+            Tags = new[] { "wedding", "events", "release", "celebration", "marriage" },
             SortOrder = 15,
             IsActive = true,
         },
@@ -369,21 +369,21 @@ public static class DefaultWalletTemplates
         },
 
         // ─────────────────────────────────────────────────────────
-        // 19. Tunde's savings challenge.
+        // 19. Tunde's weekly release plan.
         //     52-week challenge — ₦1k saved every week.
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
-            Name = "Savings Challenge",
-            Description = "52-week savings challenge — small weekly deposits.",
-            CategoryId = 17, // Savings
+            Name = "Weekly Release Plan",
+            Description = "Keep a set amount aside and make it available in weekly releases.",
+            CategoryId = 17, // Controlled Access
             DefaultTargetAmount = Money.FromNaira(52_000),
             DefaultReleaseAmount = Money.FromNaira(1_000),
             DefaultFrequency = ReleaseFrequency.Weekly,
             DefaultFrequencyConfig = "{\"type\":\"weekly\",\"daysOfWeek\":[1],\"time\":\"09:00\"}",
             DefaultPayoutDestination = PayoutDestination.Wallet,
             IconName = "Trophy",
-            Tags = new[] { "challenge", "savings", "weekly", "goal", "habit" },
+            Tags = new[] { "release", "weekly", "access", "control", "habit" },
             SortOrder = 19,
             IsActive = true,
         },

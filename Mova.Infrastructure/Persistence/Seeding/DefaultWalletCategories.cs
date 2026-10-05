@@ -107,7 +107,7 @@ public static class DefaultWalletCategories
             new WalletCategory
             {
                 Id = 17,
-                Name = "Savings",
+                Name = "Controlled Access",
                 Icon = "PiggyBank"
             },
             new WalletCategory
