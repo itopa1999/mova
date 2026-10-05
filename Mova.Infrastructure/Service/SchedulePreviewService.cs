@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -9,10 +10,14 @@ namespace Mova.Infrastructure.Services;
 public class SchedulePreviewService : ISchedulePreviewService
 {
     private readonly IWalletRuleValidator _validator;
+    private readonly ILogger<SchedulePreviewService> _logger;
 
-    public SchedulePreviewService(IWalletRuleValidator validator)
+    public SchedulePreviewService(
+        IWalletRuleValidator validator,
+        ILogger<SchedulePreviewService> logger)
     {
         _validator = validator;
+        _logger = logger;
     }
 
     public async Task<SchedulePreviewResult> PreviewScheduleAsync(
@@ -471,8 +476,9 @@ public class SchedulePreviewService : ISchedulePreviewService
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to generate schedule preview.");
             result.IsSuccess = false;
-            result.Errors.Add($"Error generating schedule preview: {ex.Message}");
+            result.Errors.Add("Unable to generate the schedule preview. Please try again.");
             return result;
         }
     }

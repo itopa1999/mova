@@ -626,8 +626,6 @@ POST /api/schedule/preview
 
 <!-- TODO -->
 
-1. make sure that every FK queries uses include
-2. please make sure that no DB error or datalink is done
 3. add all checks to FE input fields data coming into the backend 
 and remove the try and catch the middleware should handle that please.
 4. i need redis to be added to like places that need it the most please. ans also set a 

@@ -256,7 +256,7 @@ public sealed class VerifyAccountCommand
 
                 return new BaseResult<VerifyAccountResponseDto>(
                     HttpStatusCode.InternalServerError,
-                    $"DEBUG: [{ex.GetType().Name}] {ex.Message}");
+                    "An error occurred while verifying your account. Please try again later.");
             }
 
             // ─── Post-commit notifications ───

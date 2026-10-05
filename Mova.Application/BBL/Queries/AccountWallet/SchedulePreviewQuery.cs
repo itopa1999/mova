@@ -1,5 +1,6 @@
 using System.Net;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
@@ -48,10 +49,14 @@ public sealed class SchedulePreviewQuery
     public sealed class Handler : IRequestHandler<Query, BaseResult<SchedulePreviewResponseDto>>
     {
         private readonly ISchedulePreviewService _previewService;
+        private readonly ILogger<Handler> _logger;
 
-        public Handler(ISchedulePreviewService previewService)
+        public Handler(
+            ISchedulePreviewService previewService,
+            ILogger<Handler> logger)
         {
             _previewService = previewService;
+            _logger = logger;
         }
 
         public async Task<BaseResult<SchedulePreviewResponseDto>> Handle(
@@ -114,9 +119,10 @@ public sealed class SchedulePreviewQuery
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Failed to generate schedule preview response.");
                 return new BaseResult<SchedulePreviewResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    $"Error generating schedule preview: {ex.Message}",
+                    HttpStatusCode.InternalServerError,
+                    "Unable to generate the schedule preview. Please try again later.",
                     null);
             }
         }

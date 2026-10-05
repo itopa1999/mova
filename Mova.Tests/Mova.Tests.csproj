@@ -26,6 +26,7 @@
     <ProjectReference Include="..\Mova.Application\Mova.Application.csproj" />
     <ProjectReference Include="..\Mova.Shared\Mova.Shared.csproj" />
     <ProjectReference Include="..\Mova.Infrastructure\Mova.Infrastructure.csproj" />
+    <ProjectReference Include="..\Mova.Api\Mova.Api.csproj" />
   </ItemGroup>
 
 </Project>

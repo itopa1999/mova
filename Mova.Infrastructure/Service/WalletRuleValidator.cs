@@ -112,13 +112,13 @@ public class WalletRuleValidator : IWalletRuleValidator
                     break;
             }
         }
-        catch (JsonException ex)
+        catch (JsonException)
         {
-            result.AddError($"Invalid JSON configuration: {ex.Message}");
+            result.AddError("Frequency configuration is invalid. Please check the provided JSON.");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            result.AddError($"Error validating configuration: {ex.Message}");
+            result.AddError("Unable to validate the frequency configuration. Please try again.");
         }
 
         return result;

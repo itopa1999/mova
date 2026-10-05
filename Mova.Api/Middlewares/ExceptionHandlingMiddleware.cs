@@ -1,4 +1,6 @@
+using System.Data.Common;
 using System.Net;
+using Microsoft.EntityFrameworkCore;
 using Mova.Shared.Logging;
 using Mova.Shared.Common;
 
@@ -55,13 +57,11 @@ public class ExceptionHandlingMiddleware
         context.Response.Clear();
         context.Response.ContentType = "application/json";
 
-        // Determine status code and message based on exception type
         var (statusCode, message) = GetExceptionDetails(exception);
 
         context.Response.StatusCode = (int)statusCode;
         context.Response.Headers["X-Request-Id"] = requestId;
 
-        // Create result using your existing BaseResult
         var result = new BaseResult(
             statusCode: statusCode,
             message: message,
@@ -73,76 +73,80 @@ public class ExceptionHandlingMiddleware
 
     private (HttpStatusCode statusCode, string message) GetExceptionDetails(Exception exception)
     {
-        // Handle ArgumentException (including PIN validation, etc.)
-        if (exception is ArgumentException argEx)
+        if (ContainsException<DbUpdateException>(exception))
         {
-            return (HttpStatusCode.BadRequest, argEx.Message);
+            return (
+                HttpStatusCode.Conflict,
+                "We couldn't save your changes right now. Please try again.");
         }
 
-        // Handle ArgumentNullException
-        if (exception is ArgumentNullException nullEx)
+        if (ContainsException<DbException>(exception))
         {
-            return (HttpStatusCode.BadRequest, nullEx.Message);
+            return (
+                HttpStatusCode.ServiceUnavailable,
+                "The service is temporarily unavailable. Please try again shortly.");
         }
 
-        // Handle ArgumentOutOfRangeException
-        if (exception is ArgumentOutOfRangeException outOfRangeEx)
+        if (exception is ArgumentException)
         {
-            return (HttpStatusCode.BadRequest, outOfRangeEx.Message);
+            return (
+                HttpStatusCode.BadRequest,
+                "Please check the submitted information and try again.");
         }
 
-        // Handle InvalidOperationException
-        if (exception is InvalidOperationException invalidOpEx)
+        if (exception is InvalidOperationException)
         {
-            return (HttpStatusCode.BadRequest, invalidOpEx.Message);
+            return (
+                HttpStatusCode.BadRequest,
+                "This request could not be completed. Please review your information and try again.");
         }
 
-        // Handle FluentValidation.ValidationException
         if (exception.GetType().Name == "ValidationException")
         {
-            var errors = exception.GetType().GetProperty("Errors")?.GetValue(exception) as IEnumerable<dynamic>;
-            var errorMessages = errors != null 
-                ? string.Join(" | ", errors.Select(e => e?.ErrorMessage?.ToString() ?? e?.ToString() ?? "Validation error"))
-                : exception.Message;
-            
-            return (HttpStatusCode.BadRequest, errorMessages);
+            return (
+                HttpStatusCode.BadRequest,
+                "Please check the submitted information and try again.");
         }
 
-        // Handle UnauthorizedAccessException
         if (exception is UnauthorizedAccessException)
         {
             return (HttpStatusCode.Unauthorized, "You are not authorized to perform this action.");
         }
 
-        // Handle KeyNotFoundException (Not Found)
         if (exception is KeyNotFoundException)
         {
             return (HttpStatusCode.NotFound, "The requested resource was not found.");
         }
 
-        // Handle DbUpdateException (Database errors)
-        if (exception.GetType().Name == "DbUpdateException" || 
-            exception.GetType().Name == "DbUpdateConcurrencyException")
-        {
-            return (HttpStatusCode.Conflict, "An error occurred. Please try again.");
-        }
-
-        // Handle TimeoutException
         if (exception is TimeoutException)
         {
             return (HttpStatusCode.RequestTimeout, "The request timed out. Please try again.");
         }
 
-        // Handle NotImplementedException
         if (exception is NotImplementedException)
         {
-            return (HttpStatusCode.NotImplemented, "This feature is not yet implemented.");
+            return (
+                HttpStatusCode.NotImplemented,
+                "This feature is not available right now.");
         }
 
-        // Default to Internal Server Error for unhandled exceptions
         return (
             HttpStatusCode.InternalServerError,
-            "An error occurred; please try again later"
+            "An error occurred. Please try again later."
         );
+    }
+
+    private static bool ContainsException<TException>(Exception exception)
+        where TException : Exception
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is TException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

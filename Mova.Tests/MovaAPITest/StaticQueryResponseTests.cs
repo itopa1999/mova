@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.BBL.Queries.AccountWallet;
@@ -181,7 +182,9 @@ public sealed class StaticQueryResponseTests : BaseTest
                 4,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(preview);
-        var handler = new ScheduleQuery.Handler(service.Object);
+        var handler = new ScheduleQuery.Handler(
+            service.Object,
+            NullLogger<ScheduleQuery.Handler>.Instance);
 
         var result = await handler.Handle(
             new ScheduleQuery.Query
