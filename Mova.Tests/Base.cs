@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Mova.Domain.Entities;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Services;
 using Mova.Infrastructure.Persistence;
@@ -136,7 +138,7 @@ public abstract class BaseTest : IAsyncLifetime
             .Options;
 
         CurrentUser = new TestCurrentUserService();
-        Context = new ApplicationDbContext(options, CurrentUser);
+        Context = new SqliteTestApplicationDbContext(options, CurrentUser);
         await Context.Database.EnsureCreatedAsync();
 
         UnitOfWork = new RecordingUnitOfWork(Context);
@@ -153,5 +155,30 @@ public abstract class BaseTest : IAsyncLifetime
         Context.Database.EnsureDeleted();
         Context.Database.EnsureCreated();
         UnitOfWork.ResetCounts();
+    }
+
+    private sealed class SqliteTestApplicationDbContext : ApplicationDbContext
+    {
+        private static readonly ValueConverter<DateTimeOffset, DateTime>
+            SqliteDateTimeOffsetConverter = new(
+                value => value.UtcDateTime,
+                value => new DateTimeOffset(
+                    DateTime.SpecifyKind(value, DateTimeKind.Utc)));
+
+        public SqliteTestApplicationDbContext(
+            DbContextOptions<ApplicationDbContext> options,
+            ICurrentUserService currentUser)
+            : base(options, currentUser)
+        {
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<AppNotification>()
+                .Property(notification => notification.CreatedAt)
+                .HasConversion(SqliteDateTimeOffsetConverter);
+        }
     }
 }

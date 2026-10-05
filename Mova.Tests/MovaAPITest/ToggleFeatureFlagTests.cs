@@ -1,6 +1,8 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using Mova.Application.BBL.Commands.FeatureFlags;
+using Mova.Application.Interfaces.Caching;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Xunit;
@@ -11,7 +13,9 @@ public sealed class ToggleFeatureFlagTests : BaseTest
 {
     private ToggleFeatureFlag.Handler CreateHandler()
     {
-        return new ToggleFeatureFlag.Handler(UnitOfWork);
+        return new ToggleFeatureFlag.Handler(
+            UnitOfWork,
+            Mock.Of<ICacheService>());
     }
 
     private ToggleFeatureFlag.Command CreateCommand(

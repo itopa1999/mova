@@ -9,7 +9,7 @@ using Mova.Infrastructure.Identity;
 
 namespace Mova.Infrastructure.Persistence;
 
-public sealed class ApplicationDbContext
+public class ApplicationDbContext
     : IdentityDbContext<User, IdentityRole<long>, long>
 {
     private readonly ICurrentUserService _currentUser;

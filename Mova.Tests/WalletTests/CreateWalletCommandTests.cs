@@ -168,7 +168,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         _identityService.Verify(
             x => x.DebitBalanceAsync(
                 UserPublicId,
-                30_000m,
+                30_695m,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -344,7 +344,6 @@ public sealed class CreateWalletCommandTests : BaseTest
             FundedAmount = Money.FromNaira(30_000m),
             LockedAmount = Money.FromNaira(30_000m),
             AvailableAmount = Money.FromNaira(0),
-            UnusedAmount = Money.FromNaira(0),
             TotalReleasedAmount = Money.FromNaira(0),
             Status = WalletStatus.Active,
         };

@@ -112,7 +112,13 @@ public sealed class RefreshTokenCommandTests : BaseTest
                 phone,
                 profilePicture,
                 Money.FromNaira(0),
-                string.Empty));
+                string.Empty,
+                false,
+                false,
+                false,
+                false,
+                string.Empty,
+                DateTimeOffset.UtcNow));
     }
 
     private void SetupUserNotFound()

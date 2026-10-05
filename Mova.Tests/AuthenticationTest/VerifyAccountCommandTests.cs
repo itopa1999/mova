@@ -73,7 +73,13 @@ public sealed class VerifyAccountCommandTests : BaseTest
                 phone,
                 profilePicture,
                 Money.FromNaira(0),
-                string.Empty));
+                string.Empty,
+                false,
+                false,
+                false,
+                false,
+                string.Empty,
+                DateTimeOffset.UtcNow));
     }
 
     private void SetupUserNotFound()
@@ -525,6 +531,10 @@ public sealed class VerifyAccountCommandTests : BaseTest
         failingUow
             .Setup(x => x.Query<OtpVerification>())
             .Returns(UnitOfWork.Query<OtpVerification>());
+
+        failingUow
+            .Setup(x => x.Query<VirtualAccount>())
+            .Returns(UnitOfWork.Query<VirtualAccount>());
 
         failingUow
             .Setup(x => x.Update(It.IsAny<OtpVerification>()))

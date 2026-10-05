@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using Mova.Application.BBL.MovaAPIs;
+using Mova.Application.Interfaces.Caching;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Xunit;
@@ -15,7 +16,28 @@ public sealed class GetNotificationsQueryTests : BaseTest
 
     private GetNotificationsQuery.Handler CreateHandler()
     {
-        return new GetNotificationsQuery.Handler(UnitOfWork);
+        return new GetNotificationsQuery.Handler(
+            UnitOfWork,
+            CreateCacheService());
+    }
+
+    private static ICacheService CreateCacheService()
+    {
+        var cache = new Mock<ICacheService>();
+        cache
+            .Setup(x => x.GetOrSetFastAsync(
+                It.IsAny<string>(),
+                It.IsAny<Func<CancellationToken, Task<List<GetNotificationsQuery.NotificationDto>?>>>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns((
+                string key,
+                Func<CancellationToken, Task<List<GetNotificationsQuery.NotificationDto>?>> callback,
+                TimeSpan? timeout,
+                CancellationToken cancellationToken) =>
+                callback(cancellationToken));
+
+        return cache.Object;
     }
 
     private GetNotificationsQuery.Query CreateQuery(

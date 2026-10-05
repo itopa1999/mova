@@ -81,7 +81,6 @@ public sealed class LinkAccountToBankTests : BaseTest
             TotalWithdrawnAmount = Money.FromNaira(0),
             LockedAmount = Money.FromNaira(0),
             FundedAmount = Money.FromNaira(0),
-            UnusedAmount = Money.FromNaira(0),
         };
 
         await UnitOfWork.AddAsync(wallet);

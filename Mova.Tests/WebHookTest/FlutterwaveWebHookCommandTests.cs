@@ -142,7 +142,13 @@ public sealed class FlutterwaveWebHookCommandTests : BaseTest
                 "08050000000",
                 null,
                 Money.FromNaira(0),
-                string.Empty));
+                string.Empty,
+                false,
+                false,
+                false,
+                false,
+                string.Empty,
+                DateTimeOffset.UtcNow));
     }
 
     // ---------------------------------------------------------

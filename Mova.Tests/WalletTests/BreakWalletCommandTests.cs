@@ -73,8 +73,7 @@ public sealed class BreakWalletCommandTests : BaseTest
 
     private async Task<Wallet> SeedActiveWalletAsync(
         decimal locked,
-        decimal available = 0,
-        decimal unused = 0)
+        decimal available = 0)
     {
         var (category, bank) = await SeedPrerequisitesAsync();
 
@@ -89,7 +88,6 @@ public sealed class BreakWalletCommandTests : BaseTest
             FundedAmount = Money.FromNaira(locked),
             LockedAmount = Money.FromNaira(locked),
             AvailableAmount = Money.FromNaira(available),
-            UnusedAmount = Money.FromNaira(unused),
             TotalReleasedAmount = Money.FromNaira(0),
             Status = WalletStatus.Active,
         };
@@ -121,7 +119,6 @@ public sealed class BreakWalletCommandTests : BaseTest
         Assert.Equal(WalletStatus.Broken, updated.Status);
         Assert.Equal(0, updated.LockedAmount.MinorUnits);
         Assert.Equal(0, updated.AvailableAmount.MinorUnits);
-        Assert.Equal(0, updated.UnusedAmount.MinorUnits);
     }
 
     [Fact]

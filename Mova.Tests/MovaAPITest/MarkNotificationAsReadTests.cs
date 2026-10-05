@@ -1,6 +1,8 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using Mova.Application.BBL.MovaAPIs;
+using Mova.Application.Interfaces.Caching;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Xunit;
@@ -14,7 +16,9 @@ public sealed class MarkNotificationAsReadTests : BaseTest
 
     private MarkNotificationAsRead.Handler CreateHandler()
     {
-        return new MarkNotificationAsRead.Handler(UnitOfWork);
+        return new MarkNotificationAsRead.Handler(
+            UnitOfWork,
+            Mock.Of<ICacheService>());
     }
 
     private MarkNotificationAsRead.Command CreateCommand(

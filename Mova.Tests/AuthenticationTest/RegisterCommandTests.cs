@@ -85,6 +85,7 @@ public sealed class RegisterCommandTests : BaseTest
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string>(),
                 It.IsAny<string>()))
             .ReturnsAsync((true, string.Empty, publicId, userId));
     }
@@ -93,6 +94,7 @@ public sealed class RegisterCommandTests : BaseTest
     {
         _identityService
             .Setup(x => x.CreateUserAsync(
+                It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
@@ -183,6 +185,7 @@ public sealed class RegisterCommandTests : BaseTest
             x => x.CreateUserAsync(
                 "Lucky",
                 "Starboy",
+                It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>()),

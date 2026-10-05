@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.Authentication;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.ValueObjects;
@@ -32,6 +33,7 @@ public sealed class LoginUserCommandTests : BaseTest
             UnitOfWork,
             _jwtGenerator.Object,
             _refreshTokenService.Object,
+            Mock.Of<INotificationQueue>(),
             Mock.Of<ILogger<LoginUserCommand.Handler>>());
     }
 
@@ -69,7 +71,13 @@ public sealed class LoginUserCommandTests : BaseTest
                 phone,
                 profilePicture,
                 Money.FromNaira(0),
-                string.Empty));
+                string.Empty,
+                false,
+                false,
+                false,
+                false,
+                string.Empty,
+                DateTimeOffset.UtcNow));
     }
 
     private void SetupUserNotFound()

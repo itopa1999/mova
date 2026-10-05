@@ -83,7 +83,6 @@ public sealed class ToggleWalletStatusCommandTests : BaseTest
             FundedAmount = Money.FromNaira(30_000m),
             LockedAmount = Money.FromNaira(30_000m),
             AvailableAmount = Money.FromNaira(0),
-            UnusedAmount = Money.FromNaira(0),
             TotalReleasedAmount = Money.FromNaira(0),
             Status = status,
         };
