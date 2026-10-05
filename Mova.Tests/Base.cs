@@ -1,9 +1,9 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Mova.Domain.Entities;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Services;
+using Mova.Domain.Entities;
 using Mova.Infrastructure.Persistence;
 
 namespace Mova.Tests;
@@ -164,6 +164,12 @@ public abstract class BaseTest : IAsyncLifetime
                 value => value.UtcDateTime,
                 value => new DateTimeOffset(
                     DateTime.SpecifyKind(value, DateTimeKind.Utc)));
+        private static readonly ValueConverter<DateTimeOffset?, DateTime?>
+            SqliteNullableDateTimeOffsetConverter = new(
+                value => value.HasValue ? value.Value.UtcDateTime : null,
+                value => value.HasValue
+                    ? new DateTimeOffset(DateTime.SpecifyKind(value.Value, DateTimeKind.Utc))
+                    : null);
 
         public SqliteTestApplicationDbContext(
             DbContextOptions<ApplicationDbContext> options,
@@ -176,9 +182,20 @@ public abstract class BaseTest : IAsyncLifetime
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<AppNotification>()
-                .Property(notification => notification.CreatedAt)
-                .HasConversion(SqliteDateTimeOffsetConverter);
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entityType.GetProperties())
+                {
+                    if (property.ClrType == typeof(DateTimeOffset))
+                    {
+                        property.SetValueConverter(SqliteDateTimeOffsetConverter);
+                    }
+                    else if (property.ClrType == typeof(DateTimeOffset?))
+                    {
+                        property.SetValueConverter(SqliteNullableDateTimeOffsetConverter);
+                    }
+                }
+            }
         }
     }
 }

@@ -105,8 +105,9 @@ public class TransactionPinService : ITransactionPinService
 
         if (isValid)
         {
-            await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
-            return true;
+            return await _pinAttemptStore.ResetAfterSuccessfulVerificationAsync(
+                UserPublicId,
+                cancellationToken);
         }
 
         await _pinAttemptStore.RecordFailureAsync(UserPublicId, cancellationToken);

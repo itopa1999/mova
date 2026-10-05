@@ -31,7 +31,7 @@ public sealed class RefreshTokenCommand
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public string Platform { get; set; } = Platforms.Mobile;
-        public DateTimeOffset AccessTokenExpiresAt { get; set; }
+        public DateTimeOffset? AccessTokenExpiresAt { get; set; }
     }
 
     public class Handler : IRequestHandler<Command, BaseResult<RefreshTokenResponseDto>>
@@ -151,6 +151,11 @@ public sealed class RefreshTokenCommand
 
                 op.Success($"Token refreshed successfully for user {refreshToken.UserPublicId}");
 
+                var isWeb = string.Equals(
+                    request.Platform,
+                    Platforms.Web.ToString(),
+                    StringComparison.OrdinalIgnoreCase);
+
                 return new BaseResult<RefreshTokenResponseDto>(
                     HttpStatusCode.OK,
                     "Token refreshed successfully.",
@@ -162,10 +167,12 @@ public sealed class RefreshTokenCommand
                         FullName = user.FullName,
                         ProfilePicture = user.ProfilePicture,
                         Balance = user.Balance.ToDecimal(),
-                        AccessToken = accessToken,
-                        RefreshToken = newToken,
                         Platform = request.Platform,
-                        AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
+                        AccessToken = isWeb ? null : accessToken,
+                        RefreshToken = isWeb ? null : newToken,
+                        AccessTokenExpiresAt = isWeb
+                            ? null
+                            : DateTimeOffset.UtcNow.AddMinutes(15),
                     });
             }
             catch (Exception ex)

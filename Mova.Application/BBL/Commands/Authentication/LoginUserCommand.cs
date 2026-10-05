@@ -43,7 +43,7 @@ public sealed class LoginUserCommand
         public decimal Balance { get; set; }
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
-        public DateTimeOffset AccessTokenExpiresAt { get; set; }
+        public DateTimeOffset? AccessTokenExpiresAt { get; set; }
     }
 
     public class Handler : IRequestHandler<Command, BaseResult<LoginResponseDto>>
@@ -212,22 +212,30 @@ public sealed class LoginUserCommand
                 }
             }
 
-            return new BaseResult<LoginResponseDto>(
-                HttpStatusCode.OK,
-                "Login successful.",
-                new LoginResponseDto
-                {
-                    UserPublicId = user.PublicId,
-                    Email = user.Email ?? string.Empty,
-                    Phone = user.PhoneNumber ?? string.Empty,
-                    FullName = user.FullName,
-                    ProfilePicture = user.ProfilePicture,
-                    Balance = user.Balance.ToDecimal(),
-                    Platform = request.Platform,
-                    AccessToken = accessToken,
-                    RefreshToken = refreshToken,
-                    AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
-                });
+            var isWeb = string.Equals(
+            request.Platform,
+            Platforms.Web.ToString(),
+            StringComparison.OrdinalIgnoreCase);
+
+        return new BaseResult<LoginResponseDto>(
+            HttpStatusCode.OK,
+            "Login successful.",
+            new LoginResponseDto
+            {
+                UserPublicId = user.PublicId,
+                Email = user.Email ?? string.Empty,
+                Phone = user.PhoneNumber ?? string.Empty,
+                FullName = user.FullName,
+                ProfilePicture = user.ProfilePicture,
+                Balance = user.Balance.ToDecimal(),
+                Platform = request.Platform,
+
+                AccessToken = isWeb ? null : accessToken,
+                RefreshToken = isWeb ? null : refreshToken,
+                AccessTokenExpiresAt = isWeb
+                    ? null
+                    : DateTimeOffset.UtcNow.AddMinutes(15),
+            });
         }
 
         // ─── Alerts ──────────────────────────────────────────

@@ -83,6 +83,7 @@ public sealed class GetProfile
                 ProfilePicture = user.ProfilePicture,
                 Balance = user.Balance.ToDecimal(),
                 HasPinSet = !string.IsNullOrWhiteSpace(user.TransactionPinHash),
+                CreatedAt = user.CreatedAt,
 
                 Notifications = new NotificationPreferencesDto
                 {

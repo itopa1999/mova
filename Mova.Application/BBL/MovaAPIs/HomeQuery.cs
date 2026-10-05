@@ -123,14 +123,17 @@ public sealed class HomeQuery
 
                 var policyByWalletId = policies.ToDictionary(p => p.WalletId);
 
-                var today = DateTimeOffset.UtcNow.Date;
+                var todayStart = new DateTimeOffset(
+                    DateTime.UtcNow.Date,
+                    TimeSpan.Zero);
+                var tomorrowStart = todayStart.AddDays(1);
 
                 var todayReleased = await (
                     from sr in _unitOfWork.Query<ScheduledRelease>()
                     join w in _unitOfWork.Query<Wallet>() on sr.WalletId equals w.Id
                     where sr.Status == ReleaseStatus.Released
-                          && sr.ReleasedAt != null
-                          && sr.ReleasedAt.Value.Date == today
+                          && sr.ReleasedAt >= todayStart
+                          && sr.ReleasedAt < tomorrowStart
                           && w.UserPublicId == request.UserPublicId
                           && w.Status == WalletStatus.Active
                     orderby sr.ReleasedAt descending

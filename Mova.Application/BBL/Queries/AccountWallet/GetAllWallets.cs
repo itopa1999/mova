@@ -87,6 +87,11 @@ public sealed class GetAllWallets
                     "User not found.");
             }
 
+            var page = request.Page < 1 ? 1 : request.Page;
+            var pageSize = request.PageSize < 1
+                ? 10
+                : Math.Min(request.PageSize, 100);
+
             try
             {
                 var query = _unitOfWork.Query<Wallet>()
@@ -129,11 +134,11 @@ public sealed class GetAllWallets
                     .ToList();
 
                 var pagedWallets = sortedWallets
-                    .Skip((request.Page - 1) * request.PageSize)
-                    .Take(request.PageSize)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
                     .ToList();
 
-                var totalPages = (int)Math.Ceiling((double)totalCount / request.PageSize);
+                var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
                 // ─── Automation policies for the current page ─
                 var pagedWalletIds = pagedWallets.Select(w => w.Id).ToList();
@@ -232,8 +237,8 @@ public sealed class GetAllWallets
                 {
                     TotalControlledAmount = totalControlledAmount,
                     ActiveWalletCount = activeWalletCount,
-                    Page = request.Page,
-                    PageSize = request.PageSize,
+                    Page = page,
+                    PageSize = pageSize,
                     TotalCount = totalCount,
                     TotalPages = totalPages,
                     Items = walletDtos

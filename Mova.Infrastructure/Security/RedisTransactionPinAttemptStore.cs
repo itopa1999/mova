@@ -22,6 +22,14 @@ public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStor
         return 0
         """;
 
+    private const string ResetAfterSuccessfulVerificationScript = """
+        if redis.call('EXISTS', KEYS[2]) == 1 then
+            return 0
+        end
+        redis.call('DEL', KEYS[1])
+        return 1
+        """;
+
     private readonly IDatabase _database;
 
     public RedisTransactionPinAttemptStore(IConnectionMultiplexer redis)
@@ -53,6 +61,22 @@ public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStor
                 (long)AttemptWindow.TotalMilliseconds,
                 MaximumFailures,
                 (long)LockDuration.TotalMilliseconds
+            ]);
+
+        return (long)result == 1;
+    }
+
+    public async Task<bool> ResetAfterSuccessfulVerificationAsync(
+        string userPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var result = await _database.ScriptEvaluateAsync(
+            ResetAfterSuccessfulVerificationScript,
+            [
+                CacheKeys.TransactionPinAttempts(userPublicId),
+                CacheKeys.TransactionPinLock(userPublicId)
             ]);
 
         return (long)result == 1;

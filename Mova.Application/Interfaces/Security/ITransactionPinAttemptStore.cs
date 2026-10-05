@@ -10,6 +10,10 @@ public interface ITransactionPinAttemptStore
         string userPublicId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> ResetAfterSuccessfulVerificationAsync(
+        string userPublicId,
+        CancellationToken cancellationToken = default);
+
     Task ResetAsync(
         string userPublicId,
         CancellationToken cancellationToken = default);

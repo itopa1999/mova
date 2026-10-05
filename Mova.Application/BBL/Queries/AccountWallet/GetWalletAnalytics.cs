@@ -144,7 +144,8 @@ public sealed class GetWalletAnalytics
             // ─── Load transactions ────────────────────────
             var transactions = await _unitOfWork.Query<Transaction>()
                 .AsNoTracking()
-                .Where(x => x.WalletId.HasValue &&
+                .Where(x => x.UserPublicId == request.UserPublicId &&
+                            x.WalletId.HasValue &&
                             walletIds.Contains(x.WalletId.Value) &&
                             x.Status == TransactionStatus.Completed &&
                             x.CompletedAt.HasValue &&
