@@ -201,6 +201,25 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    /// <summary>Gets the user's total available withdrawal balance and its wallet breakdown.</summary>
+    [HttpGet("withdrawal/available-balance")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(
+        typeof(BaseResult<GetWithdrawalAvailableBalancesQuery.Response>),
+        (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> GetWithdrawalAvailableBalances(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetWithdrawalAvailableBalancesQuery.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpPost("fund-account")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<FundAccountDto>), (int)HttpStatusCode.OK)]

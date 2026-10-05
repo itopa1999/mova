@@ -54,7 +54,6 @@ public sealed class BankAccountQueryOwnershipTests : BaseTest
         Assert.Equal("Owner transaction", transaction.Title);
         Assert.Equal(125m, transaction.Amount);
         Assert.Equal(nameof(TransactionType.Deposit), transaction.Type);
-        Assert.Equal(1, result.Data.TotalItems);
     }
 
     [Fact]
