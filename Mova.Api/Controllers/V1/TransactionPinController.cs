@@ -55,6 +55,7 @@ public class TransactionPinController(
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Locked)]
     public async Task<IActionResult> VerifyPin(
         [FromBody] EncryptedPinRequest request,
         CancellationToken cancellationToken)

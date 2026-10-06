@@ -53,7 +53,9 @@ public sealed class TransactionPinServiceTests : BaseTest
 
         Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
         Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
-        Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
+        Assert.Equal(
+            TransactionPinVerificationResult.LockedNow,
+            await service.VerifyPinWithStatusAsync(UserPublicId, "000000"));
         Assert.True(attemptStore.IsLocked(UserPublicId));
         Assert.False(await service.VerifyPinAsync(UserPublicId, Pin));
         Assert.Equal(3, attemptStore.FailureCount(UserPublicId));
@@ -176,7 +178,7 @@ public sealed class TransactionPinServiceTests : BaseTest
             CancellationToken cancellationToken = default)
         {
             _failureCounts[userPublicId] = FailureCount(userPublicId) + 1;
-            return Task.FromResult(IsLocked(userPublicId));
+            return Task.FromResult(FailureCount(userPublicId) == 3);
         }
 
         public Task<bool> ResetAfterSuccessfulVerificationAsync(

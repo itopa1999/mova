@@ -16,6 +16,11 @@ public interface ITransactionPinService
         string pin,
         CancellationToken cancellationToken = default);
 
+    Task<TransactionPinVerificationResult> VerifyPinWithStatusAsync(
+        string UserPublicId,
+        string pin,
+        CancellationToken cancellationToken = default);
+
     Task<bool> ResetPinAsync(
         string UserPublicId,
         CancellationToken cancellationToken = default);

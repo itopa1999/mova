@@ -77,11 +77,24 @@ public class TransactionPinService : ITransactionPinService
         string pin,
         CancellationToken cancellationToken = default)
     {
+        var result = await VerifyPinWithStatusAsync(
+            UserPublicId,
+            pin,
+            cancellationToken);
+
+        return result == TransactionPinVerificationResult.Verified;
+    }
+
+    public async Task<TransactionPinVerificationResult> VerifyPinWithStatusAsync(
+        string UserPublicId,
+        string pin,
+        CancellationToken cancellationToken = default)
+    {
         if (await _pinAttemptStore.IsLockedAsync(
                 UserPublicId,
                 cancellationToken))
         {
-            return false;
+            return TransactionPinVerificationResult.Locked;
         }
 
         var user = await _context.Users
@@ -92,7 +105,7 @@ public class TransactionPinService : ITransactionPinService
         if (user is null ||
             string.IsNullOrWhiteSpace(user.TransactionPinHash))
         {
-            return false;
+            return TransactionPinVerificationResult.Invalid;
         }
 
         var result = _passwordHasher.VerifyHashedPassword(
@@ -105,13 +118,27 @@ public class TransactionPinService : ITransactionPinService
 
         if (isValid)
         {
-            return await _pinAttemptStore.ResetAfterSuccessfulVerificationAsync(
+            var wasReset = await _pinAttemptStore.ResetAfterSuccessfulVerificationAsync(
                 UserPublicId,
                 cancellationToken);
+
+            return wasReset
+                ? TransactionPinVerificationResult.Verified
+                : TransactionPinVerificationResult.Locked;
         }
 
-        await _pinAttemptStore.RecordFailureAsync(UserPublicId, cancellationToken);
-        return false;
+        var lockWasTriggered = await _pinAttemptStore.RecordFailureAsync(
+            UserPublicId,
+            cancellationToken);
+
+        if (lockWasTriggered)
+        {
+            return TransactionPinVerificationResult.LockedNow;
+        }
+
+        return await _pinAttemptStore.IsLockedAsync(UserPublicId, cancellationToken)
+            ? TransactionPinVerificationResult.Locked
+            : TransactionPinVerificationResult.Invalid;
     }
 
     public async Task ChangePinAsync(

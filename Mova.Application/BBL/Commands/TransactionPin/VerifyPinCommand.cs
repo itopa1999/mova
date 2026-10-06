@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
@@ -25,15 +26,18 @@ public sealed class VerifyPinCommand
     {
         private readonly ITransactionPinService _transactionPinService;
         private readonly IIdentityService _identityService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             ITransactionPinService transactionPinService,
             IIdentityService identityService,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _transactionPinService = transactionPinService;
             _identityService = identityService;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -104,13 +108,28 @@ public sealed class VerifyPinCommand
                         "Transaction PIN has not been set.");
                 }
 
-                var isValid = await _transactionPinService.VerifyPinAsync(
+                var verificationResult = await _transactionPinService.VerifyPinWithStatusAsync(
                     request.UserPublicId,
                     request.Pin,
                     cancellationToken);
 
-                if (!isValid)
+                if (verificationResult != TransactionPinVerificationResult.Verified)
                 {
+                    if (verificationResult is TransactionPinVerificationResult.Locked
+                        or TransactionPinVerificationResult.LockedNow)
+                    {
+                        if (verificationResult == TransactionPinVerificationResult.LockedNow
+                            && !string.IsNullOrWhiteSpace(user.Email))
+                        {
+                            QueuePinLockoutEmail(user.FirstName, user.Email);
+                        }
+
+                        op.Fail($"Transaction PIN locked for user {request.UserPublicId}.");
+                        return new BaseResult(
+                            HttpStatusCode.Locked,
+                            "Too many incorrect PIN attempts. Your transaction PIN is locked for 1 hour. Please try again in 1 hour.");
+                    }
+
                     op.Fail($"Invalid PIN provided for user {request.UserPublicId}");
                     return new BaseResult(
                         HttpStatusCode.Unauthorized,
@@ -143,6 +162,27 @@ public sealed class VerifyPinCommand
                 return new BaseResult(
                     HttpStatusCode.InternalServerError,
                     "An error occurred while verifying your transaction PIN. Please try again later.");
+            }
+        }
+
+        private void QueuePinLockoutEmail(string firstName, string email)
+        {
+            try
+            {
+                _notificationQueue.QueueNotificationEmail(
+                    firstName,
+                    email,
+                    "We locked your transaction PIN for 1 hour after 3 incorrect attempts. " +
+                    "Please try again in 1 hour. If you did not make these attempts, " +
+                    "please contact MOVA support.",
+                    "Transaction PIN temporarily locked");
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(
+                    exception,
+                    "Unable to queue transaction PIN lockout email for {Email}.",
+                    email);
             }
         }
     }

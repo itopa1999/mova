@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.TransactionPin;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.ValueObjects;
 using Xunit;
@@ -19,12 +20,14 @@ public sealed class VerifyPinCommandTests : BaseTest
 
     private readonly Mock<ITransactionPinService> _pinService = new();
     private readonly Mock<IIdentityService> _identityService = new();
+    private readonly Mock<INotificationQueue> _notificationQueue = new();
 
     private VerifyPinCommand.Handler CreateHandler()
     {
         return new VerifyPinCommand.Handler(
             _pinService.Object,
             _identityService.Object,
+            _notificationQueue.Object,
             Mock.Of<ILogger<VerifyPinCommand.Handler>>());
     }
 
@@ -91,17 +94,19 @@ public sealed class VerifyPinCommandTests : BaseTest
     private void SetupVerifyPin(bool isValid = true)
     {
         _pinService
-            .Setup(x => x.VerifyPinAsync(
+            .Setup(x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(isValid);
+            .ReturnsAsync(isValid
+                ? TransactionPinVerificationResult.Verified
+                : TransactionPinVerificationResult.Invalid);
     }
 
     private void SetupVerifyPinThrows(Exception exception)
     {
         _pinService
-            .Setup(x => x.VerifyPinAsync(
+            .Setup(x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
@@ -195,7 +200,7 @@ public sealed class VerifyPinCommandTests : BaseTest
             Times.Never);
 
         _pinService.Verify(
-            x => x.VerifyPinAsync(
+            x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()),
@@ -220,7 +225,7 @@ public sealed class VerifyPinCommandTests : BaseTest
         Assert.Equal("Transaction PIN has not been set.", result.Message);
 
         _pinService.Verify(
-            x => x.VerifyPinAsync(
+            x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()),
@@ -244,6 +249,52 @@ public sealed class VerifyPinCommandTests : BaseTest
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.Unauthorized, result.StatusCode);
         Assert.Equal("Invalid transaction PIN.", result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPinIsNewlyLocked_ReturnsLockedAndQueuesEmail()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        _pinService
+            .Setup(x => x.VerifyPinWithStatusAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(TransactionPinVerificationResult.LockedNow);
+
+        var result = await CreateHandler().Handle(CreateCommand(), default);
+
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("locked for 1 hour", result.Message);
+        _notificationQueue.Verify(x => x.QueueNotificationEmail(
+            UserFirstName,
+            UserEmail,
+            It.Is<string>(message => message.Contains("locked your transaction PIN for 1 hour")),
+            "Transaction PIN temporarily locked"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPinIsAlreadyLocked_ReturnsLockedWithoutSendingAnotherEmail()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        _pinService
+            .Setup(x => x.VerifyPinWithStatusAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(TransactionPinVerificationResult.Locked);
+
+        var result = await CreateHandler().Handle(CreateCommand(), default);
+
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("try again in 1 hour", result.Message);
+        _notificationQueue.Verify(x => x.QueueNotificationEmail(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>()), Times.Never);
     }
 
     // ---------------------------------------------------------
@@ -276,7 +327,7 @@ public sealed class VerifyPinCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _pinService.Verify(
-            x => x.VerifyPinAsync(
+            x => x.VerifyPinWithStatusAsync(
                 UserPublicId,
                 Pin,
                 It.IsAny<CancellationToken>()),
@@ -383,7 +434,7 @@ public sealed class VerifyPinCommandTests : BaseTest
         await handler.Handle(CreateCommand(), cts.Token);
 
         _pinService.Verify(
-            x => x.VerifyPinAsync(
+            x => x.VerifyPinWithStatusAsync(
                 UserPublicId,
                 Pin,
                 cts.Token),

@@ -15,7 +15,7 @@ public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStor
         if attempts == 1 then
             redis.call('PEXPIRE', KEYS[1], ARGV[1])
         end
-        if attempts >= tonumber(ARGV[2]) then
+        if attempts == tonumber(ARGV[2]) then
             redis.call('SET', KEYS[2], '1', 'PX', ARGV[3])
             return 1
         end
