@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Hangfire;
 using Mova.Api.Configurations;
 using Mova.Api.Middlewares;
+using Mova.Api.Security;
 using Mova.Shared.Common;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
@@ -181,6 +182,7 @@ public class Startup(IConfiguration configuration)
 
 
         // Later add:
+        services.AddScoped<IPinDecryptionService, RsaPinDecryptionService>();
         services.AddInfrastructure(_configuration);
         services.Configure<SwaggerSettings>(
             _configuration.GetSection(SwaggerSettings.SectionName));

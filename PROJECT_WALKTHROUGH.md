@@ -219,6 +219,8 @@ POST /api/v1/security/pin/forgot-pin-verify
 
 The PIN service requires exactly six numeric digits for setup/change and stores an ASP.NET Identity password hash, not the raw PIN. Reset clears the existing PIN hash after the recovery flow. PIN verification is a separate operation from wallet release scheduling.
 
+The `set` and `verify` requests send an RSA-OAEP/SHA-256 encrypted Base64 value in `pin`; the `change` request sends encrypted Base64 values in `currentPin` and `newPin`. The API decrypts these values before applying the existing six-digit validation and PIN hashing. Configure the matching private key on the backend as `PIN_ENCRYPTION_PRIVATE_KEY`, either as PEM contents, a path to a readable PEM key file, or Base64-encoded PKCS#8 key data. Keep this private key out of the frontend and source control; the frontend uses only the corresponding public key in `VITE_PIN_ENCRYPTION_PUBLIC_KEY`.
+
 ## 6. User and Wallet Balances
 
 The user has a main account balance. A wallet has separate balances:
