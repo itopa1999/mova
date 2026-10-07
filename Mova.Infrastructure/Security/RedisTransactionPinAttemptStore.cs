@@ -11,12 +11,16 @@ public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStor
     private static readonly TimeSpan LockDuration = TimeSpan.FromHours(1);
 
     private const string RecordFailureScript = """
+        if redis.call('EXISTS', KEYS[2]) == 1 then
+            return 1
+        end
         local attempts = redis.call('INCR', KEYS[1])
         if attempts == 1 then
             redis.call('PEXPIRE', KEYS[1], ARGV[1])
         end
-        if attempts == tonumber(ARGV[2]) then
+        if attempts >= tonumber(ARGV[2]) then
             redis.call('SET', KEYS[2], '1', 'PX', ARGV[3])
+            redis.call('DEL', KEYS[1])
             return 1
         end
         return 0

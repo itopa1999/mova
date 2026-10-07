@@ -39,6 +39,7 @@ public class ApplicationDbContext
     public DbSet<RenewalPolicy> RenewalPolicies => Set<RenewalPolicy>();
     public DbSet<RenewalEvent> RenewalEvents => Set<RenewalEvent>();
     public DbSet<WalletTemplate> WalletTemplates => Set<WalletTemplate>();
+    public DbSet<Feedback> Feedbacks => Set<Feedback>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

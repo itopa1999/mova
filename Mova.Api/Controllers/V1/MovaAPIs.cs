@@ -15,6 +15,7 @@ using static Mova.Application.BBL.Commands.FeatureFlags.ToggleFeatureFlag;
 using static Mova.Application.BBL.MovaAPIs.GetFeatureFlags;
 using static Mova.Application.BBL.MovaAPIs.GetNotificationsQuery;
 using static Mova.Application.BBL.MovaAPIs.HomeQuery;
+using static Mova.Application.BBL.MovaAPIs.SubmitFeedbackCommand;
 
 namespace Mova.Api.Controllers.V1;
 
@@ -142,6 +143,23 @@ public class MovaQueries(
         [FromBody] CreateVirtualAccountForUserCommand.Command command,
         CancellationToken cancellationToken)
     {
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPost("feedback")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<SubmitFeedbackResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> Submit(
+        [FromBody] SubmitFeedbackCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;      
+
         var result = await _mediator.Send(command, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
