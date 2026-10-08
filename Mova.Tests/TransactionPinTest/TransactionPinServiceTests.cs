@@ -17,11 +17,13 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public void TransactionPinCacheKeys_UseRequestedRedisKeyFormats()
     {
+        var prefix = CacheKeys.TransactionPinPrefixGlobal();
+
         Assert.Equal(
-            $"mova:security:pin:attempts:{UserPublicId}",
+            $"{prefix}:attempts:{UserPublicId}",
             CacheKeys.TransactionPinAttempts(UserPublicId));
         Assert.Equal(
-            $"mova:security:pin:lock:{UserPublicId}",
+            $"{prefix}:lock:{UserPublicId}",
             CacheKeys.TransactionPinLock(UserPublicId));
     }
 

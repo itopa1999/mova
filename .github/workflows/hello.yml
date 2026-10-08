@@ -1,0 +1,21 @@
+name: Hello
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  say-hello:
+    name: Say Hello
+    runs-on: ubuntu-latest
+    steps:
+      - name: Greet
+        run: echo "✅ GitHub Actions is working!"
+
+      - name: Show context
+        run: |
+          echo "Repo:   ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Actor:  ${{ github.actor }}"
+          echo "Event:  ${{ github.event_name }}"
