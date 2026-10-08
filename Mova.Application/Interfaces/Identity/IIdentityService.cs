@@ -8,11 +8,18 @@ public interface IIdentityService
         string email,
         string phoneNumber,
         string BVN,
-        string password);
+        string password,
+        CancellationToken cancellationToken = default);
 
     Task<(bool Success, string ErrorMessage)> AddToRoleAsync(
         long userId,
-        string role);
+        string role,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Success, string ErrorMessage)> RemoveFromRoleAsync(
+        long userId,
+        string role,
+        CancellationToken cancellationToken = default);
 
     Task<UserIdentityDto?> GetByIdentifierAsync(
         string identifier,
@@ -34,14 +41,14 @@ public interface IIdentityService
         CancellationToken cancellationToken = default);
 
 
-    Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId);
+    Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId, CancellationToken cancellationToken = default);
 
-    Task<(bool Success, string ErrorMessage)> ResetPasswordAsync(long userId, string newPassword);
+    Task<(bool Success, string ErrorMessage)> ResetPasswordAsync(long userId, string newPassword, CancellationToken cancellationToken = default);
 
     Task<(bool Success, string ErrorMessage)> ChangePasswordAsync(
         long userId,
         string oldPassword,
-        string newPassword);
+        string newPassword, CancellationToken cancellationToken = default);
 
     Task<bool> UpdateNotificationPreferenceAsync(
         string identifier,
@@ -52,15 +59,16 @@ public interface IIdentityService
     Task<bool> UpdateLastKnownDeviceAsync(
         string identifier,
         string deviceId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken= default);
 
-    Task<bool> CheckPasswordAsync(long userId, string password);
+    Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default);
 
-    Task<bool> IsAccountVerifiedAsync(long userId);
+    Task<bool> IsAccountVerifiedAsync(long userId, CancellationToken cancellationToken = default);
 
-    Task<IList<string>> GetRolesAsync(long userId);
+    Task<IList<string>> GetRolesAsync(long userId, CancellationToken cancellationToken = default);
 
     Task<bool> CreditBalanceAsync(string UserPublicId, decimal Amount, CancellationToken cancellationToken);
 
     Task<bool> DebitBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken);
+    Task<int> CountUsersInRoleAsync(string role, CancellationToken cancellationToken = default);
 }

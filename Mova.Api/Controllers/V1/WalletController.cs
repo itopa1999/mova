@@ -11,6 +11,7 @@ using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Application.BBL.Queries.WalletTemplates;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateRenewalPolicyCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateWalletCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.RestartWalletCommand;
@@ -31,7 +32,7 @@ using static Mova.Application.BBL.Queries.WalletTemplates.ListWalletTemplatesQue
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = Roles.Customer)]
 [Route("api/v1/wallets")]
 [ApiExplorerSettings(GroupName = "v1")]
 public class WalletController(
@@ -251,7 +252,6 @@ public class WalletController(
     }
 
     [HttpPost("preview")]
-    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<SchedulePreviewResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]

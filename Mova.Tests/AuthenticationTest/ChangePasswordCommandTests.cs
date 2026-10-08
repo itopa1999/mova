@@ -68,7 +68,8 @@ public sealed class ChangePasswordCommandTests : BaseTest
             .Setup(x => x.ChangePasswordAsync(
                 It.IsAny<long>(),
                 It.IsAny<string>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, string.Empty));
     }
 
@@ -78,7 +79,8 @@ public sealed class ChangePasswordCommandTests : BaseTest
             .Setup(x => x.ChangePasswordAsync(
                 It.IsAny<long>(),
                 It.IsAny<string>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync((false, message));
     }
 
@@ -131,7 +133,8 @@ public sealed class ChangePasswordCommandTests : BaseTest
             x => x.ChangePasswordAsync(
                 42L,
                 "OldPass123!",
-                "NewPass456!"),
+                "NewPass456!",
+                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -335,7 +338,8 @@ public sealed class ChangePasswordCommandTests : BaseTest
             .Setup(x => x.ChangePasswordAsync(
                 It.IsAny<long>(),
                 It.IsAny<string>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Identity provider unavailable"));
 
         var handler = CreateHandler();

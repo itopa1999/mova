@@ -133,7 +133,7 @@ public sealed class RefreshTokenCommandTests : BaseTest
     private void SetupRoles(params string[] roles)
     {
         _identityService
-            .Setup(x => x.GetRolesAsync(It.IsAny<long>()))
+            .Setup(x => x.GetRolesAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(roles.ToList());
     }
 

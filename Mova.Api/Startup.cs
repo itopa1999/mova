@@ -71,20 +71,15 @@ public class Startup(IConfiguration configuration)
             };
         });
 
+        var origins = (_configuration["Cors:AllowedOrigins"] ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         services.AddCors(options =>
         {
             options.AddPolicy("AllowSpecificOrigin",
                 policy =>
                 {
-                    policy.WithOrigins(
-                        "https://localhost:3000",
-                        "http://localhost:5173",
-                        "http://localhost:5174",
-                        "https://mova-frontend.luckystarboy01.workers.dev",
-                        "http://172.26.94.7:4173",
-                        "http://192.168.1.126:4173"
-
-                        )
+                    policy.WithOrigins(origins)
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
@@ -186,6 +181,8 @@ public class Startup(IConfiguration configuration)
         services.AddInfrastructure(_configuration);
         services.Configure<SwaggerSettings>(
             _configuration.GetSection(SwaggerSettings.SectionName));
+        services.Configure<HangfireSettings>(
+            _configuration.GetSection(HangfireSettings.SectionName));
 
         services.AddDataProtection();
     }
@@ -213,11 +210,28 @@ public class Startup(IConfiguration configuration)
         //     job => job.ExecuteAsync(CancellationToken.None),
         //     Cron.MinuteInterval(1));
 
+        // ─────────────────────────────────────────────────────────────
+        // 1. Exception handler FIRST — catches exceptions from every
+        //    middleware registered below it.
+        // ─────────────────────────────────────────────────────────────
+        app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-        app.UseHangfireDashboard("/hangfire");
+        // ─────────────────────────────────────────────────────────────
+        // 2. HTTPS redirect early in prod — before any content is served.
+        // ─────────────────────────────────────────────────────────────
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
 
+        // ─────────────────────────────────────────────────────────────
+        // 3. CORS — must run before endpoints it protects.
+        // ─────────────────────────────────────────────────────────────
         app.UseCors("AllowSpecificOrigin");
 
+        // ─────────────────────────────────────────────────────────────
+        // 4. Swagger — gated by basic auth via SwaggerAuthMiddleware.
+        // ─────────────────────────────────────────────────────────────
         app.UseMiddleware<SwaggerAuthMiddleware>();
 
         app.UseSwagger();
@@ -247,27 +261,37 @@ public class Startup(IConfiguration configuration)
                 "Mova API Documentation";
         });
 
-        app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-        if (!app.Environment.IsDevelopment())
-        {
-            app.UseHttpsRedirection();
-        }
-
+        // ─────────────────────────────────────────────────────────────
+        // 5. Auth pipeline — MUST run before Hangfire dashboard so the
+        //    User is populated from the JWT cookie when the role filter
+        //    inside HangfireDashboardAuthorizationFilter checks it.
+        // ─────────────────────────────────────────────────────────────
         app.UseAuthentication();
 
         app.UseAuthorization();
 
         app.UseRateLimiter();
 
-        // app.UseHangfireDashboard("/hangfire", new DashboardOptions
-        // {
-        //     Authorization = new[]
-        //     {
-        //         new HangfireDashboardAuthorizationFilter()
-        //     }
-        // });
+        // ─────────────────────────────────────────────────────────────
+        // 6. Hangfire — basic-auth gate, then dashboard with the
+        //    JWT role filter (SuperAdmin).
+        // ─────────────────────────────────────────────────────────────
+        app.UseMiddleware<HangfireAuthMiddleware>();
 
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = new[]
+            {
+                new HangfireDashboardAuthorizationFilter()
+            },
+            // Optional: make the dashboard read-only in production
+            // (no Requeue / Delete / Trigger buttons — safer for fintech)
+            // IsReadOnlyFunc = _ => !app.Environment.IsDevelopment()
+        });
+
+        // ─────────────────────────────────────────────────────────────
+        // 7. Static files and controllers.
+        // ─────────────────────────────────────────────────────────────
         app.UseStaticFiles();
 
         app.MapControllers();

@@ -60,7 +60,8 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
         _identityService
             .Setup(x => x.CheckPasswordAsync(
                 It.IsAny<long>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(valid);
     }
 
@@ -426,7 +427,7 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
             default);
 
         _identityService.Verify(
-            x => x.CheckPasswordAsync(99, "MyPass!"),
+            x => x.CheckPasswordAsync(99, "MyPass!", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

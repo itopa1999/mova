@@ -1,34 +1,29 @@
 using System.Net;
-using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
-using Mova.Application.BBL.Commands.Admin;
-using Mova.Application.BBL.Commands.FeatureFlags;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Shared.Common;
-using static Mova.Application.BBL.Commands.Admin.CreateVirtualAccountForUserCommand;
-using static Mova.Application.BBL.Commands.FeatureFlags.ToggleFeatureFlag;
-using static Mova.Application.BBL.MovaAPIs.GetFeatureFlags;
 using static Mova.Application.BBL.MovaAPIs.GetNotificationsQuery;
 using static Mova.Application.BBL.MovaAPIs.HomeQuery;
 using static Mova.Application.BBL.MovaAPIs.SubmitFeedbackCommand;
+using Mova.Shared.Constants;
 
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
-[Authorize]
 [Route("api/v1/mova")]
 [ApiExplorerSettings(GroupName = "v1")]
-public class MovaQueries(
+public class MovaController(
     IMediator mediator) : BaseController
 {
     private readonly IMediator _mediator = mediator;
 
     [HttpGet("home")]
+    [Authorize(Roles = Roles.Customer)]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<HomeQueryDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -45,6 +40,7 @@ public class MovaQueries(
     }
 
     [HttpGet("get-notifications")]
+    [Authorize(Roles = Roles.Customer)]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<NotificationDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -64,6 +60,7 @@ public class MovaQueries(
     }
 
     [HttpPatch("{id:long}/read-notification")]
+    [Authorize(Roles = Roles.Customer)]
     [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -84,6 +81,7 @@ public class MovaQueries(
 
 
     [HttpPatch("read-all-notifications")]
+    [Authorize(Roles = Roles.Customer)]
     [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -100,55 +98,8 @@ public class MovaQueries(
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpGet("feature-flags")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(typeof(BaseResult<List<FeatureFlagDto>>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> GetAll(
-        CancellationToken cancellationToken = default)
-    {
-        var result = await _mediator.Send(
-            new GetFeatureFlags.Query(), cancellationToken);
-
-        return StatusCode((int)result.StatusCode, result);
-    }
-
-    [HttpPost("feature-flags/toggle")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
-    [ProducesResponseType(typeof(BaseResult<ToggleFeatureFlagDto>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> Toggle(
-        [FromQuery] long id,
-        [FromQuery, Required] bool? isEnabled,
-        CancellationToken cancellationToken = default)
-    {
-        var command = new ToggleFeatureFlag.Command
-        {
-            Id = id,
-            IsEnabled = isEnabled!.Value,
-        };
-
-        var result = await _mediator.Send(command, cancellationToken);
-
-        return StatusCode((int)result.StatusCode, result);
-    }
-
-    [HttpPost("admin/virtual-accounts")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
-    [ProducesResponseType(
-        typeof(BaseResult<CreateVirtualAccountForUserResponseDto>),
-        (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> CreateVirtualAccountForUser(
-        [FromBody] CreateVirtualAccountForUserCommand.Command command,
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(command, cancellationToken);
-
-        return StatusCode((int)result.StatusCode, result);
-    }
-
     [HttpPost("feedback")]
+    [Authorize(Roles = Roles.Customer)]
     [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult<SubmitFeedbackResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]

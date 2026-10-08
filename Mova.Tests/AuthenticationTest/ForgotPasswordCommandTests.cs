@@ -84,7 +84,7 @@ public sealed class ForgotPasswordCommandTests : BaseTest
     private void SetupAccountVerified(bool verified = true)
     {
         _identityService
-            .Setup(x => x.IsAccountVerifiedAsync(It.IsAny<long>()))
+            .Setup(x => x.IsAccountVerifiedAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(verified);
     }
 

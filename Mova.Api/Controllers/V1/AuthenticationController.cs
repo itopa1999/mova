@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -54,6 +55,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("register")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<RegistrationResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -68,6 +70,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("verify-account")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<VerifyAccountResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -98,6 +101,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("resend-verification-token")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<ResendVerificationOtpResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -112,6 +116,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<LoginResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -142,6 +147,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("refresh-token")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthMedium)]
     [ProducesResponseType(typeof(BaseResult<RefreshTokenResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -187,7 +193,7 @@ public class AuthenticationController(
 
 
     [HttpPost("logout")]
-    [Authorize]
+    [Authorize(Roles = Roles.All)]
     [EnableRateLimiting(RateLimitPolicies.AuthMedium)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -221,6 +227,7 @@ public class AuthenticationController(
 
 
     [HttpPost("forgot-password")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<ForgotPasswordResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -236,6 +243,7 @@ public class AuthenticationController(
 
 
     [HttpPost("verify-forgot-password")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<VerifyPasswordTokenResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -248,6 +256,7 @@ public class AuthenticationController(
 
 
     [HttpPost("reset-password")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -262,7 +271,7 @@ public class AuthenticationController(
     }
 
     [HttpPost("change-password")]
-    [Authorize]
+    [Authorize(Roles = Roles.All)]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -275,6 +284,45 @@ public class AuthenticationController(
             (int)result.StatusCode,
             result
         );
+    }
+
+    [HttpGet("profile")]
+    [Authorize(Roles = Roles.Customer)]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<GetProfileDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetProfile(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetProfile.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
+
+    [HttpPut("notification-preferences")]
+    [Authorize(Roles = Roles.Customer)]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(
+        typeof(BaseResult<UpdateNotificationPreferenceResponseDto>),
+        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> UpdateNotificationPreference(
+        [FromBody] UpdateNotificationPreferenceCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
     }
 
     private void SetAuthenticationCookies(
@@ -341,44 +389,5 @@ public class AuthenticationController(
 
         Response.Cookies.Append("access_token", string.Empty, cookieOptions);
         Response.Cookies.Append("refresh_token", string.Empty, cookieOptions);
-    }
-
-    [HttpGet("profile")]
-    [Authorize]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(typeof(BaseResult<GetProfileDto>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> GetProfile(
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new GetProfile.Query
-            {
-                UserPublicId = UserPublicId ?? string.Empty
-            },
-            cancellationToken);
-
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
-    }
-
-    [HttpPut("notification-preferences")]
-    [Authorize]
-    [EnableRateLimiting(RateLimitPolicies.Write)]
-    [ProducesResponseType(
-        typeof(BaseResult<UpdateNotificationPreferenceResponseDto>),
-        (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
-    public async Task<IActionResult> UpdateNotificationPreference(
-        [FromBody] UpdateNotificationPreferenceCommand.Command command,
-        CancellationToken cancellationToken)
-    {
-        command.UserPublicId = UserPublicId ?? string.Empty;
-
-        var result = await _mediator.Send(command, cancellationToken);
-
-        return StatusCode((int)result.StatusCode, result);
     }
 }
