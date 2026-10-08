@@ -17,9 +17,15 @@ public sealed partial class MonnifyService
 
         var request = new MonnifyInitializeRequest
         {
-            Amount = amount, CustomerEmail = email, CustomerName = email, PaymentReference = reference,
-            PaymentDescription = "MOVA account funding", CurrencyCode = "NGN", ContractCode = _settings.ContractCode,
-            RedirectUrl = _externalApiSettings.PaymentCallbackUrl, PaymentMethods = ["CARD", "ACCOUNT_TRANSFER", "USSD"]
+            Amount = amount,
+            CustomerEmail = email,
+            CustomerName = email,
+            PaymentReference = reference,
+            PaymentDescription = "MOVA account funding",
+            CurrencyCode = "NGN",
+            ContractCode = _settings.ContractCode,
+            RedirectUrl = _externalApiSettings.PaymentCallbackUrl,
+            PaymentMethods = ["CARD", "ACCOUNT_TRANSFER", "USSD"]
         };
         var response = await _externalApiClient.PostAsync<MonnifyInitializeRequest, MonnifyInitializeResponse>(
             $"{_settings.BaseUrl.TrimEnd('/')}/api/v1/merchant/transactions/init-transaction", request,

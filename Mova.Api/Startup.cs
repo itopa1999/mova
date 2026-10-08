@@ -37,7 +37,7 @@ public class Startup(IConfiguration configuration)
             .AddCheck<BackendReadinessHealthCheck>(
                 "backend-readiness",
                 tags: ["ready"]);
-        
+
         // CQRS (MediatR)
         services.AddMediatR(cfg =>
         {
@@ -77,7 +77,7 @@ public class Startup(IConfiguration configuration)
                 policy =>
                 {
                     policy.WithOrigins(
-                        "https://localhost:3000", 
+                        "https://localhost:3000",
                         "http://localhost:5173",
                         "http://localhost:5174",
                         "https://mova-frontend.luckystarboy01.workers.dev",

@@ -5,5 +5,5 @@ public sealed class ExternalApiSettings
     public string NigerianBanksUrl { get; set; } = string.Empty;
     public string PaymentCallbackUrl { get; set; } = string.Empty;
     public string FrontendBaseUrl { get; set; } = string.Empty;
-    
+
 }

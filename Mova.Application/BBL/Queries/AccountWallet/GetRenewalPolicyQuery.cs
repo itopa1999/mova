@@ -30,7 +30,7 @@ public sealed class GetRenewalPolicyQuery
         public string WalletName { get; init; } = string.Empty;
 
         public bool IsEnabled { get; init; }
-         public string Status { get; init; } = string.Empty;
+        public string Status { get; init; } = string.Empty;
 
         public string TriggerType { get; init; } = string.Empty;
         public decimal TriggerAmount { get; init; }

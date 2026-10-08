@@ -1,42 +1,44 @@
-using Microsoft.EntityFrameworkCore; 
-using Microsoft.EntityFrameworkCore.Metadata.Builders; 
-using Mova.Domain.Entities; 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Mova.Domain.Entities;
 
-namespace Mova.Infrastructure.Persistence.Configurations; 
+namespace Mova.Infrastructure.Persistence.Configurations;
 
-public class WalletRuleConfiguration : IEntityTypeConfiguration<WalletRule> 
-{ 
-    public void Configure(EntityTypeBuilder<WalletRule> builder) 
-    { 
+public class WalletRuleConfiguration : IEntityTypeConfiguration<WalletRule>
+{
+    public void Configure(EntityTypeBuilder<WalletRule> builder)
+    {
         builder.ToTable("wallet_rules");
 
-        builder.HasKey(x => x.Id); 
-        
-        builder.Property(x => x.WalletId) 
-            .IsRequired(); 
-        builder.Property(x => x.Frequency) 
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.WalletId)
+            .IsRequired();
+        builder.Property(x => x.Frequency)
             .IsRequired()
             .HasConversion<int>();
-            
+
         builder.Property(x => x.StartDate)
-            .IsRequired(); 
+            .IsRequired();
         builder.Property(x => x.EndDate)
             .IsRequired();
 
-        builder.ComplexProperty( 
-            x => x.Amount, 
-            money => { 
+        builder.ComplexProperty(
+            x => x.Amount,
+            money =>
+            {
 
                 money.Property(x => x.MinorUnits)
                     .HasColumnName("amount_minor_units")
-                    .IsRequired(); 
+                    .IsRequired();
 
-                money.Property(x => x.Currency) 
-                    .HasColumnName("amount_currency") 
-                    .HasMaxLength(3) 
-                    .IsRequired(); }); 
+                money.Property(x => x.Currency)
+                    .HasColumnName("amount_currency")
+                    .HasMaxLength(3)
+                    .IsRequired();
+            });
 
-        builder.HasIndex(x => x.WalletId) 
-            .IsUnique(); 
-    } 
+        builder.HasIndex(x => x.WalletId)
+            .IsUnique();
+    }
 }

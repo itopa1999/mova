@@ -20,6 +20,6 @@ public class Feedback : BaseEntity
 
     [MaxLength(600)]
     public string? Message { get; set; }
-    
+
     public bool IsDone { get; set; } = false;
 }

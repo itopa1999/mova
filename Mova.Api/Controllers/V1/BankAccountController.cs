@@ -92,7 +92,7 @@ public class BankAccountController(
     {
         command.UserPublicId = UserPublicId ?? string.Empty;
         command.Email = UserEmail ?? string.Empty;
-        command.FirstName  = UserFirstName ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
 
         var result = await _mediator.Send(
             command,

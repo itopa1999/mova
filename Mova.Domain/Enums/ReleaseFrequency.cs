@@ -7,7 +7,7 @@ public enum ReleaseFrequency
     Weekly = 3,
     Monthly = 4,
     Quarterly = 5,
-    Yearly = 6, 
+    Yearly = 6,
     Custom = 7,
     Hourly = 8
 }

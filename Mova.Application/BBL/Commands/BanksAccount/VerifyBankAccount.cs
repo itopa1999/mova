@@ -24,7 +24,7 @@ public sealed class VerifyBankAccount
         public string AccountNumber { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;
         public string BankInstitution { get; set; } = string.Empty;
-        public string BankCode { get; init; } = string.Empty; 
+        public string BankCode { get; init; } = string.Empty;
     }
 
     public sealed class Handler : IRequestHandler<Command, BaseResult<VerifyBankAccountDto>>

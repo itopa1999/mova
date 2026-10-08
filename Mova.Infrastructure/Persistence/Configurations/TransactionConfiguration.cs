@@ -63,11 +63,11 @@ public class TransactionConfiguration
             .HasFilter("\"IsDeleted\" = FALSE AND (\"Status\" = 1 OR \"Status\" = 2)");
 
         builder.HasIndex(x => new
-            {
-                x.UserPublicId,
-                x.CreatedAt,
-                x.Id
-            })
+        {
+            x.UserPublicId,
+            x.CreatedAt,
+            x.Id
+        })
             .IsDescending(false, true, true)
             .HasDatabaseName("IX_transactions_UserPublicId_CreatedAt_Id");
 

@@ -158,7 +158,7 @@ public class MovaQueries(
     {
         command.UserPublicId = UserPublicId ?? string.Empty;
         command.FirstName = UserFirstName ?? string.Empty;
-        command.Email = UserEmail ?? string.Empty;      
+        command.Email = UserEmail ?? string.Empty;
 
         var result = await _mediator.Send(command, cancellationToken);
 

@@ -29,7 +29,7 @@ public class Payout : BaseEntity
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset? FailedAt { get; set; }
     public DateTimeOffset? MainCreditedAt { get; set; }
-    
+
     public int FailedAttempts { get; set; }
 
     public string? FailureReason { get; set; }

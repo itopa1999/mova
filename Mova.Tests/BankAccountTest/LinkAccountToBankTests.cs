@@ -72,9 +72,9 @@ public sealed class LinkAccountToBankTests : BaseTest
         {
             UserPublicId = userPublicId,
             Name = name,
-            CategoryId = category.Id,       
+            CategoryId = category.Id,
             BankAccountId = bankAccountId,
-            Status = WalletStatus.Active, 
+            Status = WalletStatus.Active,
             TargetAmount = Money.FromNaira(0),
             TotalReleasedAmount = Money.FromNaira(0),
             AvailableAmount = Money.FromNaira(0),

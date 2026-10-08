@@ -169,92 +169,92 @@ public sealed class FundAccount
             switch (provider)
             {
                 case PaymentProvider.Paystack:
-                {
-                    if (!await _featureFlagService.IsEnabledAsync(
-                        FeatureFlagName.DepositViaPaystack,
-                        cancellationToken))
                     {
-                        op.Success("Paystack is disabled");
-                        return new BaseResult<FundAccountDto>(
-                            HttpStatusCode.BadRequest,
-                            "Payment cannot be completed at this time, please choose another gataway method");
+                        if (!await _featureFlagService.IsEnabledAsync(
+                            FeatureFlagName.DepositViaPaystack,
+                            cancellationToken))
+                        {
+                            op.Success("Paystack is disabled");
+                            return new BaseResult<FundAccountDto>(
+                                HttpStatusCode.BadRequest,
+                                "Payment cannot be completed at this time, please choose another gataway method");
+                        }
+
+                        var response = await _paystackService.InitializePaymentAsync(
+                            user.Email,
+                            request.Amount,
+                            reference,
+                            cancellationToken);
+
+                        if (!response.Success)
+                        {
+                            op.Fail($"Paystack init failed: {response.Message}");
+                            return new BaseResult<FundAccountDto>(
+                                HttpStatusCode.BadRequest,
+                                response.Message ?? "Unable to initialize Paystack payment.");
+                        }
+
+                        authorizationUrl = response.AuthorizationUrl!;
+                        break;
                     }
-
-                    var response = await _paystackService.InitializePaymentAsync(
-                        user.Email,
-                        request.Amount,
-                        reference,
-                        cancellationToken);
-
-                    if (!response.Success)
-                    {
-                        op.Fail($"Paystack init failed: {response.Message}");
-                        return new BaseResult<FundAccountDto>(
-                            HttpStatusCode.BadRequest,
-                            response.Message ?? "Unable to initialize Paystack payment.");
-                    }
-
-                    authorizationUrl = response.AuthorizationUrl!;
-                    break;
-                }
 
                 case PaymentProvider.Flutterwave:
-                {
-                    if (!await _featureFlagService.IsEnabledAsync(
-                        FeatureFlagName.DepositViaFlutterwave,
-                        cancellationToken))
                     {
-                        op.Success("FlutterWave is disabled");
-                        return new BaseResult<FundAccountDto>(
-                            HttpStatusCode.BadRequest,
-                            "Payment cannot be completed at this time, please choose another gataway method");
-                    }
-                    var response = await _flutterwaveService.InitializePaymentAsync(
-                        user.Email,
-                        request.Amount,
-                        reference,
-                        cancellationToken);
+                        if (!await _featureFlagService.IsEnabledAsync(
+                            FeatureFlagName.DepositViaFlutterwave,
+                            cancellationToken))
+                        {
+                            op.Success("FlutterWave is disabled");
+                            return new BaseResult<FundAccountDto>(
+                                HttpStatusCode.BadRequest,
+                                "Payment cannot be completed at this time, please choose another gataway method");
+                        }
+                        var response = await _flutterwaveService.InitializePaymentAsync(
+                            user.Email,
+                            request.Amount,
+                            reference,
+                            cancellationToken);
 
-                    if (!response.Success)
-                    {
-                        op.Fail($"Flutterwave init failed: {response.Message}");
-                        return new BaseResult<FundAccountDto>(
-                            HttpStatusCode.BadRequest,
-                            response.Message ?? "Unable to initialize Flutterwave payment.");
-                    }
+                        if (!response.Success)
+                        {
+                            op.Fail($"Flutterwave init failed: {response.Message}");
+                            return new BaseResult<FundAccountDto>(
+                                HttpStatusCode.BadRequest,
+                                response.Message ?? "Unable to initialize Flutterwave payment.");
+                        }
 
-                    authorizationUrl = response.AuthorizationUrl!;
-                    break;
-                }
+                        authorizationUrl = response.AuthorizationUrl!;
+                        break;
+                    }
 
                 case PaymentProvider.Monnify:
-                {
-                    if (!await _featureFlagService.IsEnabledAsync(
-                        FeatureFlagName.DepositViaMonnify,
-                        cancellationToken))
                     {
-                        op.Success("Monnify is disabled");
-                        return new BaseResult<FundAccountDto>(
-                            HttpStatusCode.BadRequest,
-                            "Payment cannot be completed at this time, please choose another gataway method");
-                    }
-                    var response = await _monnifyService.InitializePaymentAsync(
-                        user.Email,
-                        request.Amount,
-                        reference,
-                        cancellationToken);
+                        if (!await _featureFlagService.IsEnabledAsync(
+                            FeatureFlagName.DepositViaMonnify,
+                            cancellationToken))
+                        {
+                            op.Success("Monnify is disabled");
+                            return new BaseResult<FundAccountDto>(
+                                HttpStatusCode.BadRequest,
+                                "Payment cannot be completed at this time, please choose another gataway method");
+                        }
+                        var response = await _monnifyService.InitializePaymentAsync(
+                            user.Email,
+                            request.Amount,
+                            reference,
+                            cancellationToken);
 
-                    if (!response.Success)
-                    {
-                        op.Fail($"Monnify init failed: {response.Message}");
-                        return new BaseResult<FundAccountDto>(
-                            HttpStatusCode.BadRequest,
-                            response.Message ?? "Unable to initialize Monnify payment.");
-                    }
+                        if (!response.Success)
+                        {
+                            op.Fail($"Monnify init failed: {response.Message}");
+                            return new BaseResult<FundAccountDto>(
+                                HttpStatusCode.BadRequest,
+                                response.Message ?? "Unable to initialize Monnify payment.");
+                        }
 
-                    authorizationUrl = response.AuthorizationUrl!;
-                    break;
-                }
+                        authorizationUrl = response.AuthorizationUrl!;
+                        break;
+                    }
 
                 default:
                     op.Fail("Unsupported payment provider.");

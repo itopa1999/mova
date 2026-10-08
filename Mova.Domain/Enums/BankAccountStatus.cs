@@ -6,6 +6,6 @@ public enum BankAccountStatus
     Verified = 1,
     Failed = 2,
     Active = 3,
-    Suspended = 4, 
+    Suspended = 4,
     Removed = 5
 }

@@ -16,7 +16,7 @@ public static class DependencyInjection
         // Bind JWT Settings
         services.Configure<JwtSettings>(
             configuration.GetSection(JwtSettings.SectionName));
-            
+
         // Register Services
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IRefreshTokenGenerator, RefreshTokenGenerator>();
@@ -57,13 +57,13 @@ public static class DependencyInjection
                         }
                         return Task.CompletedTask;
                     },
-                    
+
                     OnAuthenticationFailed = context =>
                     {
                         Console.WriteLine($"Authentication failed: {context.Exception.Message}");
                         return Task.CompletedTask;
                     },
-                    
+
                     OnChallenge = context =>
                     {
                         Console.WriteLine($"Challenge: {context.Error}");

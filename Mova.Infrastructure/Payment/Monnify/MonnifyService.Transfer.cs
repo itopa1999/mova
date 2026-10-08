@@ -33,7 +33,10 @@ public sealed partial class MonnifyService
         : Failed(reference, response?.ResponseMessage ?? fallback);
     private static string NormalizeTransferStatus(string? status) => status?.Trim().ToUpperInvariant() switch
     {
-        "SUCCESS" or "COMPLETED" => "success", "FAILED" or "REJECTED" => "failed", "REVERSED" or "REFUNDED" => "reversed", _ => "pending"
+        "SUCCESS" or "COMPLETED" => "success",
+        "FAILED" or "REJECTED" => "failed",
+        "REVERSED" or "REFUNDED" => "reversed",
+        _ => "pending"
     };
 
     private sealed class MonnifyTransferRequest

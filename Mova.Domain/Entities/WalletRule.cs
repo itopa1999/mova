@@ -13,7 +13,7 @@ public class WalletRule : BaseEntity
     public Money Amount { get; set; }
 
     public ReleaseFrequency Frequency { get; set; }
-    
+
     public string FrequencyConfig { get; set; } = string.Empty;
 
     public DateTimeOffset StartDate { get; set; }

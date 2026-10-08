@@ -56,7 +56,7 @@ public static class FrequencyConfigHelper
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
     }
-    
+
     // Deserialize JSON to specific config type
     public static FrequencyConfigBase DeserializeConfig(string json, ReleaseFrequency type)
     {
@@ -81,12 +81,12 @@ public static class FrequencyConfigHelper
             _ => throw new ArgumentException($"Unsupported frequency type: {type}")
         };
     }
-    
+
     // Get human-readable description
     public static string GetDescription(ReleaseFrequency type, string configJson)
     {
         var config = DeserializeConfig(configJson, type);
-        
+
         return type switch
         {
             ReleaseFrequency.Once => $"Once on {((OnceConfig)config).OnceDate:MMMM d, yyyy}",
@@ -100,67 +100,67 @@ public static class FrequencyConfigHelper
             _ => "Unknown schedule"
         };
     }
-    
+
     private static string GetDailyDescription(DailyConfig config)
     {
         if (config.DaysOfWeek.Count == 0 || config.DaysOfWeek.Count == 7)
             return "Every day";
-        
-        if (config.DaysOfWeek.Count == 5 && 
+
+        if (config.DaysOfWeek.Count == 5 &&
             config.DaysOfWeek.SequenceEqual(new[] { 1, 2, 3, 4, 5 }))
             return "Every weekday (Mon-Fri)";
-        
-        if (config.DaysOfWeek.Count == 3 && 
+
+        if (config.DaysOfWeek.Count == 3 &&
             config.DaysOfWeek.SequenceEqual(new[] { 5, 6, 7 }))
             return "Every weekend (Fri-Sun)";
-        
+
         return $"Every {string.Join(", ", config.DaysOfWeek.Select(DayOfWeekToString))}";
     }
-    
+
     private static string GetWeeklyDescription(WeeklyConfig config)
     {
         if (config.DaysOfWeek.Count == 0)
             return "Every week (no days selected)";
-        
+
         return $"Every {string.Join(", ", config.DaysOfWeek.Select(DayOfWeekToString))}";
     }
-    
+
     private static string GetMonthlyDescription(MonthlyConfig config)
     {
         if (config.IsLastDayOfMonth)
             return "Last day of every month";
-        
+
         if (config.DatesOfMonth.Count == 1)
             return $"{OrdinalSuffix(config.DatesOfMonth[0])} of every month";
-        
+
         return $"{string.Join(", ", config.DatesOfMonth.Select(d => OrdinalSuffix(d)))} of every month";
     }
-    
+
     private static string GetQuarterlyDescription(QuarterlyConfig config)
     {
         if (config.Months == null || !config.Months.Any())
             return "Quarterly (no months selected)";
-        
+
         if (config.DaysOfMonth == null || !config.DaysOfMonth.Any())
             return "Quarterly (no days selected)";
-        
+
         var monthNames = config.Months.Select(m => MonthToString(m));
         var dayNames = string.Join(", ", config.DaysOfMonth.Select(d => OrdinalSuffix(d)));
-        
+
         return $"{string.Join(", ", monthNames)} on the {dayNames}";
     }
-    
+
     private static string GetYearlyDescription(YearlyConfig config)
     {
         if (config.Months == null || !config.Months.Any())
             return "Yearly (no months selected)";
-        
+
         if (config.DaysOfMonth == null || !config.DaysOfMonth.Any())
             return "Yearly (no days selected)";
-        
+
         var monthNames = config.Months.Select(m => MonthToString(m));
         var dayNames = string.Join(", ", config.DaysOfMonth.Select(d => OrdinalSuffix(d)));
-        
+
         return $"Yearly on {string.Join(", ", monthNames)} {dayNames} at {config.Time}";
     }
 
@@ -170,7 +170,7 @@ public static class FrequencyConfigHelper
             ? "Every hour"
             : $"Every {config.IntervalHours} hours";
     }
-    
+
     private static string DayOfWeekToString(int day)
     {
         return day switch
@@ -185,7 +185,7 @@ public static class FrequencyConfigHelper
             _ => "Unknown"
         };
     }
-    
+
     private static string MonthToString(int month)
     {
         return month switch
@@ -205,11 +205,11 @@ public static class FrequencyConfigHelper
             _ => "Unknown"
         };
     }
-    
+
     private static string OrdinalSuffix(int number)
     {
         if (number <= 0) return number.ToString();
-        
+
         return number switch
         {
             1 => "1st",
@@ -226,7 +226,7 @@ public static class FrequencyConfigHelper
     {
         if (string.IsNullOrEmpty(timeString))
             return TimeSpan.Zero;
-            
+
         if (TimeSpan.TryParse(timeString, out var time))
         {
             // Validate time is within 00:00 to 23:59
@@ -234,7 +234,7 @@ public static class FrequencyConfigHelper
                 throw new ArgumentException("Time must be between 00:00 and 23:59");
             return time;
         }
-        
+
         throw new ArgumentException("Time must be in HH:mm format (e.g., 09:30, 14:45)");
     }
 

@@ -80,8 +80,8 @@ public sealed class NotificationQueue : INotificationQueue
                 CancellationToken.None));
     }
 
-    public void InAppNotificationAsync(string UserId, NotificationType Type, string Title, 
-    string Message, string? ActionUrl, string? Metadata, 
+    public void InAppNotificationAsync(string UserId, NotificationType Type, string Title,
+    string Message, string? ActionUrl, string? Metadata,
     CancellationToken cancellationToken = default)
     {
         _backgroundJobClient.Enqueue<BackgroundNotificationJob>(

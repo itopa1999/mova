@@ -54,7 +54,7 @@ public sealed class GetIfPinIsSetQuery
 
             var pin = new GetIfPinIsSetQueryDto
             {
-                HasPinSet=!string.IsNullOrWhiteSpace(user.TransactionPinHash)
+                HasPinSet = !string.IsNullOrWhiteSpace(user.TransactionPinHash)
             };
 
             return new BaseResult<GetIfPinIsSetQueryDto>(

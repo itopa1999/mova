@@ -12,7 +12,7 @@ public class ExceptionHandlingMiddleware
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
 
     public ExceptionHandlingMiddleware(
-        RequestDelegate next, 
+        RequestDelegate next,
         ILogger<ExceptionHandlingMiddleware> logger)
     {
         _next = next;

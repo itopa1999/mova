@@ -193,7 +193,7 @@ public sealed class VerifyAccountCommandTests : BaseTest
         var handler = CreateHandler();
         var result = await handler.Handle(CreateCommand(), default);
 
-        Assert.True(result.IsSuccess, 
+        Assert.True(result.IsSuccess,
         $"Status={result.StatusCode}, Message={result.Message}, Errors={string.Join(",", result.Message)}");
         Assert.Equal(System.Net.HttpStatusCode.OK, result.StatusCode);
         Assert.Equal("Account verified successfully.", result.Message);

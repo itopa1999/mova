@@ -14,7 +14,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddScoped<IIdentityService, IdentityService>();
-        
+
         services.AddDbContext<ApplicationDbContext>(options =>
         {
             var databaseProvider = configuration

@@ -13,5 +13,5 @@ public sealed class JwtSettings
     public int AccessTokenExpiryMinutes { get; init; } = 1500;
 
     public int RefreshTokenExpiryDays { get; init; } = 7;
-    
+
 }

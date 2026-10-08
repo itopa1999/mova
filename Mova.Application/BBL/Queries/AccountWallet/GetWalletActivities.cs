@@ -98,7 +98,7 @@ public sealed class GetWalletActivities
                 .AsNoTracking()
                 .Where(x =>
                     x.WalletId == wallet.Id &&
-                    x.UserPublicId == request.UserPublicId );
+                    x.UserPublicId == request.UserPublicId);
 
             var totalActivities = await baseQuery.CountAsync(cancellationToken);
 

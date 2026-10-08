@@ -95,19 +95,19 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             });
 
 
-            builder.ComplexProperty(
-                x => x.FundedAmount,
-                money =>
-                {
-                    money.Property(x => x.MinorUnits)
-                        .HasColumnName("funded_amount_minor_units")
-                        .IsRequired();
+        builder.ComplexProperty(
+            x => x.FundedAmount,
+            money =>
+            {
+                money.Property(x => x.MinorUnits)
+                    .HasColumnName("funded_amount_minor_units")
+                    .IsRequired();
 
-                    money.Property(x => x.Currency)
-                        .HasColumnName("funded_amount_currency")
-                        .HasMaxLength(3)
-                        .IsRequired();
-                });
+                money.Property(x => x.Currency)
+                    .HasColumnName("funded_amount_currency")
+                    .HasMaxLength(3)
+                    .IsRequired();
+            });
 
         builder.ComplexProperty(
             x => x.TotalReleasedAmount,

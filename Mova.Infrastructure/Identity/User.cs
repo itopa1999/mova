@@ -26,9 +26,9 @@ public class User : IdentityUser<long>
             .Where(value => !string.IsNullOrWhiteSpace(value)));
 
     public string? ProfilePicture { get; set; } = string.Empty;
-            
+
     public string? TransactionPinHash { get; set; }
-    
+
     [MaxLength(100)]
     public string? BvnHash { get; set; }
     public DateTimeOffset? TransactionPinSetAt { get; set; }
@@ -39,7 +39,7 @@ public class User : IdentityUser<long>
 
     [MaxLength(200)]
     public string? LastKnownDeviceId { get; set; }
-    
+
     // Alerts when the account is accessed from a new device or location.
     public bool NotifyLoginAlerts { get; set; } = true;
 
@@ -70,4 +70,4 @@ public class User : IdentityUser<long>
 
     [MaxLength(100)]
     public string? DeletedBy { get; set; }
-    }
+}

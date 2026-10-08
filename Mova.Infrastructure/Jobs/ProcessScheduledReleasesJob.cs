@@ -50,7 +50,7 @@ public sealed class ProcessScheduledReleasesJob
         var releaseIds = await _context.ScheduledReleases
             .AsNoTracking()
             .Where(x => x.Status == ReleaseStatus.Scheduled
-                        // && x.ScheduledFor <= DateTimeOffset.UtcNow)
+            // && x.ScheduledFor <= DateTimeOffset.UtcNow)
             )
             .OrderBy(x => x.ScheduledFor)
             .ThenBy(x => x.Id)
@@ -96,7 +96,7 @@ public sealed class ProcessScheduledReleasesJob
 
             if (scheduledRelease is null
                 || scheduledRelease.Status != ReleaseStatus.Scheduled
-                // || scheduledRelease.ScheduledFor > DateTimeOffset.UtcNow)
+            // || scheduledRelease.ScheduledFor > DateTimeOffset.UtcNow)
             )
             {
                 await transaction.RollbackAsync(cancellationToken);
