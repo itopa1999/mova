@@ -1,7 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Mova.Application.BBL.Commands.BanksAccount;
+using Mova.Application.BBL.Commands.Admin;
 using Mova.Application.Interfaces.Payment;
 using Xunit;
 

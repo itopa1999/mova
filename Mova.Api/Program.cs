@@ -28,14 +28,15 @@ Env.Load(envPath);
 
 builder.Configuration.AddEnvironmentVariables();
 
-// TODO please enable this on prod.
-
-// builder.WebHost.UseSentry(options =>
-// {
-//     options.Dsn = builder.Configuration["Sentry:Dsn"];
-//     options.Debug = builder.Environment.IsDevelopment();
-//     options.EnableLogs = true;
-// });
+if (builder.Environment.IsProduction())
+{
+    builder.WebHost.UseSentry(options =>
+    {
+        options.Dsn = builder.Configuration["Sentry:Dsn"];
+        options.Debug = false;
+        options.EnableLogs = true;
+    });
+}
 
 var startup = new Startup(builder.Configuration);
 

@@ -272,7 +272,7 @@ public sealed class ResendVerificationOtpCommandTests : BaseTest
         await handler.Handle(CreateCommand(purpose: "password-reset"), default);
 
         _identityService.Verify(
-            x => x.IsAccountVerifiedAsync(It.IsAny<long>()),
+            x => x.IsAccountVerifiedAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

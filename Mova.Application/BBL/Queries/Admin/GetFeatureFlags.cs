@@ -4,7 +4,7 @@ using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 
-namespace Mova.Application.BBL.MovaAPIs;
+namespace Mova.Application.BBL.Queries.Admin;
 
 public sealed class GetFeatureFlags
 {

@@ -12,6 +12,6 @@ public sealed class HangfireDashboardAuthorizationFilter : IDashboardAuthorizati
         if (!httpContext.User.Identity?.IsAuthenticated ?? true)
             return false;
 
-        return httpContext.User.IsInRole(Roles.Customer); // TODO change this later.
+        return httpContext.User.IsInRole(Roles.AllAdmins);
     }
 }

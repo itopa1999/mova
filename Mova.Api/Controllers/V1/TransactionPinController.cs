@@ -9,11 +9,12 @@ using Mova.Api.Security;
 using Mova.Application.BBL.Commands.TransactionPin;
 using Mova.Application.BBL.Queries.TransactionPin;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = Roles.Customer)]
 [Route("api/v1/security/pin")]
 [ApiExplorerSettings(GroupName = "v1")]
 public class TransactionPinController(

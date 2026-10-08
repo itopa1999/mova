@@ -79,7 +79,7 @@ public sealed class IdentityService : IIdentityService
         return (true, string.Empty, user.PublicId, user.Id);
     }
 
-    public async Task<(bool Success, string ErrorMessage)> AddToRoleAsync(long userId, string role)
+    public async Task<(bool Success, string ErrorMessage)> AddToRoleAsync(long userId, string role, CancellationToken cancellationToken = default)
     {
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null)
@@ -241,7 +241,7 @@ public sealed class IdentityService : IIdentityService
         return await query.AnyAsync(cancellationToken);
     }
 
-    public async Task<bool> CheckPasswordAsync(long userId, string password)
+    public async Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default)
     {
         var existingUser = await _userManager.FindByIdAsync(userId.ToString());
         if (existingUser is null) return false;
@@ -249,7 +249,7 @@ public sealed class IdentityService : IIdentityService
         return await _userManager.CheckPasswordAsync(existingUser, password);
     }
 
-    public async Task<bool> IsAccountVerifiedAsync(long userId)
+    public async Task<bool> IsAccountVerifiedAsync(long userId, CancellationToken cancellationToken = default)
     {
         var existingUser = await _userManager.FindByIdAsync(userId.ToString());
         if (existingUser is null) return false;
@@ -257,7 +257,7 @@ public sealed class IdentityService : IIdentityService
         return existingUser.EmailConfirmed && existingUser.PhoneNumberConfirmed;
     }
 
-    public async Task<IList<string>> GetRolesAsync(long userId)
+    public async Task<IList<string>> GetRolesAsync(long userId, CancellationToken cancellationToken = default)
     {
         var existingUser = await _userManager.FindByIdAsync(userId.ToString());
         if (existingUser is null) return new List<string>();
@@ -495,5 +495,39 @@ public sealed class IdentityService : IIdentityService
         {
             await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PhoneNumber));
         }
+    }
+
+    public async Task<(bool Success, string ErrorMessage)> RemoveFromRoleAsync(
+        long userId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null)
+        {
+            return (false, "User not found.");
+        }
+
+        var result = await _userManager.RemoveFromRoleAsync(user, role);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return (false, errors);
+        }
+
+        return (true, string.Empty);
+    }
+
+    public async Task<int> CountUsersInRoleAsync(
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(role))
+        {
+            return 0;
+        }
+
+        var users = await _userManager.GetUsersInRoleAsync(role);
+        return users.Count;
     }
 }

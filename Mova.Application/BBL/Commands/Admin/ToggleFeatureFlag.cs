@@ -9,7 +9,7 @@ using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 
-namespace Mova.Application.BBL.Commands.FeatureFlags;
+namespace Mova.Application.BBL.Commands.Admin;
 
 public sealed class ToggleFeatureFlag
 {

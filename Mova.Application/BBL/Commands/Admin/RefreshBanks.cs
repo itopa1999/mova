@@ -3,7 +3,7 @@ using MediatR;
 using Mova.Application.Interfaces.Payment;
 using Mova.Shared.Common;
 
-namespace Mova.Application.BBL.Commands.BanksAccount;
+namespace Mova.Application.BBL.Commands.Admin;
 public sealed class RefreshBanks
 {
     public sealed class Command : IRequest<BaseResult>

@@ -238,7 +238,7 @@ public sealed class RegisterCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _identityService.Verify(
-            x => x.AddToRoleAsync(NewUserId, Roles.Customer),
+            x => x.AddToRoleAsync(NewUserId, Roles.Customer, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

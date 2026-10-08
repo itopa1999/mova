@@ -12,11 +12,11 @@ using Mova.Application.BBL.Commands.BanksAccount;
 using Mova.Application.BBL.Queries.BanksAccount;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using static Mova.Application.BBL.Commands.AccountWallet.LinkAccountToBank;
 using static Mova.Application.BBL.Commands.BanksAccount.AddBankAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.FundAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.VerifyBankAccount;
-using static Mova.Application.BBL.Queries.BanksAccount.DepositTransaction;
 using static Mova.Application.BBL.Queries.BanksAccount.GetAccountForFunding;
 using static Mova.Application.BBL.Queries.BanksAccount.GetAllBankAccount;
 using static Mova.Application.BBL.Queries.BanksAccount.GetBanks;
@@ -27,7 +27,7 @@ using WithdrawalResponse = Mova.Application.BBL.Commands.BanksAccount.Withdrawal
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = Roles.Customer)]
 [Route("api/v1/bank-account")]
 [ApiExplorerSettings(GroupName = "v1")]
 public class BankAccountController(
@@ -48,20 +48,6 @@ public class BankAccountController(
             {
                 Name = name
             },
-            cancellationToken);
-
-        return StatusCode((int)result.StatusCode, result);
-    }
-
-    [HttpPost("banks/refresh")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> RefreshBanks(
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new RefreshBanks.Command(),
             cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
@@ -203,7 +189,6 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
-    /// <summary>Gets the user's total available withdrawal balance and its wallet breakdown.</summary>
     [HttpGet("withdrawal/available-balance")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(
@@ -222,10 +207,6 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
-    /// <summary>
-    /// Debits the selected wallet's available balance. External bank and utility payout
-    /// processing is not performed by this endpoint yet.
-    /// </summary>
     [HttpPost("withdrawal")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(

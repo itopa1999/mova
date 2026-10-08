@@ -6,6 +6,8 @@ public static class Roles
     public const string Admin = "Admin";
     public const string SuperAdmin = "SuperAdmin";
     public const string SupportAgent = "SupportAgent";
+    public const string All = $"{Customer},{Admin},{SuperAdmin},{SupportAgent}";
+    public const string AllAdmins = $"{Admin},{SuperAdmin}";
 }
 
 public static class OtpPurpose

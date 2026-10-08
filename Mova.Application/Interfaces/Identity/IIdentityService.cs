@@ -12,7 +12,13 @@ public interface IIdentityService
 
     Task<(bool Success, string ErrorMessage)> AddToRoleAsync(
         long userId,
-        string role);
+        string role,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Success, string ErrorMessage)> RemoveFromRoleAsync(
+        long userId,
+        string role,
+        CancellationToken cancellationToken = default);
 
     Task<UserIdentityDto?> GetByIdentifierAsync(
         string identifier,
@@ -54,13 +60,14 @@ public interface IIdentityService
         string deviceId,
         CancellationToken cancellationToken);
 
-    Task<bool> CheckPasswordAsync(long userId, string password);
+    Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default);
 
-    Task<bool> IsAccountVerifiedAsync(long userId);
+    Task<bool> IsAccountVerifiedAsync(long userId, CancellationToken cancellationToken = default);
 
-    Task<IList<string>> GetRolesAsync(long userId);
+    Task<IList<string>> GetRolesAsync(long userId, CancellationToken cancellationToken = default);
 
     Task<bool> CreditBalanceAsync(string UserPublicId, decimal Amount, CancellationToken cancellationToken);
 
     Task<bool> DebitBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken);
+    Task<int> CountUsersInRoleAsync(string role, CancellationToken cancellationToken = default);
 }

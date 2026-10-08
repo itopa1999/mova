@@ -12,7 +12,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Xunit;
 using CategoriesQuery = Mova.Application.BBL.Queries.AccountWallet.GetWalletCategories;
-using FlagsQuery = Mova.Application.BBL.MovaAPIs.GetFeatureFlags;
+using FlagsQuery = Mova.Application.BBL.Queries.Admin.GetFeatureFlags;
 using ScheduleQuery = Mova.Application.BBL.Queries.SchedulePreview.SchedulePreviewQuery;
 using TemplatesQuery = Mova.Application.BBL.Queries.WalletTemplates.ListWalletTemplatesQuery;
 
