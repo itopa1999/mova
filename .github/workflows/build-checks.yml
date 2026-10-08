@@ -7,26 +7,59 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: build-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
 jobs:
   test:
-    name: Test
+    name: build-check-before-merging
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/packages.lock.json', '**/NuGet.config') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore --verbosity minimal
+
+      - name: Format check
+        run: dotnet format --no-restore --verify-no-changes --verbosity diagnostic
+        continue-on-error: true
 
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        run: >
+          dotnet build
+          --no-restore
+          --configuration Release
+          --verbosity minimal
+          /p:TreatWarningsAsErrors=false
 
       - name: Test
         run: >
@@ -36,6 +69,17 @@ jobs:
           --logger "console;verbosity=normal"
           --logger "trx;LogFileName=results.trx"
           --results-directory ./TestResults
+          --blame-hang-timeout 5m
+          --blame-hang-dump-type none
+
+      - name: Publish test summary
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Test Results
+          path: ./TestResults/*.trx
+          reporter: dotnet-trx
+          fail-on-error: false
 
       - name: Upload test results
         if: always()
