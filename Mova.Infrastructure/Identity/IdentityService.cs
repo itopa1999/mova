@@ -37,14 +37,20 @@ public sealed class IdentityService : IIdentityService
         _cache = cache;
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // WRITE PATH — user creation
+    // ─────────────────────────────────────────────────────────────
     public async Task<(bool Success, string ErrorMessage, string UserPublicId, long UserId)> CreateUserAsync(
         string firstName,
         string lastName,
         string email,
         string phoneNumber,
-        string bvn,
-        string password)
+        string BVN,
+        string password,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var user = new User
         {
             FirstName = firstName,
@@ -56,7 +62,7 @@ public sealed class IdentityService : IIdentityService
             ProfilePicture = DefaultProfilePictures.PickRandom(),
         };
 
-        user.BvnHash = _passwordHasher.HashPassword(user, bvn);
+        user.BvnHash = _passwordHasher.HashPassword(user, BVN);
 
         var result = await _userManager.CreateAsync(user, password);
 
@@ -79,8 +85,16 @@ public sealed class IdentityService : IIdentityService
         return (true, string.Empty, user.PublicId, user.Id);
     }
 
-    public async Task<(bool Success, string ErrorMessage)> AddToRoleAsync(long userId, string role, CancellationToken cancellationToken = default)
+    // ─────────────────────────────────────────────────────────────
+    // ROLE MANAGEMENT
+    // ─────────────────────────────────────────────────────────────
+    public async Task<(bool Success, string ErrorMessage)> AddToRoleAsync(
+        long userId,
+        string role,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null)
         {
@@ -95,6 +109,56 @@ public sealed class IdentityService : IIdentityService
         }
 
         return (true, string.Empty);
+    }
+
+    public async Task<(bool Success, string ErrorMessage)> RemoveFromRoleAsync(
+        long userId,
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null)
+        {
+            return (false, "User not found.");
+        }
+
+        var result = await _userManager.RemoveFromRoleAsync(user, role);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return (false, errors);
+        }
+
+        return (true, string.Empty);
+    }
+
+    public async Task<IList<string>> GetRolesAsync(
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var existingUser = await _userManager.FindByIdAsync(userId.ToString());
+        if (existingUser is null) return new List<string>();
+
+        return await _userManager.GetRolesAsync(existingUser);
+    }
+
+    public async Task<int> CountUsersInRoleAsync(
+        string role,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.IsNullOrWhiteSpace(role))
+        {
+            return 0;
+        }
+
+        var users = await _userManager.GetUsersInRoleAsync(role);
+        return users.Count;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -186,6 +250,9 @@ public sealed class IdentityService : IIdentityService
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // EXISTENCE CHECKS
+    // ─────────────────────────────────────────────────────────────
     public async Task<bool> EmailExistsAsync(
         string email,
         long? excludeUserId = null,
@@ -241,32 +308,40 @@ public sealed class IdentityService : IIdentityService
         return await query.AnyAsync(cancellationToken);
     }
 
-    public async Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default)
+    // ─────────────────────────────────────────────────────────────
+    // PASSWORD & VERIFICATION
+    // ─────────────────────────────────────────────────────────────
+    public async Task<bool> CheckPasswordAsync(
+        long userId,
+        string password,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var existingUser = await _userManager.FindByIdAsync(userId.ToString());
         if (existingUser is null) return false;
 
         return await _userManager.CheckPasswordAsync(existingUser, password);
     }
 
-    public async Task<bool> IsAccountVerifiedAsync(long userId, CancellationToken cancellationToken = default)
+    public async Task<bool> IsAccountVerifiedAsync(
+        long userId,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var existingUser = await _userManager.FindByIdAsync(userId.ToString());
         if (existingUser is null) return false;
 
         return existingUser.EmailConfirmed && existingUser.PhoneNumberConfirmed;
     }
 
-    public async Task<IList<string>> GetRolesAsync(long userId, CancellationToken cancellationToken = default)
+    public async Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(
+        long userId,
+        CancellationToken cancellationToken = default)
     {
-        var existingUser = await _userManager.FindByIdAsync(userId.ToString());
-        if (existingUser is null) return new List<string>();
+        cancellationToken.ThrowIfCancellationRequested();
 
-        return await _userManager.GetRolesAsync(existingUser);
-    }
-
-    public async Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId)
-    {
         var existingUser = await _userManager.FindByIdAsync(userId.ToString());
         if (existingUser is null)
         {
@@ -288,8 +363,13 @@ public sealed class IdentityService : IIdentityService
         return (true, string.Empty);
     }
 
-    public async Task<(bool Success, string ErrorMessage)> ResetPasswordAsync(long userId, string newPassword)
+    public async Task<(bool Success, string ErrorMessage)> ResetPasswordAsync(
+        long userId,
+        string newPassword,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null) return (false, "User not found.");
 
@@ -318,8 +398,14 @@ public sealed class IdentityService : IIdentityService
         return (true, string.Empty);
     }
 
-    public async Task<(bool Success, string ErrorMessage)> ChangePasswordAsync(long userId, string oldPassword, string newPassword)
+    public async Task<(bool Success, string ErrorMessage)> ChangePasswordAsync(
+        long userId,
+        string oldPassword,
+        string newPassword,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null) return (false, "User not found.");
 
@@ -337,7 +423,13 @@ public sealed class IdentityService : IIdentityService
         return (true, string.Empty);
     }
 
-    public async Task<bool> CreditBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken)
+    // ─────────────────────────────────────────────────────────────
+    // BALANCE
+    // ─────────────────────────────────────────────────────────────
+    public async Task<bool> CreditBalanceAsync(
+        string userPublicId,
+        decimal amount,
+        CancellationToken cancellationToken)
     {
         if (amount <= 0)
             return false;
@@ -379,6 +471,9 @@ public sealed class IdentityService : IIdentityService
         return true;
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // PREFERENCES & DEVICE
+    // ─────────────────────────────────────────────────────────────
     public async Task<bool> UpdateNotificationPreferenceAsync(
         string identifier,
         string key,
@@ -432,7 +527,7 @@ public sealed class IdentityService : IIdentityService
     public async Task<bool> UpdateLastKnownDeviceAsync(
         string identifier,
         string deviceId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(identifier) ||
             string.IsNullOrWhiteSpace(deviceId))
@@ -495,39 +590,5 @@ public sealed class IdentityService : IIdentityService
         {
             await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PhoneNumber));
         }
-    }
-
-    public async Task<(bool Success, string ErrorMessage)> RemoveFromRoleAsync(
-        long userId,
-        string role,
-        CancellationToken cancellationToken = default)
-    {
-        var user = await _userManager.FindByIdAsync(userId.ToString());
-        if (user is null)
-        {
-            return (false, "User not found.");
-        }
-
-        var result = await _userManager.RemoveFromRoleAsync(user, role);
-        if (!result.Succeeded)
-        {
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return (false, errors);
-        }
-
-        return (true, string.Empty);
-    }
-
-    public async Task<int> CountUsersInRoleAsync(
-        string role,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(role))
-        {
-            return 0;
-        }
-
-        var users = await _userManager.GetUsersInRoleAsync(role);
-        return users.Count;
     }
 }

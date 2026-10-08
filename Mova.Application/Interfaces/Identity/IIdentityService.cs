@@ -8,7 +8,8 @@ public interface IIdentityService
         string email,
         string phoneNumber,
         string BVN,
-        string password);
+        string password,
+        CancellationToken cancellationToken = default);
 
     Task<(bool Success, string ErrorMessage)> AddToRoleAsync(
         long userId,
@@ -40,14 +41,14 @@ public interface IIdentityService
         CancellationToken cancellationToken = default);
 
 
-    Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId);
+    Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId, CancellationToken cancellationToken = default);
 
-    Task<(bool Success, string ErrorMessage)> ResetPasswordAsync(long userId, string newPassword);
+    Task<(bool Success, string ErrorMessage)> ResetPasswordAsync(long userId, string newPassword, CancellationToken cancellationToken = default);
 
     Task<(bool Success, string ErrorMessage)> ChangePasswordAsync(
         long userId,
         string oldPassword,
-        string newPassword);
+        string newPassword, CancellationToken cancellationToken = default);
 
     Task<bool> UpdateNotificationPreferenceAsync(
         string identifier,
@@ -58,7 +59,7 @@ public interface IIdentityService
     Task<bool> UpdateLastKnownDeviceAsync(
         string identifier,
         string deviceId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken= default);
 
     Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default);
 

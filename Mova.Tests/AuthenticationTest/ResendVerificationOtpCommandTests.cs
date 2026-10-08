@@ -85,7 +85,7 @@ public sealed class ResendVerificationOtpCommandTests : BaseTest
     private void SetupAccountVerified(bool verified = false)
     {
         _identityService
-            .Setup(x => x.IsAccountVerifiedAsync(It.IsAny<long>()))
+            .Setup(x => x.IsAccountVerifiedAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(verified);
     }
 

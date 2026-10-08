@@ -94,14 +94,14 @@ public sealed class VerifyAccountCommandTests : BaseTest
     private void SetupMarkVerifiedSucceeds()
     {
         _identityService
-            .Setup(x => x.MarkEmailAndPhoneAsVerifiedAsync(It.IsAny<long>()))
+            .Setup(x => x.MarkEmailAndPhoneAsVerifiedAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, string.Empty));
     }
 
     private void SetupMarkVerifiedFails(string error = "Mark failed")
     {
         _identityService
-            .Setup(x => x.MarkEmailAndPhoneAsVerifiedAsync(It.IsAny<long>()))
+            .Setup(x => x.MarkEmailAndPhoneAsVerifiedAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((false, error));
     }
 

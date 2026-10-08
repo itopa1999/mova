@@ -92,7 +92,7 @@ public sealed class LoginUserCommandTests : BaseTest
     private void SetupAccountVerified(bool verified = true)
     {
         _identityService
-            .Setup(x => x.IsAccountVerifiedAsync(It.IsAny<long>()))
+            .Setup(x => x.IsAccountVerifiedAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(verified);
     }
 
@@ -101,14 +101,15 @@ public sealed class LoginUserCommandTests : BaseTest
         _identityService
             .Setup(x => x.CheckPasswordAsync(
                 It.IsAny<long>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(valid);
     }
 
     private void SetupRoles(params string[] roles)
     {
         _identityService
-            .Setup(x => x.GetRolesAsync(It.IsAny<long>()))
+            .Setup(x => x.GetRolesAsync(It.IsAny<long>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(roles.ToList());
     }
 

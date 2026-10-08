@@ -86,7 +86,8 @@ public sealed class RegisterCommandTests : BaseTest
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(), 
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, string.Empty, publicId, userId));
     }
 
@@ -99,7 +100,8 @@ public sealed class RegisterCommandTests : BaseTest
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(), 
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync((false, error, string.Empty, 0L));
     }
 
@@ -108,7 +110,7 @@ public sealed class RegisterCommandTests : BaseTest
         _identityService
             .Setup(x => x.AddToRoleAsync(
                 It.IsAny<long>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, string.Empty));
     }
 
@@ -117,7 +119,8 @@ public sealed class RegisterCommandTests : BaseTest
         _identityService
             .Setup(x => x.AddToRoleAsync(
                 It.IsAny<long>(),
-                It.IsAny<string>()))
+                It.IsAny<string>(), 
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync((false, error));
     }
 
@@ -188,7 +191,8 @@ public sealed class RegisterCommandTests : BaseTest
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
-                It.IsAny<string>()),
+                It.IsAny<string>(), 
+                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
