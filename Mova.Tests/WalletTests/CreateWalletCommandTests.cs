@@ -8,6 +8,9 @@ using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
+using Mova.Shared.Common;
+using System.Net;
+using System.Text.Json;
 using Xunit;
 
 namespace Mova.Tests.Handlers;
@@ -37,7 +40,8 @@ public sealed class CreateWalletCommandTests : BaseTest
     private CreateWalletCommand.Command CreateCommand(
         long categoryId,
         long bankAccountId,
-        string name = "Rent Savings")
+        string name = "Rent Savings",
+        string payoutDestination = "bank")
     {
         return new CreateWalletCommand.Command
         {
@@ -53,6 +57,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             FrequencyConfig = "{}",
             AmountToBeReleased = 1_000m,
             StartDate = DateTimeOffset.UtcNow.Date.AddDays(1),
+            PayoutDestination = payoutDestination,
         };
     }
 
@@ -89,7 +94,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         return (category, bank);
     }
 
-    private void SetupHappyPathDependencies()
+    private void SetupHappyPathDependencies(int totalReleases = 30)
     {
         _identityService
             .Setup(x => x.DebitBalanceAsync(
@@ -110,7 +115,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             .ReturnsAsync(new SchedulePreviewResult
             {
                 IsSuccess = true,
-                TotalReleases = 30,
+                TotalReleases = totalReleases,
             });
 
         _walletRuleService
@@ -126,9 +131,44 @@ public sealed class CreateWalletCommandTests : BaseTest
                 });
     }
 
-    // ---------------------------------------------------------
-    // 1. Happy path
-    // ---------------------------------------------------------
+    private static UtilityConfig BuildAirtimeConfig()
+        => new()
+        {
+            UtilityType = "airtime",
+            Network = "mtn",
+            PhoneNumber = "08012345678",
+        };
+
+    private static UtilityConfig BuildDataConfig()
+        => new()
+        {
+            UtilityType = "data",
+            Network = "mtn",
+            PhoneNumber = "08012345678",
+            PlanCode = "mtn-2gb-7d",
+        };
+
+    private static UtilityConfig BuildCableConfig()
+        => new()
+        {
+            UtilityType = "cable",
+            CableProvider = "DSTV",
+            SmartcardNumber = "1234567890",
+            PackageCode = "dstv-confam",
+        };
+
+    private static UtilityConfig BuildElectricityConfig()
+        => new()
+        {
+            UtilityType = "electricity",
+            Disco = "Ikeja Electric",
+            MeterNumber = "04512345678",
+            MeterType = "prepaid",
+        };
+
+    // =========================================================
+    // 1. Happy path — Bank
+    // =========================================================
 
     [Fact]
     public async Task Handle_WithValidRequest_CreatesWallet()
@@ -154,6 +194,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Equal(30_000m, wallet.TargetAmount.ToDecimal());
         Assert.Equal(30_000m, wallet.LockedAmount.ToDecimal());
         Assert.Equal(0m, wallet.AvailableAmount.ToDecimal());
+        Assert.Equal(PayoutDestination.Bank, wallet.PayoutDestination);
     }
 
     [Fact]
@@ -248,9 +289,475 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Equal(0, UnitOfWork.RollbackCount);
     }
 
-    // ---------------------------------------------------------
-    // 2. Validation failures
-    // ---------------------------------------------------------
+    // =========================================================
+    // 2. Happy path — Wallet destination
+    // =========================================================
+
+[Fact]
+public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestination()
+{
+    var (category, _) = await SeedPrerequisitesAsync();
+    SetupHappyPathDependencies();
+
+    var handler = CreateHandler();
+    var result = await handler.Handle(
+        CreateCommand(category.Id, 0, payoutDestination: "wallet"), default);
+
+    Assert.True(result.IsSuccess);
+
+    var wallet = await Context.Wallets
+        .AsNoTracking()
+        .FirstAsync(x => x.Id == result.Data!.WalletId);
+
+    Assert.Equal(PayoutDestination.Wallet, wallet.PayoutDestination);
+    Assert.Null(wallet.BankAccountId);
+    Assert.Null(wallet.UtilityType);
+    Assert.Null(wallet.UtilityConfigJson);
+}
+    [Fact]
+    public async Task Handle_WithWalletDestinationAndBankAccountProvided_ReturnsBadRequest()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id, payoutDestination: "wallet"), default);
+
+        // bank.Id > 0 → should be rejected
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithWalletDestinationAndZeroBankAccount_Succeeds()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, 0, payoutDestination: "wallet"), default);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    // =========================================================
+    // 3. Happy path — Main destination
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WithMainDestination_CreatesWalletWithMainDestination()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, 0, payoutDestination: "main"), default);
+
+        Assert.True(result.IsSuccess);
+
+        var wallet = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == result.Data!.WalletId);
+
+        Assert.Equal(PayoutDestination.Main, wallet.PayoutDestination);
+        Assert.Null(wallet.UtilityType);
+        Assert.Null(wallet.UtilityConfigJson);
+    }
+
+    // =========================================================
+    // 4. Happy path — Utilities (all four types)
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WithAirtimeUtility_CreatesWalletWithUtilityConfig()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = BuildAirtimeConfig();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.True(result.IsSuccess);
+
+        var wallet = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == result.Data!.WalletId);
+
+        Assert.Equal(PayoutDestination.Utilities, wallet.PayoutDestination);
+        Assert.Equal(UtilityType.Airtime, wallet.UtilityType);
+        Assert.NotNull(wallet.UtilityConfigJson);
+
+        var parsed = JsonSerializer.Deserialize<UtilityConfig>(wallet.UtilityConfigJson!);
+        Assert.NotNull(parsed);
+        Assert.Equal("airtime", parsed!.UtilityType);
+        Assert.Equal("mtn", parsed.Network);
+        Assert.Equal("08012345678", parsed.PhoneNumber);
+    }
+
+    [Fact]
+    public async Task Handle_WithDataUtility_CreatesWalletWithUtilityConfig()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = BuildDataConfig();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.True(result.IsSuccess);
+
+        var wallet = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == result.Data!.WalletId);
+
+        Assert.Equal(UtilityType.Data, wallet.UtilityType);
+
+        var parsed = JsonSerializer.Deserialize<UtilityConfig>(wallet.UtilityConfigJson!);
+        Assert.NotNull(parsed);
+        Assert.Equal("data", parsed!.UtilityType);
+        Assert.Equal("mtn-2gb-7d", parsed.PlanCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithCableUtility_CreatesWalletWithUtilityConfig()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = BuildCableConfig();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.True(result.IsSuccess);
+
+        var wallet = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == result.Data!.WalletId);
+
+        Assert.Equal(UtilityType.Cable, wallet.UtilityType);
+
+        var parsed = JsonSerializer.Deserialize<UtilityConfig>(wallet.UtilityConfigJson!);
+        Assert.NotNull(parsed);
+        Assert.Equal("cable", parsed!.UtilityType);
+        Assert.Equal("DSTV", parsed.CableProvider);
+        Assert.Equal("1234567890", parsed.SmartcardNumber);
+        Assert.Equal("dstv-confam", parsed.PackageCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithElectricityUtility_CreatesWalletWithUtilityConfig()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = BuildElectricityConfig();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.True(result.IsSuccess);
+
+        var wallet = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == result.Data!.WalletId);
+
+        Assert.Equal(UtilityType.Electricity, wallet.UtilityType);
+
+        var parsed = JsonSerializer.Deserialize<UtilityConfig>(wallet.UtilityConfigJson!);
+        Assert.NotNull(parsed);
+        Assert.Equal("electricity", parsed!.UtilityType);
+        Assert.Equal("Ikeja Electric", parsed.Disco);
+        Assert.Equal("04512345678", parsed.MeterNumber);
+        Assert.Equal("prepaid", parsed.MeterType);
+    }
+
+    // =========================================================
+    // 5. Utilities validation failures
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WithUtilitiesDestinationAndNoConfig_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, 0, payoutDestination: "utilities"), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(0, UnitOfWork.BeginCount);
+    }
+
+    [Fact]
+    public async Task Handle_WithUnknownUtilityType_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig { UtilityType = "water" };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithAirtimeButMissingNetwork_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "airtime",
+            PhoneNumber = "08012345678",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithAirtimeInvalidNetwork_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "airtime",
+            Network = "vodacom",
+            PhoneNumber = "08012345678",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithAirtimeInvalidPhone_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "airtime",
+            Network = "mtn",
+            PhoneNumber = "12345", // too short
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithDataButMissingPlanCode_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "data",
+            Network = "mtn",
+            PhoneNumber = "08012345678",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithCableButMissingProvider_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "cable",
+            SmartcardNumber = "1234567890",
+            PackageCode = "dstv-confam",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithCableInvalidProvider_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "cable",
+            CableProvider = "SkyTV",
+            SmartcardNumber = "1234567890",
+            PackageCode = "dstv-confam",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithCableButMissingPackageCode_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "cable",
+            CableProvider = "DSTV",
+            SmartcardNumber = "1234567890",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithElectricityInvalidMeterType_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "electricity",
+            Disco = "Ikeja Electric",
+            MeterNumber = "04512345678",
+            MeterType = "smart",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithElectricityMissingMeterNumber_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "electricity",
+            Disco = "Ikeja Electric",
+            MeterType = "prepaid",
+        };
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithBankDestinationAndUtilityConfig_ReturnsBadRequest()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, bank.Id, payoutDestination: "bank");
+        command.UtilityConfig = BuildAirtimeConfig();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithWalletDestinationAndUtilityConfig_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "wallet");
+        command.UtilityConfig = BuildAirtimeConfig();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithMainDestinationAndUtilityConfig_ReturnsBadRequest()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "main");
+        command.UtilityConfig = BuildAirtimeConfig();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(command, default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+    }
+
+    // =========================================================
+    // 6. Validation failures — general
+    // =========================================================
 
     [Fact]
     public async Task Handle_WithEmptyName_ReturnsBadRequest()
@@ -264,7 +771,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         var result = await handler.Handle(command, default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal(0, UnitOfWork.BeginCount);
         Assert.Equal(0, UnitOfWork.CommitCount);
     }
@@ -281,7 +788,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         var result = await handler.Handle(command, default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -296,7 +803,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         var result = await handler.Handle(command, default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -311,7 +818,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         var result = await handler.Handle(command, default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -326,7 +833,7 @@ public sealed class CreateWalletCommandTests : BaseTest
         var result = await handler.Handle(command, default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -355,7 +862,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             CreateCommand(category.Id, bank.Id, name: "Rent Savings"), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -368,7 +875,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             CreateCommand(categoryId: 999_999L, bankAccountId: bank.Id), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -381,7 +888,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             CreateCommand(categoryId: category.Id, bankAccountId: 999_999L), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -397,7 +904,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             CreateCommand(category.Id, bank.Id), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -413,7 +920,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             CreateCommand(category.Id, bank.Id), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]
@@ -434,7 +941,7 @@ public sealed class CreateWalletCommandTests : BaseTest
             CreateCommand(category.Id, bank.Id), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal(1, UnitOfWork.BeginCount);
         Assert.Equal(1, UnitOfWork.RollbackCount);
     }
@@ -464,12 +971,12 @@ public sealed class CreateWalletCommandTests : BaseTest
             CreateCommand(category.Id, bank.Id), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
-    // ---------------------------------------------------------
-    // 3. REGRESSION: notification failures must not fail the request
-    // ---------------------------------------------------------
+    // =========================================================
+    // 7. REGRESSION: notifications must never fail the request
+    // =========================================================
 
     [Fact]
     public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
@@ -583,9 +1090,9 @@ public sealed class CreateWalletCommandTests : BaseTest
             Times.Once);
     }
 
-    // ---------------------------------------------------------
-    // 4. REGRESSION: notification content
-    // ---------------------------------------------------------
+    // =========================================================
+    // 8. REGRESSION: notification content
+    // =========================================================
 
     [Fact]
     public async Task Handle_WithValidRequest_SendsNotificationWithCorrectContent()
@@ -614,5 +1121,271 @@ public sealed class CreateWalletCommandTests : BaseTest
                 It.Is<string>(m => m.Contains("Rent Savings")),
                 "Your Rent Savings wallet is ready"),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WithAirtimeUtility_MentionsAirtimeInNotification()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = BuildAirtimeConfig();
+
+        var handler = CreateHandler();
+        await handler.Handle(command, default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                UserPublicId,
+                NotificationType.Wallet,
+                It.IsAny<string>(),
+                It.Is<string>(m =>
+                    m.Contains("MTN") &&
+                    m.Contains("08012345678")),
+                "/wallets",
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WithCableUtility_MentionsCableProviderInNotification()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = BuildCableConfig();
+
+        var handler = CreateHandler();
+        await handler.Handle(command, default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                UserPublicId,
+                NotificationType.Wallet,
+                It.IsAny<string>(),
+                It.Is<string>(m => m.Contains("DSTV")),
+                "/wallets",
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WithElectricityUtility_MentionsDiscoInNotification()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = BuildElectricityConfig();
+
+        var handler = CreateHandler();
+        await handler.Handle(command, default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                UserPublicId,
+                NotificationType.Wallet,
+                It.IsAny<string>(),
+                It.Is<string>(m => m.Contains("Ikeja Electric")),
+                "/wallets",
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    // =========================================================
+    // 9. REGRESSION: no side effects on failure
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WhenUtilityValidationFails_NoWalletPersisted()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var command = CreateCommand(category.Id, 0, payoutDestination: "utilities");
+        command.UtilityConfig = new UtilityConfig
+        {
+            UtilityType = "airtime",
+            Network = "mtn",
+            // missing phone number
+        };
+
+        var handler = CreateHandler();
+        await handler.Handle(command, default);
+
+        var walletCount = await Context.Wallets.CountAsync();
+        Assert.Equal(0, walletCount);
+        Assert.Equal(0, UnitOfWork.BeginCount);
+    }
+
+    [Fact]
+    public async Task Handle_WhenBankValidationFails_NoBalanceDebit()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        await handler.Handle(
+            CreateCommand(category.Id, bankAccountId: 999_999L), default);
+
+        _identityService.Verify(
+            x => x.DebitBalanceAsync(
+                It.IsAny<string>(),
+                It.IsAny<decimal>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenInsufficientBalance_NoWalletPersisted()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        _identityService
+            .Setup(x => x.DebitBalanceAsync(
+                It.IsAny<string>(),
+                It.IsAny<decimal>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        var walletCount = await Context.Wallets.CountAsync();
+        Assert.Equal(0, walletCount);
+    }
+
+    // =========================================================
+    // 10. REGRESSION: ledger invariants
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WithValidRequest_CreatesMatchingLedgerEntry()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        var ledger = await Context.LedgerEntries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.WalletId == result.Data!.WalletId);
+
+        Assert.NotNull(ledger);
+        Assert.True(ledger!.IsCredit);
+        Assert.Equal(30_000m, ledger.Amount.ToDecimal());
+    }
+
+    [Fact]
+    public async Task Handle_WithValidRequest_LedgerReferencesMatchingTransaction()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        var walletId = result.Data!.WalletId;
+
+        var ledger = await Context.LedgerEntries
+            .AsNoTracking()
+            .FirstAsync(x => x.WalletId == walletId);
+
+        var tx = await Context.Transactions
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == ledger.TransactionId);
+
+        Assert.Equal(tx.Id, ledger.TransactionId);
+        Assert.Equal(tx.Amount.ToDecimal(), ledger.Amount.ToDecimal());
+    }
+
+    [Fact]
+    public async Task Handle_WithValidRequest_CreatesSeparateFeeTransaction()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        var feeTx = await Context.Transactions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.Reference == $"wallet-fee:{result.Data!.WalletId}");
+
+        Assert.NotNull(feeTx);
+        Assert.Equal(TransactionType.Fee, feeTx!.Type);
+    }
+
+    // =========================================================
+    // 11. REGRESSION: wallet balance initial state
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WithValidRequest_LocksExactTargetAmount()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        var wallet = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == result.Data!.WalletId);
+
+        Assert.Equal(wallet.TargetAmount.ToDecimal(), wallet.LockedAmount.ToDecimal());
+        Assert.Equal(wallet.TargetAmount.ToDecimal(), wallet.FundedAmount.ToDecimal());
+        Assert.Equal(0m, wallet.AvailableAmount.ToDecimal());
+        Assert.Equal(0m, wallet.TotalReleasedAmount.ToDecimal());
+        Assert.Equal(0m, wallet.TotalWithdrawnAmount.ToDecimal());
+        Assert.Equal(0m, wallet.ResetAmount.ToDecimal());
+    }
+
+    [Fact]
+    public async Task Handle_WithValidRequest_ReturnsNewMainBalanceFromIdentityService()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+
+        _identityService
+            .Setup(x => x.GetByIdentifierAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserIdentityDto(
+                1,
+                UserPublicId,
+                UserFirstName,
+                null,
+                "Starboy",
+                UserEmail,
+                "08050000000",
+                null,
+                Money.FromNaira(69_305m),
+                string.Empty,
+                true,
+                true,
+                true,
+                false,
+                "Lucky Starboy",
+                DateTimeOffset.UtcNow));
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(69_305m, result.Data!.NewMainBalance);
     }
 }

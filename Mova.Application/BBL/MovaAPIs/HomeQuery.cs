@@ -24,6 +24,30 @@ public sealed class HomeQuery
         public List<ReleasedSchedulesToday> TodayReleased { get; set; } = new();
         public List<Wallets> Wallets { get; set; } = new();
         public List<LockedAmountPoint> LockedAmountHistory { get; set; } = new();
+
+        // ─────────────────────────────────────────────────────
+        // Account status — FE reads this to display a banner
+        // when the account is not in good standing.
+        // Always populated (Active for healthy accounts too).
+        // ─────────────────────────────────────────────────────
+        public AccountStatusDto AccountStatus { get; set; } = new();
+    }
+
+    public sealed class AccountStatusDto
+    {
+        public string Status { get; set; } = string.Empty;
+        public string StatusLabel { get; set; } = string.Empty;
+        public string StatusDescription { get; set; } = string.Empty;
+        public string? RestrictionReason { get; set; }
+        public string? RestrictionReasonDetails { get; set; }
+        public DateTimeOffset? RestrictionExpiresAt { get; set; }
+
+        /// <summary>
+        /// True when the account is Active and, if it carries an expiry,
+        /// that expiry has not yet passed. FE can use this to decide
+        /// whether to show a banner at all.
+        /// </summary>
+        public bool IsHealthy { get; set; }
     }
 
     public sealed class Balance
@@ -56,10 +80,7 @@ public sealed class HomeQuery
 
     public sealed class LockedAmountPoint
     {
-        // e.g. "May 2026"
         public string Label { get; set; } = string.Empty;
-
-        // Sum of target amounts for wallets created in this month
         public decimal Value { get; set; }
     }
 
@@ -91,12 +112,19 @@ public sealed class HomeQuery
                 request.UserPublicId,
                 cancellationToken);
 
+            Console.WriteLine("User", user);
+
             if (user == null)
             {
                 return new BaseResult<HomeQueryDto>(
                     HttpStatusCode.NotFound,
                     "User not found.");
             }
+
+            // ── Permissions snapshot (includes account status) ──
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
 
             try
             {
@@ -177,6 +205,8 @@ public sealed class HomeQuery
                     months: 5,
                     cancellationToken);
 
+                var accountStatus = BuildAccountStatus(permissions);
+
                 var result = new HomeQueryDto
                 {
                     Balance = new Balance
@@ -187,7 +217,8 @@ public sealed class HomeQuery
                     },
                     TodayReleased = todayReleased,
                     Wallets = walletSummaries,
-                    LockedAmountHistory = lockedAmountHistory
+                    LockedAmountHistory = lockedAmountHistory,
+                    AccountStatus = accountStatus
                 };
 
                 return new BaseResult<HomeQueryDto>(
@@ -202,6 +233,49 @@ public sealed class HomeQuery
                     "An error occurred while retrieving your home data. Please try again later.");
             }
         }
+
+        // ─────────────────────────────────────────────────────
+        // Account status snapshot
+        // ─────────────────────────────────────────────────────
+
+        private static AccountStatusDto BuildAccountStatus(
+            UserPermissionsDto? permissions)
+        {
+            if (permissions is null)
+            {
+                // User record was found but permissions couldn't be resolved.
+                // Fail safe: mark as unhealthy so the FE shows something.
+                return new AccountStatusDto
+                {
+                    Status = "Unknown",
+                    StatusLabel = "Unavailable",
+                    StatusDescription = "We couldn't load your account status.",
+                    IsHealthy = false,
+                };
+            }
+
+            var isActive = permissions.AccountStatus == UserAccountStatus.Active;
+
+            // If the account is Active but carries an expiry, respect it.
+            var isHealthy = isActive
+                && (permissions.RestrictionExpiresAt is null
+                    || permissions.RestrictionExpiresAt.Value > DateTimeOffset.UtcNow);
+
+            return new AccountStatusDto
+            {
+                Status = permissions.AccountStatus.ToString(),
+                StatusLabel = permissions.StatusLabel,
+                StatusDescription = permissions.StatusDescription,
+                RestrictionReason = permissions.RestrictionReason,
+                RestrictionReasonDetails = permissions.RestrictionReasonDetails,
+                RestrictionExpiresAt = permissions.RestrictionExpiresAt,
+                IsHealthy = isHealthy,
+            };
+        }
+
+        // ─────────────────────────────────────────────────────
+        // Locked amount history
+        // ─────────────────────────────────────────────────────
 
         private async Task<List<LockedAmountPoint>> BuildLockedAmountHistoryAsync(
             string userPublicId,

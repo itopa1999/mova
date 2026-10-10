@@ -1418,6 +1418,12 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("UtilityConfigJson")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("UtilityType")
+                        .HasColumnType("integer");
+
                     b.ComplexProperty<Dictionary<string, object>>("AvailableAmount", "Mova.Domain.Entities.Wallet.AvailableAmount#Money", b1 =>
                         {
                             b1.Property<string>("Currency")

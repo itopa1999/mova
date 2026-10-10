@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.Shared;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Service;
@@ -8,6 +7,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Common;
 using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Services;
