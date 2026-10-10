@@ -21,3 +21,16 @@ public enum AccountRestrictionReason
     UserRequestedDeactivation = 6,
     AdministrativeAction = 7
 }
+
+/// <summary>
+/// Discrete actions a user can attempt. Used by the feature-gate helper
+/// to decide, per user, what's currently allowed.
+/// </summary>
+public enum UserAction
+{
+    Login = 1,
+    WalletCreation = 2,
+    SensitiveOperation = 3,
+    ReceivePayout = 4,
+    BalanceTopUp = 5,
+}

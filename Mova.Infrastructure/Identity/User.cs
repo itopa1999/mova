@@ -60,7 +60,7 @@ public class User : IdentityUser<long>
     // ─────────────────────────────────────────────────────────
     public UserAccountStatus AccountStatus { get; set; } = UserAccountStatus.Active;
 
-    public AccountRestrictionReason? RestrictionReason { get; set; }
+    public AccountRestrictionReason? RestrictionReason { get; set; } = AccountRestrictionReason.None;
 
     [MaxLength(1000)]
     public string? RestrictionReasonDetails { get; set; }

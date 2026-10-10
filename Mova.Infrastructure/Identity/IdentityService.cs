@@ -4,6 +4,7 @@ using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Common;
+using Mova.Infrastructure.Identity.Extensions;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
 
@@ -562,6 +563,107 @@ public sealed class IdentityService : IIdentityService
 
         return true;
     }
+
+    public async Task<bool> IsLockedOutAsync(
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return false;
+
+        return await _userManager.IsLockedOutAsync(user);
+    }
+
+    public async Task<DateTimeOffset?> GetLockoutEndAsync(
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return null;
+
+        return await _userManager.GetLockoutEndDateAsync(user);
+    }
+
+    public async Task RecordFailedAccessAsync(
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return;
+
+        await _userManager.AccessFailedAsync(user);
+    }
+
+    public async Task ResetFailedAccessAsync(
+        long userId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user is null) return;
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+
+        await _userManager.SetLockoutEndDateAsync(user, null);
+    }
+
+
+    // ─────────────────────────────────────────────────────
+    // Permissions / feature gates
+    // ─────────────────────────────────────────────────────
+
+    public async Task<UserPermissionsDto?> GetPermissionsAsync(
+        string userPublicId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await FindUserEntityByPublicIdAsync(userPublicId, cancellationToken);
+        if (user is null) return null;
+
+        return BuildPermissions(user);
+    }
+
+    // ─────────────────────────────────────────────────────
+    // Private helpers used by the two methods above
+    // ─────────────────────────────────────────────────────
+
+    private async Task<User?> FindUserEntityByPublicIdAsync(
+        string userPublicId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userPublicId)) return null;
+
+        var normalized = userPublicId.Trim();
+
+        return await _context.Users
+            .FirstOrDefaultAsync(
+                u => u.PublicId == normalized && !u.IsDeleted,
+                cancellationToken);
+    }
+
+    private static UserPermissionsDto BuildPermissions(User user) =>
+        new(
+            user.PublicId,
+            user.AccountStatus,
+            user.GetStatusLabel(),
+            user.GetStatusDescription(),
+            user.CanLogin(),
+            user.CanCreateWallets(),
+            user.CanPerformSensitiveOperations(),
+            user.CanReceivePayouts(),
+            user.CanTopUp(),
+            user.RestrictionReason?.ToString(),
+            user.RestrictionReasonDetails,
+            user.RestrictedAt,
+            user.RestrictionExpiresAt);
 
     // ─────────────────────────────────────────────────────────────
     // INVALIDATION — one canonical profile key + its three index
