@@ -1772,6 +1772,9 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
 
+                    b.Property<int>("AccountStatus")
+                        .HasColumnType("integer");
+
                     b.Property<string>("BvnHash")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1879,6 +1882,26 @@ namespace Mova.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("ReactivatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RestrictedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RestrictedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("RestrictionExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("RestrictionReason")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RestrictionReasonDetails")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");

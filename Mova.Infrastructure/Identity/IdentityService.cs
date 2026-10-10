@@ -246,7 +246,7 @@ public sealed class IdentityService : IIdentityService
                 x.NotifyProductUpdates,
                 x.NotifyPromotions,
                 x.LastKnownDeviceId ?? string.Empty,
-                x.CreatedAt.Value))
+                x.CreatedAt ?? DateTimeOffset.UtcNow))
             .FirstOrDefaultAsync(cancellationToken);
     }
 

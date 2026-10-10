@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.AspNetCore.Identity;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 
 namespace Mova.Infrastructure.Identity;
@@ -54,6 +55,31 @@ public class User : IdentityUser<long>
 
     public Money Balance { get; set; } = Money.FromNaira(0); // The current balance of the user, representing the total amount of funds available for transactions
 
+    // ─────────────────────────────────────────────────────────
+    // Account status & restriction
+    // ─────────────────────────────────────────────────────────
+    public UserAccountStatus AccountStatus { get; set; } = UserAccountStatus.Active;
+
+    public AccountRestrictionReason? RestrictionReason { get; set; }
+
+    [MaxLength(1000)]
+    public string? RestrictionReasonDetails { get; set; }
+
+    public DateTimeOffset? RestrictedAt { get; set; }
+
+    [MaxLength(100)]
+    public string? RestrictedBy { get; set; }
+
+    public DateTimeOffset? RestrictionExpiresAt { get; set; }
+
+    public DateTimeOffset? ReactivatedAt { get; set; }
+
+    
+
+    // ─────────────────────────────────────────────────────────
+    // Audit
+    // ─────────────────────────────────────────────────────────
+    
     public DateTimeOffset? CreatedAt { get; set; }
 
     public DateTimeOffset? ModifiedAt { get; set; }
@@ -71,3 +97,5 @@ public class User : IdentityUser<long>
     [MaxLength(100)]
     public string? DeletedBy { get; set; }
 }
+
+
