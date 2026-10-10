@@ -14,4 +14,5 @@ public enum PayoutDestination
     Bank = 1,
     Wallet = 2,
     Main = 3,
+    Utilities = 4
 }

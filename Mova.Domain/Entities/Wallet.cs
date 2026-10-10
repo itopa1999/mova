@@ -68,5 +68,7 @@ public class Wallet : BaseEntity
     public WalletCategory Category { get; set; } = null!;
 
     public BankAccount? BankAccount { get; set; }
+    public UtilityType? UtilityType { get; set; }
+    public string? UtilityConfigJson { get; set; }
 
 }

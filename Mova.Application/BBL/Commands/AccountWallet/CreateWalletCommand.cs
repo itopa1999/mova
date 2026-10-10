@@ -1,10 +1,10 @@
 using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.Shared;
 using Mova.Application.Validation;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
@@ -58,8 +58,12 @@ public sealed class CreateWalletCommand
         [NotDefault]
         public DateTimeOffset StartDate { get; set; }
 
-        [Required, RegularExpression(@"(?i)^\s*(bank|wallet|main)\s*$", ErrorMessage = "Payout destination must be bank, wallet, or main.")]
+        [Required, RegularExpression(
+            @"(?i)^\s*(bank|wallet|main|utilities)\s*$",
+            ErrorMessage = "Payout destination must be bank, wallet, main, or utilities.")]
         public string PayoutDestination { get; set; } = "bank";
+
+        public UtilityConfig? UtilityConfig { get; set; }
     }
 
     public sealed class CreateWalletResponseDto
@@ -76,6 +80,18 @@ public sealed class CreateWalletCommand
     public sealed class Handler
         : IRequestHandler<Command, BaseResult<CreateWalletResponseDto>>
     {
+        private static readonly HashSet<string> AllowedNetworks =
+            new(StringComparer.OrdinalIgnoreCase)
+            { "mtn", "airtel", "glo", "9mobile" };
+
+        private static readonly HashSet<string> AllowedCableProviders =
+            new(StringComparer.OrdinalIgnoreCase)
+            { "dstv", "gotv", "startimes" };
+
+        private static readonly HashSet<string> AllowedMeterTypes =
+            new(StringComparer.OrdinalIgnoreCase)
+            { "prepaid", "postpaid" };
+
         private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
@@ -165,6 +181,7 @@ public sealed class CreateWalletCommand
                 "bank" => PayoutDestination.Bank,
                 "wallet" => PayoutDestination.Wallet,
                 "main" => PayoutDestination.Main,
+                "utilities" => PayoutDestination.Utilities,
                 _ => (PayoutDestination?)null,
             };
 
@@ -173,10 +190,38 @@ public sealed class CreateWalletCommand
                 op.Fail($"Invalid payout destination: {request.PayoutDestination}");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "Invalid payout destination. Must be one of: bank, wallet, main.");
+                    "Invalid payout destination. Must be one of: bank, wallet, main, utilities.");
             }
 
             var goingToBank = destination == PayoutDestination.Bank;
+            var goingToUtilities = destination == PayoutDestination.Utilities;
+
+            UtilityType? parsedUtilityType = null;
+            string? serializedUtilityConfig = null;
+
+            if (goingToUtilities)
+            {
+                var validationError = ValidateUtilityConfig(request.UtilityConfig, out parsedUtilityType);
+
+                if (validationError is not null)
+                {
+                    op.Fail($"Utility config invalid: {validationError}");
+                    return new BaseResult<CreateWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        validationError);
+                }
+
+                serializedUtilityConfig = JsonSerializer.Serialize(
+                    request.UtilityConfig,
+                    new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+            }
+            else if (request.UtilityConfig is not null)
+            {
+                op.Fail($"Utility config provided but destination is {destination}.");
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Utility config must not be provided for this payout destination.");
+            }
 
             var normalizedFrequencyConfig =
                 FrequencyConfigHelper.NormalizeConfigJson(request.FrequencyConfig);
@@ -373,6 +418,8 @@ public sealed class CreateWalletCommand
                     LockedAmount = targetMoney,
                     ResetAmount = Money.FromNaira(0),
                     Status = WalletStatus.Active,
+                    UtilityType = goingToUtilities ? parsedUtilityType : null,
+                    UtilityConfigJson = goingToUtilities ? serializedUtilityConfig : null,
                 };
 
                 await _unitOfWork.AddAsync(wallet, cancellationToken);
@@ -501,7 +548,9 @@ public sealed class CreateWalletCommand
                     walletId,
                     walletName,
                     firstReleaseDate,
-                    destination.Value);
+                    destination.Value,
+                    parsedUtilityType,
+                    request.UtilityConfig);
             }
             catch (Exception ex)
             {
@@ -523,6 +572,92 @@ public sealed class CreateWalletCommand
                 });
         }
 
+        private static string? ValidateUtilityConfig(
+            UtilityConfig? config,
+            out UtilityType? parsedType)
+        {
+            parsedType = null;
+
+            if (config is null)
+                return "Utility config is required when payout destination is utilities.";
+
+            if (string.IsNullOrWhiteSpace(config.UtilityType))
+                return "Utility type is required.";
+
+            parsedType = config.UtilityType.Trim().ToLowerInvariant() switch
+            {
+                "airtime" => UtilityType.Airtime,
+                "data" => UtilityType.Data,
+                "cable" => UtilityType.Cable,
+                "electricity" => UtilityType.Electricity,
+                _ => null,
+            };
+
+            if (parsedType is null)
+                return "Invalid utility type. Must be one of: airtime, data, cable, electricity.";
+
+            switch (parsedType)
+            {
+                case UtilityType.Airtime:
+                    if (string.IsNullOrWhiteSpace(config.Network))
+                        return "Network is required for airtime.";
+                    if (!AllowedNetworks.Contains(config.Network.Trim()))
+                        return "Invalid network. Must be one of: mtn, airtel, glo, 9mobile.";
+                    if (string.IsNullOrWhiteSpace(config.PhoneNumber))
+                        return "Phone number is required for airtime.";
+                    if (!IsValidPhone(config.PhoneNumber))
+                        return "Invalid phone number. Must be 11 digits.";
+                    break;
+
+                case UtilityType.Data:
+                    if (string.IsNullOrWhiteSpace(config.Network))
+                        return "Network is required for data.";
+                    if (!AllowedNetworks.Contains(config.Network.Trim()))
+                        return "Invalid network. Must be one of: mtn, airtel, glo, 9mobile.";
+                    if (string.IsNullOrWhiteSpace(config.PhoneNumber))
+                        return "Phone number is required for data.";
+                    if (!IsValidPhone(config.PhoneNumber))
+                        return "Invalid phone number. Must be 11 digits.";
+                    if (string.IsNullOrWhiteSpace(config.PlanCode))
+                        return "Plan code is required for data.";
+                    break;
+
+                case UtilityType.Cable:
+                    if (string.IsNullOrWhiteSpace(config.CableProvider))
+                        return "Cable provider is required for cable.";
+                    if (!AllowedCableProviders.Contains(config.CableProvider.Trim()))
+                        return "Invalid cable provider. Must be one of: DSTV, GOtv, Startimes.";
+                    if (string.IsNullOrWhiteSpace(config.SmartcardNumber))
+                        return "Smartcard number is required for cable.";
+                    if (config.SmartcardNumber.Trim().Length < 6)
+                        return "Invalid smartcard number.";
+                    if (string.IsNullOrWhiteSpace(config.PackageCode))
+                        return "Package code is required for cable.";
+                    break;
+
+                case UtilityType.Electricity:
+                    if (string.IsNullOrWhiteSpace(config.Disco))
+                        return "Disco is required for electricity.";
+                    if (string.IsNullOrWhiteSpace(config.MeterNumber))
+                        return "Meter number is required for electricity.";
+                    if (config.MeterNumber.Trim().Length < 6)
+                        return "Invalid meter number.";
+                    if (string.IsNullOrWhiteSpace(config.MeterType))
+                        return "Meter type is required for electricity.";
+                    if (!AllowedMeterTypes.Contains(config.MeterType.Trim()))
+                        return "Invalid meter type. Must be prepaid or postpaid.";
+                    break;
+            }
+
+            return null;
+        }
+
+        private static bool IsValidPhone(string phone)
+        {
+            var digits = new string(phone.Where(char.IsDigit).ToArray());
+            return digits.Length == 11;
+        }
+
         private async Task SendWalletCreatedNotificationsAsync(
             string userPublicId,
             string email,
@@ -530,7 +665,9 @@ public sealed class CreateWalletCommand
             long walletId,
             string walletName,
             DateTimeOffset firstReleaseDate,
-            PayoutDestination payoutDestination)
+            PayoutDestination payoutDestination,
+            UtilityType? utilityType,
+            UtilityConfig? utilityConfig)
         {
             var title = $"{walletName} wallet created";
 
@@ -539,9 +676,11 @@ public sealed class CreateWalletCommand
                 PayoutDestination.Bank =>
                     "Releases will be sent to your linked bank account.",
                 PayoutDestination.Wallet =>
-                    "Releases will stay in your wallet available balance — withdraw anytime.",
+                    "Releases will stay in your wallet available balance — pay bills or withdraw anytime.",
                 PayoutDestination.Main =>
-                    "Releases will be added to your main MOVA balance (spend-only, non-withdrawable).",
+                    "Releases will be added to your main MOVA balance.",
+                PayoutDestination.Utilities =>
+                    BuildUtilityNotificationClause(utilityType, utilityConfig),
                 _ => "Releases will be handled on schedule."
             };
 
@@ -592,6 +731,31 @@ public sealed class CreateWalletCommand
                     "Email queue failed for created wallet {WalletId}.",
                     walletId);
             }
+        }
+
+        private static string BuildUtilityNotificationClause(
+            UtilityType? utilityType,
+            UtilityConfig? config)
+        {
+            if (utilityType is null || config is null)
+                return "Releases will be used to pay your selected utility.";
+
+            return utilityType switch
+            {
+                UtilityType.Airtime =>
+                    $"Releases will top up {config.Network?.ToUpperInvariant()} airtime on {config.PhoneNumber}.",
+
+                UtilityType.Data =>
+                    $"Releases will buy {config.Network?.ToUpperInvariant()} data on {config.PhoneNumber}.",
+
+                UtilityType.Cable =>
+                    $"Releases will renew your {config.CableProvider} package.",
+
+                UtilityType.Electricity =>
+                    $"Releases will top up your {config.Disco} {config.MeterType} meter.",
+
+                _ => "Releases will be used to pay your selected utility."
+            };
         }
     }
 }

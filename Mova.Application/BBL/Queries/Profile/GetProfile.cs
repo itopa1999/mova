@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Mova.Application.Interfaces.Identity;
+using Mova.Domain.Enums;
 using Mova.Shared.Common;
 
 namespace Mova.Application.BBL.Queries.Profile;
@@ -27,8 +28,9 @@ public sealed class GetProfile
         public bool HasPinSet { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
 
-        // ─── Notification preferences ─────────────────
         public NotificationPreferencesDto Notifications { get; set; } = new();
+
+        public AccountStatusDto AccountStatus { get; set; } = new();
     }
 
     public sealed class NotificationPreferencesDto
@@ -37,6 +39,18 @@ public sealed class GetProfile
         public bool Release { get; set; }
         public bool Updates { get; set; }
         public bool Promotions { get; set; }
+    }
+
+    public sealed class AccountStatusDto
+    {
+        public string Status { get; set; } = string.Empty;
+        public string StatusLabel { get; set; } = string.Empty;
+        public string StatusDescription { get; set; } = string.Empty;
+        public string? RestrictionReason { get; set; }
+        public string? RestrictionReasonDetails { get; set; }
+        public DateTimeOffset? RestrictionExpiresAt { get; set; }
+
+        public bool IsHealthy { get; set; }
     }
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetProfileDto>>
@@ -72,6 +86,10 @@ public sealed class GetProfile
                     default);
             }
 
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
             var profile = new GetProfileDto
             {
                 FirstName = user.FirstName ?? string.Empty,
@@ -92,12 +110,46 @@ public sealed class GetProfile
                     Updates = user.NotifyProductUpdates,
                     Promotions = user.NotifyPromotions,
                 },
+
+                AccountStatus = BuildAccountStatus(permissions),
             };
 
             return new BaseResult<GetProfileDto>(
                 HttpStatusCode.OK,
                 "Profile retrieved successfully.",
                 profile);
+        }
+
+        private static AccountStatusDto BuildAccountStatus(
+            UserPermissionsDto? permissions)
+        {
+            if (permissions is null)
+            {
+                return new AccountStatusDto
+                {
+                    Status = "Unknown",
+                    StatusLabel = "Unavailable",
+                    StatusDescription = "We couldn't load your account status.",
+                    IsHealthy = false,
+                };
+            }
+
+            var isActive = permissions.AccountStatus == UserAccountStatus.Active;
+
+            var isHealthy = isActive
+                && (permissions.RestrictionExpiresAt is null
+                    || permissions.RestrictionExpiresAt.Value > DateTimeOffset.UtcNow);
+
+            return new AccountStatusDto
+            {
+                Status = permissions.AccountStatus.ToString(),
+                StatusLabel = permissions.StatusLabel,
+                StatusDescription = permissions.StatusDescription,
+                RestrictionReason = permissions.RestrictionReason,
+                RestrictionReasonDetails = permissions.RestrictionReasonDetails,
+                RestrictionExpiresAt = permissions.RestrictionExpiresAt,
+                IsHealthy = isHealthy,
+            };
         }
     }
 }
