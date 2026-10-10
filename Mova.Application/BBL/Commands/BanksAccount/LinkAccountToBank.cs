@@ -27,8 +27,7 @@ public sealed class LinkAccountToBank
         public string FirstName { get; set; } = string.Empty;
 
         [JsonIgnore]
-        [Range(1, long.MaxValue)]
-        public long WalletId { get; set; } = 0;
+         public long WalletId { get; set; } = 0;
 
         [Range(1, long.MaxValue)]
         public long BankAccountId { get; set; }
