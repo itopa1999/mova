@@ -16,7 +16,7 @@ namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class LoginUserCommand
 {
-    public class Command : IRequest<BaseResult<LoginResponseDto>>
+    public class Command : IRequest<BaseResult<LoginResultDto>>
     {
         [Required, MaxLength(254)]
         [JsonPropertyName("emailOrPhone")]
@@ -32,6 +32,11 @@ public sealed class LoginUserCommand
         public string? DeviceId { get; init; }
     }
 
+    /// <summary>
+    /// Login success payload. Does NOT carry account status fields —
+    /// those are only relevant when login is blocked and are returned
+    /// via <see cref="LoginBlockedDto"/> instead.
+    /// </summary>
     public class LoginResponseDto
     {
         public string UserPublicId { get; set; } = string.Empty;
@@ -46,7 +51,35 @@ public sealed class LoginUserCommand
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
     }
 
-    public class Handler : IRequestHandler<Command, BaseResult<LoginResponseDto>>
+    /// <summary>
+    /// Returned only when the login is blocked (Restricted, Suspended,
+    /// Closed, Deactivated, or locked out). Contains just enough info
+    /// for the FE to render the exact reason.
+    /// </summary>
+    public class LoginBlockedDto
+    {
+        public string UserPublicId { get; set; } = string.Empty;
+        public string AccountStatus { get; set; } = string.Empty;
+        public string StatusLabel { get; set; } = string.Empty;
+        public string StatusDescription { get; set; } = string.Empty;
+        public string? RestrictionReason { get; set; }
+        public string? RestrictionReasonDetails { get; set; }
+        public DateTimeOffset? RestrictionExpiresAt { get; set; }
+        public DateTimeOffset? LockoutEndsAt { get; set; }
+    }
+
+    /// <summary>
+    /// Unified result: on success, <see cref="Data"/> is the login payload
+    /// and <see cref="Blocked"/> is null. On block, <see cref="Data"/> is
+    /// null and <see cref="Blocked"/> carries the status info.
+    /// </summary>
+    public class LoginResultDto
+    {
+        public LoginResponseDto? Data { get; set; }
+        public LoginBlockedDto? Blocked { get; set; }
+    }
+
+    public class Handler : IRequestHandler<Command, BaseResult<LoginResultDto>>
     {
         private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
@@ -79,7 +112,7 @@ public sealed class LoginUserCommand
             _logger = logger;
         }
 
-        public async Task<BaseResult<LoginResponseDto>> Handle(
+        public async Task<BaseResult<LoginResultDto>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
@@ -91,7 +124,7 @@ public sealed class LoginUserCommand
             if (!ValidPlatforms.Contains(request.Platform))
             {
                 op.Fail($"Invalid platform: {request.Platform}");
-                return new BaseResult<LoginResponseDto>(
+                return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid platform specified.");
             }
@@ -103,15 +136,67 @@ public sealed class LoginUserCommand
             if (user == null)
             {
                 op.Fail("User not found.");
-                return new BaseResult<LoginResponseDto>(
+                return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid email or password.");
+            }
+
+            var permissions = await _identityService.GetPermissionsAsync(
+                user.PublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {user.PublicId}.");
+                return new BaseResult<LoginResultDto>(
+                    HttpStatusCode.BadRequest,
+                    "Invalid email or password.");
+            }
+
+            // ─────────────────────────────────────────────────────
+            // Login gate — blocked status returns 403 with the reason
+            // ─────────────────────────────────────────────────────
+            if (!permissions.CanLogin)
+            {
+                op.Fail(
+                    $"Login blocked for user {user.PublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                return new BaseResult<LoginResultDto>(
+                    HttpStatusCode.Forbidden,
+                    permissions.StatusDescription,
+                    new LoginResultDto
+                    {
+                        Blocked = BuildBlockedDto(user.PublicId, permissions),
+                    });
+            }
+
+            if (await _identityService.IsLockedOutAsync(user.Id, cancellationToken))
+            {
+                var lockoutEnd = await _identityService.GetLockoutEndAsync(
+                    user.Id, cancellationToken);
+                var minutesLeft = lockoutEnd.HasValue
+                    ? (int)Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalMinutes)
+                    : 15;
+
+                op.Fail($"Account locked for user {user.PublicId}");
+
+                return new BaseResult<LoginResultDto>(
+                    HttpStatusCode.Locked,
+                    $"Too many failed login attempts. Your account is locked. " +
+                    $"Please try again in {minutesLeft} minute(s).",
+                    new LoginResultDto
+                    {
+                        Blocked = BuildBlockedDto(
+                            user.PublicId, permissions, lockoutEnd),
+                    });
             }
 
             if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
             {
                 op.Fail($"Account not verified for user {user.PublicId}");
-                return new BaseResult<LoginResponseDto>(
+                return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Please verify your account before logging in.");
             }
@@ -122,11 +207,37 @@ public sealed class LoginUserCommand
 
             if (!passwordIsValid)
             {
+                await _identityService.RecordFailedAccessAsync(
+                    user.Id, cancellationToken);
+
+                if (await _identityService.IsLockedOutAsync(user.Id, cancellationToken))
+                {
+                    var lockoutEnd = await _identityService.GetLockoutEndAsync(
+                        user.Id, cancellationToken);
+                    var minutesLeft = lockoutEnd.HasValue
+                        ? (int)Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalMinutes)
+                        : 15;
+
+                    op.Fail($"Account locked after failed attempt for user {user.PublicId}");
+
+                    return new BaseResult<LoginResultDto>(
+                        HttpStatusCode.Locked,
+                        $"Too many failed login attempts. Your account has been locked " +
+                        $"for {minutesLeft} minute(s).",
+                        new LoginResultDto
+                        {
+                            Blocked = BuildBlockedDto(
+                                user.PublicId, permissions, lockoutEnd),
+                        });
+                }
+
                 op.Fail($"Invalid password for user {user.PublicId}");
-                return new BaseResult<LoginResponseDto>(
+                return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid email or password.");
             }
+
+            await _identityService.ResetFailedAccessAsync(user.Id, cancellationToken);
 
             var roles = await _identityService.GetRolesAsync(user.Id);
 
@@ -185,7 +296,6 @@ public sealed class LoginUserCommand
                 }
                 catch (Exception ex)
                 {
-                    // Never let a notification failure break login
                     _logger.LogError(
                         ex,
                         "New-device alert failed for user {UserPublicId}.",
@@ -212,23 +322,47 @@ public sealed class LoginUserCommand
                 }
             }
 
-            return new BaseResult<LoginResponseDto>(
+            // ─────────────────────────────────────────────────────
+            // Success — clean payload only. No status block.
+            // ─────────────────────────────────────────────────────
+            return new BaseResult<LoginResultDto>(
                 HttpStatusCode.OK,
                 "Login successful.",
-                new LoginResponseDto
+                new LoginResultDto
                 {
-                    UserPublicId = user.PublicId,
-                    Email = user.Email ?? string.Empty,
-                    Phone = user.PhoneNumber ?? string.Empty,
-                    FullName = user.FullName,
-                    ProfilePicture = user.ProfilePicture,
-                    Balance = user.Balance.ToDecimal(),
-                    Platform = request.Platform,
-                    AccessToken = accessToken,
-                    RefreshToken = refreshToken,
-                    AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
+                    Data = new LoginResponseDto
+                    {
+                        UserPublicId = user.PublicId,
+                        Email = user.Email ?? string.Empty,
+                        Phone = user.PhoneNumber ?? string.Empty,
+                        FullName = user.FullName,
+                        ProfilePicture = user.ProfilePicture,
+                        Balance = user.Balance.ToDecimal(),
+                        Platform = request.Platform,
+                        AccessToken = accessToken,
+                        RefreshToken = refreshToken,
+                        AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
+                    },
                 });
         }
+
+        // ─── Blocked-login DTO builder ────────────────────────
+
+        private static LoginBlockedDto BuildBlockedDto(
+            string userPublicId,
+            UserPermissionsDto permissions,
+            DateTimeOffset? lockoutEndsAt = null) =>
+            new()
+            {
+                UserPublicId = userPublicId,
+                AccountStatus = permissions.AccountStatus.ToString(),
+                StatusLabel = permissions.StatusLabel,
+                StatusDescription = permissions.StatusDescription,
+                RestrictionReason = permissions.RestrictionReason,
+                RestrictionReasonDetails = permissions.RestrictionReasonDetails,
+                RestrictionExpiresAt = permissions.RestrictionExpiresAt,
+                LockoutEndsAt = lockoutEndsAt,
+            };
 
         // ─── Alerts ──────────────────────────────────────────
 
@@ -247,7 +381,6 @@ public sealed class LoginUserCommand
                 ? deviceId[..8]
                 : deviceId;
 
-            // ─── In-app ──────────────────────────────────────
             try
             {
                 _notificationQueue.InAppNotificationAsync(
@@ -268,7 +401,6 @@ public sealed class LoginUserCommand
                     userPublicId);
             }
 
-            // ─── Email ───────────────────────────────────────
             if (string.IsNullOrWhiteSpace(email))
             {
                 return;

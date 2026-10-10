@@ -115,29 +115,33 @@ public class AuthenticationController(
             result);
     }
 
+
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
-    [ProducesResponseType(typeof(BaseResult<LoginResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult<LoginResultDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> LoginUser(
-        [FromBody] LoginUserCommand.Command command, CancellationToken cancellationToken)
+        [FromBody] LoginUserCommand.Command command,
+        CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(command, cancellationToken);
 
+        var loginData = result.Data?.Data;
+
         if (result.IsSuccess &&
-            result.Data is not null &&
-            string.Equals(result.Data.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
+            loginData is not null &&
+            string.Equals(loginData.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
         {
             RemoveAuthenticationTokensFromResponse(
-                result.Data.AccessToken,
-                result.Data.RefreshToken,
+                loginData.AccessToken,
+                loginData.RefreshToken,
                 SetAuthenticationCookies,
                 () =>
                 {
-                    result.Data.AccessToken = null;
-                    result.Data.RefreshToken = null;
-                    result.Data.AccessTokenExpiresAt = null;
+                    loginData.AccessToken = null;
+                    loginData.RefreshToken = null;
+                    loginData.AccessTokenExpiresAt = null;
                 });
         }
 

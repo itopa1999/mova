@@ -1,3 +1,5 @@
+using Mova.Domain.Enums;
+
 namespace Mova.Application.Interfaces.Identity;
 
 public interface IIdentityService
@@ -71,4 +73,35 @@ public interface IIdentityService
 
     Task<bool> DebitBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken);
     Task<int> CountUsersInRoleAsync(string role, CancellationToken cancellationToken = default);
+
+
+    Task<bool> IsLockedOutAsync(
+        long userId,
+        CancellationToken cancellationToken = default);
+
+    Task<DateTimeOffset?> GetLockoutEndAsync(
+        long userId,
+        CancellationToken cancellationToken = default);
+
+    Task RecordFailedAccessAsync(
+        long userId,
+        CancellationToken cancellationToken = default);
+
+    Task ResetFailedAccessAsync(
+        long userId,
+        CancellationToken cancellationToken = default);
+
+
+
+    // ─────────────────────────────────────────────────────
+    // Permissions / feature gates
+    // ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns a snapshot of the user's current permissions, or null if the
+    /// user does not exist.
+    /// </summary>
+    Task<UserPermissionsDto?> GetPermissionsAsync(
+        string userPublicId,
+        CancellationToken cancellationToken = default);
 }

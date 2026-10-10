@@ -70,9 +70,9 @@ public static class DependencyInjection
 
     private static void ConfigureLockout(IdentityOptions options)
     {
-        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.MaxFailedAccessAttempts = 4;
         options.Lockout.DefaultLockoutTimeSpan =
-            TimeSpan.FromMinutes(15);
+            TimeSpan.FromMinutes(30);
         options.Lockout.AllowedForNewUsers = true;
     }
 
