@@ -2,9 +2,9 @@ name: build-check
 
 on:
   push:
-    branches: [main, production]
+    branches: [main]
   pull_request:
-    branches: [main, production]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
