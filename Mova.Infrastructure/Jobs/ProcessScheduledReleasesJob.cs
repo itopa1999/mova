@@ -176,7 +176,8 @@ public sealed class ProcessScheduledReleasesJob
                 op.Success("Release kept in wallet available balance.");
             }
             else if (wallet.PayoutDestination == PayoutDestination.Bank
-                     || wallet.PayoutDestination == PayoutDestination.Main)
+                     || wallet.PayoutDestination == PayoutDestination.Main 
+                     || wallet.PayoutDestination == PayoutDestination.Utilities)
             {
                 var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";
 
@@ -248,6 +249,8 @@ public sealed class ProcessScheduledReleasesJob
                     "and is now available in your wallet balance.",
                 PayoutDestination.Main =>
                     "and has been added to your main MOVA balance.",
+                PayoutDestination.Utilities =>
+                    "and has been used to top up your utility.",
                 _ => "and has been released."
             };
 
@@ -385,6 +388,8 @@ public sealed class ProcessScheduledReleasesJob
                 $"Your {walletName} release is now available",
             PayoutDestination.Main =>
                 $"Your {walletName} release has been added to your main balance",
+            PayoutDestination.Utilities =>
+                $"Your {walletName} release has been used for your utility",
             _ => $"Your {walletName} release"
         };
 
@@ -404,6 +409,11 @@ public sealed class ProcessScheduledReleasesJob
                 $"₦{amount:N0} has been released from your {walletName} wallet. " +
                 $"The money is being added to your main MOVA balance. You can spend " +
                 $"it inside MOVA — please note it cannot be withdrawn to a bank account. " +
+                $"MOVA will handle the next release on schedule.",
+
+            PayoutDestination.Utilities =>
+                $"₦{amount:N0} has been released from your {walletName} wallet. " +
+                $"The money has been used to top up your utility. " +
                 $"MOVA will handle the next release on schedule.",
 
             _ =>

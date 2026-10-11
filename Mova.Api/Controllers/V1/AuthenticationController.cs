@@ -329,6 +329,26 @@ public class AuthenticationController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+
+    [HttpPost("request-deactivation")]
+    [Authorize(Roles = Roles.Customer)]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(
+        typeof(BaseResult<UpdateNotificationPreferenceResponseDto>),
+        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> RequestForAccountDeletion(
+        [FromBody] UpdateNotificationPreferenceCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     private void SetAuthenticationCookies(
         string accessToken,
         string refreshToken)
