@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Identity;
 using Moq;
+using Mova.Application.Behaviors;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
+using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Services.Security;
 using Mova.Shared.Constants;
-using Xunit;
 
 namespace Mova.Tests.TransactionPinTest;
 
@@ -13,6 +14,27 @@ public sealed class TransactionPinServiceTests : BaseTest
 {
     private const string UserPublicId = "pin-lockout-user";
     private const string Pin = "123456";
+
+    private readonly Mock<IPinChallenge> _pinChallengeMock = new();
+
+    private TransactionPinService CreateService(
+        IPasswordHasher<User> hasher,
+        ITransactionPinAttemptStore attemptStore)
+    {
+        _pinChallengeMock
+            .Setup(x => x.CreateAsync(
+                It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        return new TransactionPinService(
+            Context,
+            hasher,
+            Mock.Of<ICacheService>(),
+            attemptStore,
+            _pinChallengeMock.Object);
+    }
 
     [Fact]
     public void TransactionPinCacheKeys_UseRequestedRedisKeyFormats()
@@ -28,7 +50,7 @@ public sealed class TransactionPinServiceTests : BaseTest
     }
 
     [Fact]
-    public async Task VerifyPinAsync_LocksAfterThreeFailures()
+    public async Task VerifyPinWithStatusAsync_LocksAfterThreeFailures()
     {
         var hasher = new PasswordHasher<User>();
         var user = new User
@@ -47,24 +69,35 @@ public sealed class TransactionPinServiceTests : BaseTest
         await Context.SaveChangesAsync();
 
         var attemptStore = new InMemoryPinAttemptStore();
-        var service = new TransactionPinService(
-            Context,
-            hasher,
-            Mock.Of<ICacheService>(),
-            attemptStore);
+        var service = CreateService(hasher, attemptStore);
 
-        Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
-        Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
+        Assert.Equal(
+            TransactionPinVerificationResult.Invalid,
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, "000000", PinChallengeType.CreateWallet));
+
+        Assert.Equal(
+            TransactionPinVerificationResult.Invalid,
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, "000000", PinChallengeType.CreateWallet));
+
         Assert.Equal(
             TransactionPinVerificationResult.LockedNow,
-            await service.VerifyPinWithStatusAsync(UserPublicId, "000000"));
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, "000000", PinChallengeType.CreateWallet));
+
         Assert.True(attemptStore.IsLocked(UserPublicId));
-        Assert.False(await service.VerifyPinAsync(UserPublicId, Pin));
+
+        Assert.Equal(
+            TransactionPinVerificationResult.Locked,
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, Pin, PinChallengeType.CreateWallet));
+
         Assert.Equal(3, attemptStore.FailureCount(UserPublicId));
     }
 
     [Fact]
-    public async Task VerifyPinAsync_ClearsFailuresAfterSuccessfulVerification()
+    public async Task VerifyPinWithStatusAsync_ClearsFailuresAfterSuccessfulVerification()
     {
         var hasher = new PasswordHasher<User>();
         var user = new User
@@ -85,19 +118,19 @@ public sealed class TransactionPinServiceTests : BaseTest
         var attemptStore = new InMemoryPinAttemptStore();
         await attemptStore.RecordFailureAsync(UserPublicId);
 
-        var service = new TransactionPinService(
-            Context,
-            hasher,
-            Mock.Of<ICacheService>(),
-            attemptStore);
+        var service = CreateService(hasher, attemptStore);
 
-        Assert.True(await service.VerifyPinAsync(UserPublicId, Pin));
+        Assert.Equal(
+            TransactionPinVerificationResult.Verified,
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, Pin, PinChallengeType.CreateWallet));
+
         Assert.Equal(0, attemptStore.FailureCount(UserPublicId));
         Assert.False(attemptStore.IsLocked(UserPublicId));
     }
 
     [Fact]
-    public async Task VerifyPinAsync_LockoutIsIsolatedPerUser()
+    public async Task VerifyPinWithStatusAsync_LockoutIsIsolatedPerUser()
     {
         var hasher = new PasswordHasher<User>();
         var firstUser = CreateUser(UserPublicId, "first-pin-user@example.com");
@@ -108,22 +141,27 @@ public sealed class TransactionPinServiceTests : BaseTest
         await Context.SaveChangesAsync();
 
         var attemptStore = new InMemoryPinAttemptStore();
-        var service = new TransactionPinService(
-            Context,
-            hasher,
-            Mock.Of<ICacheService>(),
-            attemptStore);
+        var service = CreateService(hasher, attemptStore);
 
-        Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
-        Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
-        Assert.False(await service.VerifyPinAsync(UserPublicId, "000000"));
+        await service.VerifyPinWithStatusAsync(
+            UserPublicId, "000000", PinChallengeType.CreateWallet);
+        await service.VerifyPinWithStatusAsync(
+            UserPublicId, "000000", PinChallengeType.CreateWallet);
+        await service.VerifyPinWithStatusAsync(
+            UserPublicId, "000000", PinChallengeType.CreateWallet);
+
         Assert.True(attemptStore.IsLocked(UserPublicId));
-        Assert.True(await service.VerifyPinAsync(secondUser.PublicId, Pin));
+
+        Assert.Equal(
+            TransactionPinVerificationResult.Verified,
+            await service.VerifyPinWithStatusAsync(
+                secondUser.PublicId, Pin, PinChallengeType.CreateWallet));
+
         Assert.False(attemptStore.IsLocked(secondUser.PublicId));
     }
 
     [Fact]
-    public async Task VerifyPinAsync_DoesNotClearLockCreatedDuringSuccessfulVerification()
+    public async Task VerifyPinWithStatusAsync_DoesNotClearLockCreatedDuringSuccessfulVerification()
     {
         var hasher = new PasswordHasher<User>();
         var user = CreateUser(UserPublicId, "concurrent-pin-user@example.com");
@@ -135,15 +173,104 @@ public sealed class TransactionPinServiceTests : BaseTest
         {
             LockDuringSuccessfulReset = true
         };
+        var service = CreateService(hasher, attemptStore);
+
+        Assert.Equal(
+            TransactionPinVerificationResult.Locked,
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, Pin, PinChallengeType.CreateWallet));
+
+        Assert.True(attemptStore.IsLocked(UserPublicId));
+        Assert.Equal(3, attemptStore.FailureCount(UserPublicId));
+    }
+
+    [Fact]
+    public async Task VerifyPinWithStatusAsync_WhenChallengeCreationFails_ThrowsPinChallengePersistenceException()
+    {
+        var hasher = new PasswordHasher<User>();
+        var user = CreateUser(UserPublicId, "challenge-fail@example.com");
+        user.TransactionPinHash = hasher.HashPassword(user, Pin);
+        Context.Users.Add(user);
+        await Context.SaveChangesAsync();
+
+        var attemptStore = new InMemoryPinAttemptStore();
+
+        _pinChallengeMock
+            .Setup(x => x.CreateAsync(
+                It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
         var service = new TransactionPinService(
             Context,
             hasher,
             Mock.Of<ICacheService>(),
-            attemptStore);
+            attemptStore,
+            _pinChallengeMock.Object);
 
-        Assert.False(await service.VerifyPinAsync(UserPublicId, Pin));
-        Assert.True(attemptStore.IsLocked(UserPublicId));
-        Assert.Equal(3, attemptStore.FailureCount(UserPublicId));
+        await Assert.ThrowsAsync<PinChallengePersistenceException>(
+            () => service.VerifyPinWithStatusAsync(
+                UserPublicId, Pin, PinChallengeType.CreateWallet));
+    }
+
+    [Fact]
+    public async Task VerifyPinWithStatusAsync_ForwardsChallengeTypeToPinChallenge()
+    {
+        var hasher = new PasswordHasher<User>();
+        var user = CreateUser(UserPublicId, "challenge-forward@example.com");
+        user.TransactionPinHash = hasher.HashPassword(user, Pin);
+        Context.Users.Add(user);
+        await Context.SaveChangesAsync();
+
+        var attemptStore = new InMemoryPinAttemptStore();
+
+        _pinChallengeMock
+            .Setup(x => x.CreateAsync(
+                It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var service = new TransactionPinService(
+            Context,
+            hasher,
+            Mock.Of<ICacheService>(),
+            attemptStore,
+            _pinChallengeMock.Object);
+
+        await service.VerifyPinWithStatusAsync(
+            UserPublicId, Pin, PinChallengeType.BreakWallet);
+
+        _pinChallengeMock.Verify(
+            x => x.CreateAsync(
+                UserPublicId,
+                PinChallengeType.BreakWallet,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyPinWithStatusAsync_DoesNotCreateChallengeOnInvalidPin()
+    {
+        var hasher = new PasswordHasher<User>();
+        var user = CreateUser(UserPublicId, "no-challenge-on-fail@example.com");
+        user.TransactionPinHash = hasher.HashPassword(user, Pin);
+        Context.Users.Add(user);
+        await Context.SaveChangesAsync();
+
+        var attemptStore = new InMemoryPinAttemptStore();
+        var service = CreateService(hasher, attemptStore);
+
+        await service.VerifyPinWithStatusAsync(
+            UserPublicId, "000000", PinChallengeType.CreateWallet);
+
+        _pinChallengeMock.Verify(
+            x => x.CreateAsync(
+                It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     private static User CreateUser(string publicId, string email) =>

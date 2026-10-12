@@ -2,11 +2,12 @@ using System.Net;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.TransactionPin;
+using Mova.Application.Behaviors;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Xunit;
 
 namespace Mova.Tests.Handlers;
 
@@ -33,18 +34,16 @@ public sealed class VerifyPinCommandTests : BaseTest
 
     private VerifyPinCommand.Command CreateCommand(
         string pin = Pin,
-        string? userPublicId = null)
+        string? userPublicId = null,
+        PinChallengeType pinChallengeType = PinChallengeType.CreateWallet)
     {
         return new VerifyPinCommand.Command
         {
             UserPublicId = userPublicId ?? UserPublicId,
             Pin = pin,
+            PinChallengeType = pinChallengeType,
         };
     }
-
-    // ---------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------
 
     private void SetupUserExists(
         long userId = UserId,
@@ -97,6 +96,7 @@ public sealed class VerifyPinCommandTests : BaseTest
             .Setup(x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(isValid
                 ? TransactionPinVerificationResult.Verified
@@ -109,13 +109,10 @@ public sealed class VerifyPinCommandTests : BaseTest
             .Setup(x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(exception);
     }
-
-    // ---------------------------------------------------------
-    // 1. Validation
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
@@ -168,10 +165,6 @@ public sealed class VerifyPinCommandTests : BaseTest
         Assert.Contains("only digits", result.Message);
     }
 
-    // ---------------------------------------------------------
-    // 2. User lookup
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WithUnknownUser_ReturnsBadRequest()
     {
@@ -203,13 +196,10 @@ public sealed class VerifyPinCommandTests : BaseTest
             x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
-
-    // ---------------------------------------------------------
-    // 3. No PIN set
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WhenNoPinSet_ReturnsBadRequest()
@@ -228,13 +218,10 @@ public sealed class VerifyPinCommandTests : BaseTest
             x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
-
-    // ---------------------------------------------------------
-    // 4. Invalid PIN
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithInvalidPin_ReturnsUnauthorized()
@@ -260,6 +247,7 @@ public sealed class VerifyPinCommandTests : BaseTest
             .Setup(x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TransactionPinVerificationResult.LockedNow);
 
@@ -283,6 +271,7 @@ public sealed class VerifyPinCommandTests : BaseTest
             .Setup(x => x.VerifyPinWithStatusAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TransactionPinVerificationResult.Locked);
 
@@ -296,10 +285,6 @@ public sealed class VerifyPinCommandTests : BaseTest
             It.IsAny<string>(),
             It.IsAny<string>()), Times.Never);
     }
-
-    // ---------------------------------------------------------
-    // 5. Happy path
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithValidPin_ReturnsSuccess()
@@ -330,6 +315,7 @@ public sealed class VerifyPinCommandTests : BaseTest
             x => x.VerifyPinWithStatusAsync(
                 UserPublicId,
                 Pin,
+                It.IsAny<PinChallengeType>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -350,10 +336,6 @@ public sealed class VerifyPinCommandTests : BaseTest
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
-
-    // ---------------------------------------------------------
-    // 6. Exceptions from the PIN service
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WhenVerifyPinThrowsArgumentException_ReturnsBadRequest()
@@ -417,10 +399,6 @@ public sealed class VerifyPinCommandTests : BaseTest
         Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
     }
 
-    // ---------------------------------------------------------
-    // 7. Cancellation propagation
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WithValidPin_PassesCancellationToken()
     {
@@ -437,13 +415,10 @@ public sealed class VerifyPinCommandTests : BaseTest
             x => x.VerifyPinWithStatusAsync(
                 UserPublicId,
                 Pin,
+                It.IsAny<PinChallengeType>(),
                 cts.Token),
             Times.Once);
     }
-
-    // ---------------------------------------------------------
-    // 8. BaseResult has no Data payload
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithValidPin_ReturnsResultWithoutPayload()
@@ -455,8 +430,226 @@ public sealed class VerifyPinCommandTests : BaseTest
         var handler = CreateHandler();
         var result = await handler.Handle(CreateCommand(), default);
 
-        // Non-generic BaseResult — no Data property to assert on.
         Assert.True(result.IsSuccess);
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithUndefinedChallengeType_ReturnsBadRequest()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+
+        var handler = CreateHandler();
+
+        var result = await handler.Handle(
+            CreateCommand(pinChallengeType: (PinChallengeType)0),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal("A valid PIN challenge type is required.", result.Message);
+
+        _pinService.Verify(
+            x => x.VerifyPinWithStatusAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithUnknownNumericChallengeType_ReturnsBadRequest()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+
+        var handler = CreateHandler();
+
+        var result = await handler.Handle(
+            CreateCommand(pinChallengeType: (PinChallengeType)999),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal("A valid PIN challenge type is required.", result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WithDisallowedChallengeType_ReturnsBadRequest()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+
+        var handler = CreateHandler();
+
+        var result = await handler.Handle(
+            CreateCommand(pinChallengeType: PinChallengeType.ChangeTransactionPin),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(
+            "Unsupported PIN challenge type for this endpoint.",
+            result.Message);
+
+        _pinService.Verify(
+            x => x.VerifyPinWithStatusAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithAccountDeletionChallengeType_ReturnsBadRequest()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+
+        var result = await CreateHandler().Handle(
+            CreateCommand(pinChallengeType: PinChallengeType.AccountDeletion),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(
+            "Unsupported PIN challenge type for this endpoint.",
+            result.Message);
+    }
+
+    [Theory]
+    [InlineData(PinChallengeType.CreateWallet)]
+    [InlineData(PinChallengeType.AddBankAccount)]
+    [InlineData(PinChallengeType.BankAccountDeletion)]
+    [InlineData(PinChallengeType.ManualTransferToBank)]
+    [InlineData(PinChallengeType.ManualPayUtilities)]
+    [InlineData(PinChallengeType.BreakWallet)]
+    [InlineData(PinChallengeType.PausedWallet)]
+    [InlineData(PinChallengeType.UnpausedWallet)]
+    [InlineData(PinChallengeType.RestartWallet)]
+    [InlineData(PinChallengeType.LinkBankAccountToWallet)]
+    [InlineData(PinChallengeType.WalletAutomation)]
+    public async Task Handle_WithEachAllowedChallengeType_ReturnsSuccess(
+        PinChallengeType challengeType)
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+
+        var result = await CreateHandler().Handle(
+            CreateCommand(pinChallengeType: challengeType),
+            default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WithValidPin_ForwardsChallengeTypeToService()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+
+        await CreateHandler().Handle(
+            CreateCommand(pinChallengeType: PinChallengeType.BreakWallet),
+            default);
+
+        _pinService.Verify(
+            x => x.VerifyPinWithStatusAsync(
+                UserPublicId,
+                Pin,
+                PinChallengeType.BreakWallet,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Theory]
+    [InlineData(PinChallengeType.CreateWallet)]
+    [InlineData(PinChallengeType.AddBankAccount)]
+    [InlineData(PinChallengeType.BreakWallet)]
+    [InlineData(PinChallengeType.RestartWallet)]
+    public async Task Handle_WithValidPin_DoesNotSubstituteChallengeType(
+        PinChallengeType challengeType)
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+
+        await CreateHandler().Handle(
+            CreateCommand(pinChallengeType: challengeType),
+            default);
+
+        _pinService.Verify(
+            x => x.VerifyPinWithStatusAsync(
+                UserPublicId,
+                Pin,
+                challengeType,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        _pinService.Verify(
+            x => x.VerifyPinWithStatusAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.Is<PinChallengeType>(t => t != challengeType),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithInvalidChallengeType_DoesNotCheckHasPin()
+    {
+        SetupUserExists();
+
+        await CreateHandler().Handle(
+            CreateCommand(pinChallengeType: (PinChallengeType)0),
+            default);
+
+        _pinService.Verify(
+            x => x.HasPinAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithInvalidChallengeType_DoesNotLookupUser()
+    {
+        var handler = CreateHandler();
+
+        await handler.Handle(
+            CreateCommand(pinChallengeType: (PinChallengeType)0),
+            default);
+
+        _identityService.Verify(
+            x => x.GetByIdentifierAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenChallengePersistenceFails_ReturnsInternalServerError()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPinThrows(new PinChallengePersistenceException(
+            "Failed to persist PIN challenge after successful verification."));
+
+        var result = await CreateHandler().Handle(
+            CreateCommand(pinChallengeType: PinChallengeType.CreateWallet),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("An error occurred", result.Message);
     }
 }

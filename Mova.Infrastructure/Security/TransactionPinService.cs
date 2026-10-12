@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Behaviors;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
+using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
@@ -14,17 +16,20 @@ public class TransactionPinService : ITransactionPinService
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly ICacheService _cache;
     private readonly ITransactionPinAttemptStore _pinAttemptStore;
+    private readonly IPinChallenge _pinChallenge;
 
     public TransactionPinService(
         ApplicationDbContext context,
         IPasswordHasher<User> passwordHasher,
         ICacheService cache,
-        ITransactionPinAttemptStore pinAttemptStore)
+        ITransactionPinAttemptStore pinAttemptStore,
+        IPinChallenge pinChallenge)
     {
         _context = context;
         _passwordHasher = passwordHasher;
         _cache = cache;
         _pinAttemptStore = pinAttemptStore;
+        _pinChallenge = pinChallenge;
     }
 
     public async Task<bool> HasPinAsync(
@@ -77,17 +82,31 @@ public class TransactionPinService : ITransactionPinService
         string pin,
         CancellationToken cancellationToken = default)
     {
-        var result = await VerifyPinWithStatusAsync(
-            UserPublicId,
-            pin,
-            cancellationToken);
+        var user = await _context.Users
+            .FirstOrDefaultAsync(
+                x => x.PublicId == UserPublicId,
+                cancellationToken);
 
-        return result == TransactionPinVerificationResult.Verified;
+        if (user is null ||
+            string.IsNullOrWhiteSpace(user.TransactionPinHash))
+        {
+            return false;
+        }
+
+        var result = _passwordHasher.VerifyHashedPassword(
+            user,
+            user.TransactionPinHash,
+            pin);
+
+        var isValid = result == PasswordVerificationResult.Success ||
+                      result == PasswordVerificationResult.SuccessRehashNeeded;
+        return isValid;
     }
 
     public async Task<TransactionPinVerificationResult> VerifyPinWithStatusAsync(
         string UserPublicId,
         string pin,
+        PinChallengeType pinChallengeType,
         CancellationToken cancellationToken = default)
     {
         if (await _pinAttemptStore.IsLockedAsync(
@@ -122,9 +141,24 @@ public class TransactionPinService : ITransactionPinService
                 UserPublicId,
                 cancellationToken);
 
-            return wasReset
-                ? TransactionPinVerificationResult.Verified
-                : TransactionPinVerificationResult.Locked;
+            if (!wasReset)
+            {
+                return TransactionPinVerificationResult.Locked;
+            }
+
+            var challengeCreated = await _pinChallenge.CreateAsync(
+                UserPublicId,
+                pinChallengeType,
+                cancellationToken);
+
+            if (!challengeCreated)
+            {
+                throw new PinChallengePersistenceException(
+                    $"Failed to persist PIN challenge for user {UserPublicId} " +
+                    $"(type: {pinChallengeType}).");
+            }
+
+            return TransactionPinVerificationResult.Verified;
         }
 
         var lockWasTriggered = await _pinAttemptStore.RecordFailureAsync(

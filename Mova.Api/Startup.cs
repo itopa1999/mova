@@ -30,7 +30,9 @@ public class Startup(IConfiguration configuration)
             {
                 options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
                 options.JsonSerializerOptions.Converters.Add(
-                    new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+                    new JsonStringEnumConverter(
+                    namingPolicy: JsonNamingPolicy.CamelCase,
+                    allowIntegerValues: false));
             });
 
         services.AddHealthChecks()
