@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
@@ -27,7 +28,7 @@ public sealed class LinkAccountToBank
         public string FirstName { get; set; } = string.Empty;
 
         [JsonIgnore]
-         public long WalletId { get; set; } = 0;
+        public long WalletId { get; set; } = 0;
 
         [Range(1, long.MaxValue)]
         public long BankAccountId { get; set; }
@@ -53,15 +54,18 @@ public sealed class LinkAccountToBank
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IIdentityService _identityService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             INotificationQueue notificationQueue,
+            IIdentityService identityService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _notificationQueue = notificationQueue;
+            _identityService = identityService;
             _logger = logger;
         }
 
@@ -75,6 +79,42 @@ public sealed class LinkAccountToBank
                 ("UserId", request.UserPublicId),
                 ("WalletId", request.WalletId),
                 ("BankAccountId", request.BankAccountId));
+
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                op.Fail("UserPublicId is required.");
+                return new BaseResult<LinkAccountToBankDto>(
+                    HttpStatusCode.BadRequest,
+                    "User identity is required.");
+            }
+
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<LinkAccountToBankDto>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                op.Fail(
+                    $"Sensitive-operation gate blocked LinkAccountToBank for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<LinkAccountToBankDto>(
+                    HttpStatusCode.Locked,
+                    userMessage);
+            }
 
             long walletId = 0;
             string walletName = string.Empty;

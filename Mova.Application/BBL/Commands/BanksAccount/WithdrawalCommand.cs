@@ -13,6 +13,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
+using Mova.Shared.Logging;
 using DataAnnotationValidationResult = System.ComponentModel.DataAnnotations.ValidationResult;
 
 namespace Mova.Application.BBL.Commands.BanksAccount;
@@ -158,19 +159,57 @@ public sealed class WithdrawalCommand
             Command request,
             CancellationToken cancellationToken)
         {
+            using var op = OperationLogger.Start(
+                logger,
+                "Withdrawal",
+                ("UserId", request.UserPublicId),
+                ("WalletId", request.WalletId),
+                ("Amount", request.Amount),
+                ("Type", request.Type));
+
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
+                op.Fail("UserPublicId is required.");
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
+            }
+
+            var permissions = await identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<WithdrawalResponse>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                op.Fail(
+                    $"Sensitive-operation gate blocked withdrawal for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<WithdrawalResponse>(
+                    HttpStatusCode.Locked,
+                    userMessage);
             }
 
             if (!await featureFlagService.IsEnabledAsync(
                     FeatureFlagName.AllowWithdrawFunds,
                     cancellationToken))
             {
+                op.Fail("Withdrawals feature flag is disabled.");
                 return new BaseResult<WithdrawalResponse>(
-                    HttpStatusCode.Forbidden,
+                    HttpStatusCode.BadRequest,
                     "Withdrawals are currently unavailable.");
             }
 
@@ -190,6 +229,8 @@ public sealed class WithdrawalCommand
                 if (wallet is null)
                 {
                     await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    op.Fail($"Wallet {request.WalletId} not found for user {request.UserPublicId}.");
+
                     return new BaseResult<WithdrawalResponse>(
                         HttpStatusCode.NotFound,
                         "Wallet not found.");
@@ -198,6 +239,10 @@ public sealed class WithdrawalCommand
                 if (wallet.AvailableAmount.MinorUnits < amount.MinorUnits)
                 {
                     await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    op.Fail(
+                        $"Insufficient wallet balance. Available: {wallet.AvailableAmount.MinorUnits}, " +
+                        $"Requested: {amount.MinorUnits}.");
+
                     return new BaseResult<WithdrawalResponse>(
                         HttpStatusCode.BadRequest,
                         "The wallet does not have enough available balance.");
@@ -237,6 +282,10 @@ public sealed class WithdrawalCommand
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 await unitOfWork.CommitTransactionAsync(cancellationToken);
 
+                op.Success(
+                    $"Withdrawal debit recorded. WalletId: {wallet.Id}, " +
+                    $"Reference: {reference}, Amount: {amount.MinorUnits} minor units.");
+
                 await QueueWithdrawalNotificationsAsync(
                     request.UserPublicId,
                     wallet,
@@ -251,16 +300,16 @@ public sealed class WithdrawalCommand
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 await unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+                op.Fail("Withdrawal cancelled by caller.");
                 throw;
             }
             catch (Exception exception)
             {
                 await unitOfWork.RollbackTransactionAsync(CancellationToken.None);
-                logger.LogError(
-                    exception,
-                    "Wallet withdrawal debit failed for wallet {WalletId} and user {UserPublicId}.",
-                    request.WalletId,
-                    request.UserPublicId);
+                op.Fail(
+                    $"Wallet withdrawal debit failed for wallet {request.WalletId} " +
+                    $"and user {request.UserPublicId}: {exception.Message}",
+                    exception);
 
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.InternalServerError,

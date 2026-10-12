@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
+using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 
@@ -13,6 +14,21 @@ namespace Mova.Application.BBL.Commands.TransactionPin;
 
 public sealed class VerifyPinCommand
 {
+    private static readonly HashSet<PinChallengeType> AllowedChallengeTypes = new()
+    {
+        PinChallengeType.CreateWallet,
+        PinChallengeType.BankAccountDeletion,
+        PinChallengeType.AddBankAccount,
+        PinChallengeType.ManualTransferToBank,
+        PinChallengeType.ManualPayUtilities,
+        PinChallengeType.BreakWallet,
+        PinChallengeType.PausedWallet,
+        PinChallengeType.UnpausedWallet,
+        PinChallengeType.RestartWallet,
+        PinChallengeType.LinkBankAccountToWallet,
+        PinChallengeType.WalletAutomation,
+    };
+
     public sealed class Command : IRequest<BaseResult>
     {
         [JsonIgnore]
@@ -20,6 +36,8 @@ public sealed class VerifyPinCommand
 
         [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "PIN must be exactly 6 digits.")]
         public string Pin { get; init; } = string.Empty;
+
+        public PinChallengeType PinChallengeType { get; init; }
     }
 
     public sealed class Handler : IRequestHandler<Command, BaseResult>
@@ -48,7 +66,8 @@ public sealed class VerifyPinCommand
             using var op = OperationLogger.Start(
                 _logger,
                 "VerifyTransactionPin",
-                ("UserId", request.UserPublicId));
+                ("UserId", request.UserPublicId),
+                ("ChallengeType", request.PinChallengeType));
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
@@ -82,6 +101,22 @@ public sealed class VerifyPinCommand
                     "PIN must contain only digits.");
             }
 
+            if (!Enum.IsDefined(typeof(PinChallengeType), request.PinChallengeType))
+            {
+                op.Fail($"Invalid PinChallengeType value: {(int)request.PinChallengeType}");
+                return new BaseResult(
+                    HttpStatusCode.BadRequest,
+                    "A valid PIN challenge type is required.");
+            }
+
+            if (!AllowedChallengeTypes.Contains(request.PinChallengeType))
+            {
+                op.Fail($"Disallowed PinChallengeType for /verify-pin: {request.PinChallengeType}");
+                return new BaseResult(
+                    HttpStatusCode.BadRequest,
+                    "Unsupported PIN challenge type for this endpoint.");
+            }
+
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -111,6 +146,7 @@ public sealed class VerifyPinCommand
                 var verificationResult = await _transactionPinService.VerifyPinWithStatusAsync(
                     request.UserPublicId,
                     request.Pin,
+                    request.PinChallengeType,
                     cancellationToken);
 
                 if (verificationResult != TransactionPinVerificationResult.Verified)

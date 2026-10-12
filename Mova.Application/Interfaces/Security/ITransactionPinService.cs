@@ -1,3 +1,5 @@
+using Mova.Domain.Enums;
+
 namespace Mova.Application.Interfaces.Security;
 
 public interface ITransactionPinService
@@ -19,6 +21,7 @@ public interface ITransactionPinService
     Task<TransactionPinVerificationResult> VerifyPinWithStatusAsync(
         string UserPublicId,
         string pin,
+        PinChallengeType pinChallengeType,
         CancellationToken cancellationToken = default);
 
     Task<bool> ResetPinAsync(

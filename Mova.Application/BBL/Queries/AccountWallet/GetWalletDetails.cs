@@ -1,5 +1,6 @@
 using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +77,44 @@ public sealed class WalletDetails
         // Audit
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? UpdatedAt { get; set; }
+
+        // ─── Utilities ─────────────────────────────────────
+        /// <summary>
+        /// Present only when PayoutDestination == "utilities".
+        /// One of: airtime | data | cable | electricity
+        /// </summary>
+        public string? UtilityType { get; set; }
+
+        /// <summary>
+        /// Structured utility config. Null when destination is not utilities.
+        /// </summary>
+        public UtilityConfigDto? UtilityConfig { get; set; }
+
+        /// <summary>
+        /// Human-friendly one-liner (e.g. "MTN 2GB Weekly to 08012345678").
+        /// Null when destination is not utilities.
+        /// </summary>
+        public string? UtilitySummary { get; set; }
+    }
+
+    public sealed class UtilityConfigDto
+    {
+        public string UtilityType { get; set; } = string.Empty;
+
+        // Airtime + Data
+        public string? Network { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? PlanCode { get; set; }
+
+        // Cable
+        public string? CableProvider { get; set; }
+        public string? SmartcardNumber { get; set; }
+        public string? PackageCode { get; set; }
+
+        // Electricity
+        public string? Disco { get; set; }
+        public string? MeterNumber { get; set; }
+        public string? MeterType { get; set; }
     }
 
     public sealed class ReleaseSummaryDto
@@ -248,9 +287,6 @@ public sealed class WalletDetails
                     projectedEndDate = lastProjected?.ScheduledFor;
                 }
 
-                // ─── Progress: per-cycle ─────────────────────
-                // For Active + OnCompletion policies, use the policy's refill
-                // amount as the cycle total. Otherwise fall back to target.
                 decimal cycleTotal;
 
                 if (renewalPolicy is not null
@@ -307,6 +343,27 @@ public sealed class WalletDetails
                                 : "Not released"
                         })
                         .ToList();
+                }
+
+                // ─── Utility config hydration ──────────────────
+                UtilityConfigDto? utilityConfigDto = null;
+                string? utilitySummary = null;
+
+                if (wallet.PayoutDestination == PayoutDestination.Utilities
+                    && wallet.UtilityType.HasValue)
+                {
+                    utilityConfigDto = DeserializeUtilityConfig(wallet.UtilityConfigJson);
+
+                    if (utilityConfigDto is not null)
+                    {
+                        utilityConfigDto.UtilityType = wallet.UtilityType.Value
+                            .ToString()
+                            .ToLowerInvariant();
+
+                        utilitySummary = BuildUtilitySummary(
+                            wallet.UtilityType.Value,
+                            utilityConfigDto);
+                    }
                 }
 
                 var response = new WalletDetailsResponseDto
@@ -376,6 +433,10 @@ public sealed class WalletDetails
 
                     CreatedAt = wallet.CreatedAt,
                     UpdatedAt = wallet.ModifiedAt,
+
+                    UtilityType = wallet.UtilityType?.ToString().ToLowerInvariant(),
+                    UtilityConfig = utilityConfigDto,
+                    UtilitySummary = utilitySummary,
                 };
 
                 return new BaseResult<WalletDetailsResponseDto>(
@@ -389,6 +450,72 @@ public sealed class WalletDetails
                     HttpStatusCode.InternalServerError,
                     "An error occurred while retrieving wallet details. Please try again later.");
             }
+        }
+
+        // ─────────────────────────────────────────────────────
+        // Utility helpers
+        // ─────────────────────────────────────────────────────
+
+        private static UtilityConfigDto? DeserializeUtilityConfig(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            try
+            {
+                var raw = JsonSerializer.Deserialize<UtilityConfig>(
+                    json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (raw is null)
+                    return null;
+
+                return new UtilityConfigDto
+                {
+                    UtilityType = raw.UtilityType ?? string.Empty,
+                    Network = raw.Network,
+                    PhoneNumber = raw.PhoneNumber,
+                    PlanCode = raw.PlanCode,
+                    CableProvider = raw.CableProvider,
+                    SmartcardNumber = raw.SmartcardNumber,
+                    PackageCode = raw.PackageCode,
+                    Disco = raw.Disco,
+                    MeterNumber = raw.MeterNumber,
+                    MeterType = raw.MeterType,
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string BuildUtilitySummary(
+            UtilityType utilityType,
+            UtilityConfigDto config)
+        {
+            return utilityType switch
+            {
+                UtilityType.Airtime =>
+                    $"{(config.Network ?? "Network").ToUpperInvariant()} airtime to {config.PhoneNumber}",
+
+                UtilityType.Data =>
+                    $"{(config.Network ?? "Network").ToUpperInvariant()} {config.PlanCode} to {config.PhoneNumber}",
+
+                UtilityType.Cable =>
+                    $"{config.CableProvider} {config.PackageCode} · ••••{Last4(config.SmartcardNumber)}",
+
+                UtilityType.Electricity =>
+                    $"{config.Disco} · ••••{Last4(config.MeterNumber)} ({config.MeterType})",
+
+                _ => "Utility configured",
+            };
+        }
+
+        private static string Last4(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return value.Length <= 4 ? value : value[^4..];
         }
 
         private static string GetNextReleaseDisplay(DateTimeOffset? nextReleaseDate)

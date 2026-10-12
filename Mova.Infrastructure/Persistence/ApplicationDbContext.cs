@@ -40,6 +40,7 @@ public class ApplicationDbContext
     public DbSet<RenewalEvent> RenewalEvents => Set<RenewalEvent>();
     public DbSet<WalletTemplate> WalletTemplates => Set<WalletTemplate>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
+    public DbSet<PinChallenge> PinChallenges => Set<PinChallenge>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

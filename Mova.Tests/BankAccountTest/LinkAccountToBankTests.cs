@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.AccountWallet;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -26,12 +27,19 @@ public sealed class LinkAccountToBankTests : BaseTest
     private const string BankImageUrl = "https://example.com/gtb.png";
 
     private readonly Mock<INotificationQueue> _notifications = new();
+    private readonly Mock<IIdentityService> _identityService = new();
+
+    public LinkAccountToBankTests()
+    {
+        SetupPermissions();
+    }
 
     private LinkAccountToBank.Handler CreateHandler()
     {
         return new LinkAccountToBank.Handler(
             UnitOfWork,
             _notifications.Object,
+            _identityService.Object,
             Mock.Of<ILogger<LinkAccountToBank.Handler>>());
     }
 
@@ -50,6 +58,41 @@ public sealed class LinkAccountToBankTests : BaseTest
             WalletId = walletId,
             BankAccountId = bankAccountId,
         };
+    }
+
+    private void SetupPermissions(
+        bool canPerformSensitiveOperations = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                UserPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                true,
+                canPerformSensitiveOperations,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
+    }
+
+    private void SetupPermissionsNull()
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserPermissionsDto?)null);
     }
 
     // ---------------------------------------------------------
@@ -591,6 +634,277 @@ public sealed class LinkAccountToBankTests : BaseTest
 
         var handler = CreateHandler();
         await handler.Handle(CreateCommand(wallet.Id, bank.Id), default);
+
+        var reloaded = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == wallet.Id);
+
+        Assert.Equal(bank.Id, reloaded.BankAccountId);
+    }
+
+    // ---------------------------------------------------------
+    // 6. Permissions gating
+    // ---------------------------------------------------------
+
+    [Fact]
+    public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(wallet.Id, bank.Id, userPublicId: ""),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal("User identity is required.", result.Message);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(wallet.Id, bank.Id),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("couldn't verify", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotLinkWallet()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(wallet.Id, bank.Id), default);
+
+        var reloaded = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == wallet.Id);
+
+        Assert.Null(reloaded.BankAccountId);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotSaveChanges()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        UnitOfWork.ResetCounts();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(wallet.Id, bank.Id), default);
+
+        Assert.Equal(0, UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotNotify()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(wallet.Id, bank.Id), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_ReturnsLocked()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusLabel: "Restricted",
+            statusDescription: "Some features are temporarily limited. Existing wallets and releases continue normally.");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(wallet.Id, bank.Id),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal(
+            "Some features are temporarily limited. Existing wallets and releases continue normally.",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionEmpty()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: string.Empty);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(wallet.Id, bank.Id),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionWhitespace()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: "   ");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(wallet.Id, bank.Id),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotLinkWallet()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(wallet.Id, bank.Id), default);
+
+        var reloaded = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == wallet.Id);
+
+        Assert.Null(reloaded.BankAccountId);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotSaveChanges()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        UnitOfWork.ResetCounts();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(wallet.Id, bank.Id), default);
+
+        Assert.Equal(0, UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotNotify()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(wallet.Id, bank.Id), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotLookupWallet()
+    {
+        // Pass a wallet ID that doesn't exist — the gate must fire first,
+        // so the response should be 423, not 404.
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(999_999, bank.Id),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsGranted_ProceedsToLinkWallet()
+    {
+        var wallet = await SeedWalletAsync();
+        var bank = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: true);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(wallet.Id, bank.Id),
+            default);
+
+        Assert.True(result.IsSuccess);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
 
         var reloaded = await Context.Wallets
             .AsNoTracking()

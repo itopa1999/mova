@@ -26,6 +26,11 @@ public sealed class CreateWalletCommandTests : BaseTest
     private readonly Mock<IWalletRuleService> _walletRuleService = new();
     private readonly Mock<INotificationQueue> _notifications = new();
 
+    public CreateWalletCommandTests()
+    {
+        SetupPermissions();
+    }
+
     private CreateWalletCommand.Handler CreateHandler()
     {
         return new CreateWalletCommand.Handler(
@@ -129,6 +134,41 @@ public sealed class CreateWalletCommandTests : BaseTest
                     ScheduledFor = after.AddDays(1),
                     Amount = rule.Amount,
                 });
+    }
+
+    private void SetupPermissions(
+        bool canCreateWallets = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                UserPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                canCreateWallets,
+                true,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
+    }
+
+    private void SetupPermissionsNull()
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserPermissionsDto?)null);
     }
 
     private static UtilityConfig BuildAirtimeConfig()
@@ -293,27 +333,28 @@ public sealed class CreateWalletCommandTests : BaseTest
     // 2. Happy path — Wallet destination
     // =========================================================
 
-[Fact]
-public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestination()
-{
-    var (category, _) = await SeedPrerequisitesAsync();
-    SetupHappyPathDependencies();
+    [Fact]
+    public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestination()
+    {
+        var (category, _) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
 
-    var handler = CreateHandler();
-    var result = await handler.Handle(
-        CreateCommand(category.Id, 0, payoutDestination: "wallet"), default);
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, 0, payoutDestination: "wallet"), default);
 
-    Assert.True(result.IsSuccess);
+        Assert.True(result.IsSuccess);
 
-    var wallet = await Context.Wallets
-        .AsNoTracking()
-        .FirstAsync(x => x.Id == result.Data!.WalletId);
+        var wallet = await Context.Wallets
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == result.Data!.WalletId);
 
-    Assert.Equal(PayoutDestination.Wallet, wallet.PayoutDestination);
-    Assert.Null(wallet.BankAccountId);
-    Assert.Null(wallet.UtilityType);
-    Assert.Null(wallet.UtilityConfigJson);
-}
+        Assert.Equal(PayoutDestination.Wallet, wallet.PayoutDestination);
+        Assert.Null(wallet.BankAccountId);
+        Assert.Null(wallet.UtilityType);
+        Assert.Null(wallet.UtilityConfigJson);
+    }
+
     [Fact]
     public async Task Handle_WithWalletDestinationAndBankAccountProvided_ReturnsBadRequest()
     {
@@ -324,7 +365,6 @@ public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestinatio
         var result = await handler.Handle(
             CreateCommand(category.Id, bank.Id, payoutDestination: "wallet"), default);
 
-        // bank.Id > 0 → should be rejected
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
@@ -569,7 +609,7 @@ public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestinatio
         {
             UtilityType = "airtime",
             Network = "mtn",
-            PhoneNumber = "12345", // too short
+            PhoneNumber = "12345",
         };
 
         var handler = CreateHandler();
@@ -1212,7 +1252,6 @@ public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestinatio
         {
             UtilityType = "airtime",
             Network = "mtn",
-            // missing phone number
         };
 
         var handler = CreateHandler();
@@ -1387,5 +1426,244 @@ public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestinatio
 
         Assert.True(result.IsSuccess);
         Assert.Equal(69_305m, result.Data!.NewMainBalance);
+    }
+
+    // =========================================================
+    // 12. Permissions gating
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("couldn't verify", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotDebitBalance()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        _identityService.Verify(
+            x => x.DebitBalanceAsync(
+                It.IsAny<string>(),
+                It.IsAny<decimal>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotCreateWallet()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        var count = await Context.Wallets.CountAsync();
+        Assert.Equal(0, count);
+        Assert.Equal(0, UnitOfWork.BeginCount);
+        Assert.Equal(0, UnitOfWork.CommitCount);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotCallSchedulePreview()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        _schedulePreview.Verify(
+            x => x.PreviewScheduleAsync(
+                It.IsAny<decimal>(),
+                It.IsAny<decimal>(),
+                It.IsAny<ReleaseFrequency>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_ReturnsLocked()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(
+            canCreateWallets: false,
+            statusLabel: "Suspended",
+            statusDescription: "Your account is suspended. Please contact support.",
+            restrictionReason: "SuspiciousActivity");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal("Your account is suspended. Please contact support.", result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_UsesFallbackMessageWhenDescriptionEmpty()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(
+            canCreateWallets: false,
+            statusDescription: string.Empty);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_UsesFallbackMessageWhenDescriptionWhitespace()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(
+            canCreateWallets: false,
+            statusDescription: "   ");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_DoesNotDebitBalance()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(canCreateWallets: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        _identityService.Verify(
+            x => x.DebitBalanceAsync(
+                It.IsAny<string>(),
+                It.IsAny<decimal>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_DoesNotCreateWallet()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(canCreateWallets: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        var count = await Context.Wallets.CountAsync();
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_DoesNotBeginTransaction()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(canCreateWallets: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        Assert.Equal(0, UnitOfWork.BeginCount);
+        Assert.Equal(0, UnitOfWork.CommitCount);
+        Assert.Equal(0, UnitOfWork.RollbackCount);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_DoesNotCallSchedulePreview()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(canCreateWallets: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        _schedulePreview.Verify(
+            x => x.PreviewScheduleAsync(
+                It.IsAny<decimal>(),
+                It.IsAny<decimal>(),
+                It.IsAny<ReleaseFrequency>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCannotCreateWallets_DoesNotSendNotifications()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupPermissions(canCreateWallets: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(category.Id, bank.Id), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithPermissionsGranted_ProceedsToValidation()
+    {
+        var (category, bank) = await SeedPrerequisitesAsync();
+        SetupHappyPathDependencies();
+        SetupPermissions(canCreateWallets: true);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(category.Id, bank.Id), default);
+
+        Assert.True(result.IsSuccess);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

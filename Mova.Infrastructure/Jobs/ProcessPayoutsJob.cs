@@ -6,6 +6,7 @@ using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Logging;
 
@@ -140,6 +141,13 @@ public sealed class ProcessPayoutsJob
                 await ProcessMainPayoutAsync(
                     payout,
                     op,
+                    cancellationToken);
+                break;
+
+            case PayoutDestination.Utilities:
+                await ProcessUtilityPayoutAsync(
+                    payout, 
+                    op, 
                     cancellationToken);
                 break;
 
@@ -322,6 +330,66 @@ public sealed class ProcessPayoutsJob
 
             op.Fail(
                 $"Error processing main payout {payout.Id}.",
+                ex);
+
+            throw;
+        }
+    }
+
+    // ─── UTILITIES ─────────────────────────────────────────────
+
+    private async Task ProcessUtilityPayoutAsync(
+        Payout payout,
+        OperationLogger op,
+        CancellationToken cancellationToken)
+    {
+        if (payout.Wallet is null)
+        {
+            await MarkFailedAsync(
+                payout,
+                "Wallet was not found.",
+                cancellationToken);
+
+            return;
+        }
+
+        await using var tx = await _context.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        try
+        {
+            // Utilities are settled inline for now. In the future this
+            // reference will be confirmed via the provider webhook.
+            var reference = $"UTID-{Guid.NewGuid():N}";
+
+            // payout.Wallet.LockedAmount = Money.FromMinorUnits(
+            //     payout.Wallet.LockedAmount.MinorUnits - payout.Amount.MinorUnits,
+            //     payout.Wallet.LockedAmount.Currency);
+
+            payout.Wallet.TotalWithdrawnAmount = Money.FromMinorUnits(
+                checked(payout.Wallet.TotalWithdrawnAmount.MinorUnits + payout.Amount.MinorUnits),
+                payout.Wallet.TotalWithdrawnAmount.Currency);
+
+            payout.Provider = "Utility";
+            payout.ProviderReference = reference;
+
+            if (payout.Status != PayoutStatus.Successful)
+            {
+                payout.Status = PayoutStatus.Successful;
+                payout.CompletedAt = DateTimeOffset.UtcNow;
+            }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success($"Utility payout processed. Reference: {reference}");
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync(cancellationToken);
+
+            op.Fail(
+                $"Error processing utility payout {payout.Id}.",
                 ex);
 
             throw;

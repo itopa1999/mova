@@ -2,10 +2,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.BanksAccount;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 using Xunit;
 
 namespace Mova.Tests.Handlers;
@@ -22,6 +24,12 @@ public sealed class AddBankAccountTests : BaseTest
 
     private readonly Mock<IPaystackService> _paystack = new();
     private readonly Mock<INotificationQueue> _notifications = new();
+    private readonly Mock<IIdentityService> _identityService = new();
+
+    public AddBankAccountTests()
+    {
+        SetupPermissions();
+    }
 
     private AddBankAccount.Handler CreateHandler()
     {
@@ -29,23 +37,60 @@ public sealed class AddBankAccountTests : BaseTest
             UnitOfWork,
             _paystack.Object,
             _notifications.Object,
+            _identityService.Object,
             Mock.Of<ILogger<AddBankAccount.Handler>>());
     }
 
     private AddBankAccount.Command CreateCommand(
         string accountNumber = AccountNumber,
         string bankCode = BankCode,
-        bool consent = true)
+        bool consent = true,
+        string? userPublicId = null)
     {
         return new AddBankAccount.Command
         {
-            UserPublicId = UserPublicId,
+            UserPublicId = userPublicId ?? UserPublicId,
             Email = UserEmail,
             FirstName = UserFirstName,
             AccountNumber = accountNumber,
             BankCode = bankCode,
             Consent = consent,
         };
+    }
+
+    private void SetupPermissions(
+        bool canPerformSensitiveOperations = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                UserPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                true,
+                canPerformSensitiveOperations,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
+    }
+
+    private void SetupPermissionsNull()
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserPermissionsDto?)null);
     }
 
     private async Task<Bank> SeedBankAsync(
@@ -506,6 +551,243 @@ public sealed class AddBankAccountTests : BaseTest
                 UserEmail,
                 It.IsAny<string>(),
                 It.IsAny<string>()),
+            Times.Once);
+    }
+
+    // ---------------------------------------------------------
+    // 4. Permissions gating
+    // ---------------------------------------------------------
+
+    [Fact]
+    public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
+    {
+        var handler = CreateHandler();
+
+        var result = await handler.Handle(
+            CreateCommand(userPublicId: ""), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal("User identity is required.", result.Message);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("couldn't verify", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotCallPaystack()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _paystack.Verify(
+            x => x.ResolveBankAccountAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotPersistAccount()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        var any = await Context.BankAccounts.AnyAsync();
+        Assert.False(any);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotNotify()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_ReturnsLocked()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusLabel: "Restricted",
+            statusDescription: "Some features are temporarily limited. Existing wallets and releases continue normally.");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(System.Net.HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal(
+            "Some features are temporarily limited. Existing wallets and releases continue normally.",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionEmpty()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: string.Empty);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(System.Net.HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionWhitespace()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: "   ");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(System.Net.HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotCallPaystack()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _paystack.Verify(
+            x => x.ResolveBankAccountAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotPersistAccount()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        var any = await Context.BankAccounts.AnyAsync();
+        Assert.False(any);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotNotify()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotValidateAccountNumber()
+    {
+        // Even with an invalid account number, a blocked user should get
+        // the 423, not the 400 — the gate runs before format validation.
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(accountNumber: "abc"), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(System.Net.HttpStatusCode.Locked, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsGranted_ProceedsToPaystackVerify()
+    {
+        await SeedBankAsync();
+        SetupHappyPath();
+        SetupPermissions(canPerformSensitiveOperations: true);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.True(result.IsSuccess);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        _paystack.Verify(
+            x => x.ResolveBankAccountAsync(
+                AccountNumber,
+                BankCode,
+                It.IsAny<CancellationToken>()),
             Times.Once);
     }
 }

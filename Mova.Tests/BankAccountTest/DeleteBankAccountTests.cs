@@ -3,9 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.BanksAccount;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 using Xunit;
 
 namespace Mova.Tests.Handlers;
@@ -19,12 +21,19 @@ public sealed class DeleteBankAccountTests : BaseTest
     private const string BankName = "GTBank";
 
     private readonly Mock<INotificationQueue> _notifications = new();
+    private readonly Mock<IIdentityService> _identityService = new();
+
+    public DeleteBankAccountTests()
+    {
+        SetupPermissions();
+    }
 
     private DeleteBankAccount.Handler CreateHandler()
     {
         return new DeleteBankAccount.Handler(
             UnitOfWork,
             _notifications.Object,
+            _identityService.Object,
             Mock.Of<ILogger<DeleteBankAccount.Handler>>());
     }
 
@@ -37,6 +46,41 @@ public sealed class DeleteBankAccountTests : BaseTest
             UserPublicId = userPublicId ?? UserPublicId,
             BankAccountId = bankAccountId,
         };
+    }
+
+    private void SetupPermissions(
+        bool canPerformSensitiveOperations = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                UserPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                true,
+                canPerformSensitiveOperations,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
+    }
+
+    private void SetupPermissionsNull()
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserPermissionsDto?)null);
     }
 
     private async Task<BankAccount> SeedBankAccountAsync(
@@ -97,7 +141,6 @@ public sealed class DeleteBankAccountTests : BaseTest
         var handler = CreateHandler();
         await handler.Handle(CreateCommand(account.Id), default);
 
-        // Query filter hides IsDeleted = true rows, so use IgnoreQueryFilters
         var saved = await Context.BankAccounts
             .IgnoreQueryFilters()
             .AsNoTracking()
@@ -164,7 +207,6 @@ public sealed class DeleteBankAccountTests : BaseTest
         Assert.Equal(HttpStatusCode.NotFound, result.StatusCode);
         Assert.Equal("Bank account not found.", result.Message);
 
-        // Confirm the other user's account is untouched
         var stillThere = await Context.BankAccounts
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == account.Id);
@@ -305,5 +347,238 @@ public sealed class DeleteBankAccountTests : BaseTest
 
         Assert.NotNull(saved);
         Assert.True(saved!.IsDeleted);
+    }
+
+    // ---------------------------------------------------------
+    // 5. Permissions gating
+    // ---------------------------------------------------------
+
+    [Fact]
+    public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
+    {
+        var account = await SeedBankAccountAsync();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(
+            CreateCommand(account.Id, userPublicId: ""),
+            default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal("User identity is required.", result.Message);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(account.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("couldn't verify", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotDeleteAccount()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(account.Id), default);
+
+        var saved = await Context.BankAccounts
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == account.Id);
+
+        Assert.False(saved.IsDeleted);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotSaveChanges()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        UnitOfWork.ResetCounts();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(account.Id), default);
+
+        Assert.Equal(0, UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotNotify()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(account.Id), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_ReturnsLocked()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusLabel: "Restricted",
+            statusDescription: "Some features are temporarily limited. Existing wallets and releases continue normally.");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(account.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal(
+            "Some features are temporarily limited. Existing wallets and releases continue normally.",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionEmpty()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: string.Empty);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(account.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionWhitespace()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: "   ");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(account.Id), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotDeleteAccount()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(account.Id), default);
+
+        var saved = await Context.BankAccounts
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == account.Id);
+
+        Assert.False(saved.IsDeleted);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotSaveChanges()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        UnitOfWork.ResetCounts();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(account.Id), default);
+
+        Assert.Equal(0, UnitOfWork.SaveChangesCount);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotNotify()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(account.Id), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotLookupBankAccount()
+    {
+        // Pass a nonexistent account ID — the gate must fire first,
+        // so the response should be 423, not 404.
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(999_999), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsGranted_ProceedsToDelete()
+    {
+        var account = await SeedBankAccountAsync();
+        SetupPermissions(canPerformSensitiveOperations: true);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(account.Id), default);
+
+        Assert.True(result.IsSuccess);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        var saved = await Context.BankAccounts
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == account.Id);
+
+        Assert.True(saved.IsDeleted);
     }
 }

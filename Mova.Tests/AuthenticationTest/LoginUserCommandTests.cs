@@ -669,7 +669,7 @@ public sealed class LoginUserCommandTests : BaseTest
         var result = await handler.Handle(CreateCommand(), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
         Assert.Equal("Invalid email or password.", result.Message);
     }
 

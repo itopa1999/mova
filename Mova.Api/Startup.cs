@@ -30,7 +30,9 @@ public class Startup(IConfiguration configuration)
             {
                 options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
                 options.JsonSerializerOptions.Converters.Add(
-                    new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+                    new JsonStringEnumConverter(
+                    namingPolicy: JsonNamingPolicy.CamelCase,
+                    allowIntegerValues: false));
             });
 
         services.AddHealthChecks()
@@ -195,15 +197,15 @@ public class Startup(IConfiguration configuration)
         var recurringJobManager = app.Services
             .GetRequiredService<IRecurringJobManager>();
 
-        // recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
-        //     "process-scheduled-releases",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.MinuteInterval(1));
+        recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
+            "process-scheduled-releases",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
 
-        // recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
-        //     "process-releases-payouts",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.MinuteInterval(2));
+        recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
+            "process-releases-payouts",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
 
         // recurringJobManager.AddOrUpdate<ProcessPendingProcessingTransactions>(
         //     "process-pending-processing-transactions",

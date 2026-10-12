@@ -24,6 +24,11 @@ public sealed class ChangePinCommandTests : BaseTest
     private readonly Mock<IIdentityService> _identityService = new();
     private readonly Mock<INotificationQueue> _notifications = new();
 
+    public ChangePinCommandTests()
+    {
+        SetupPermissions();
+    }
+
     private ChangePinCommand.Handler CreateHandler()
     {
         return new ChangePinCommand.Handler(
@@ -125,6 +130,41 @@ public sealed class ChangePinCommandTests : BaseTest
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(exception);
+    }
+
+    private void SetupPermissions(
+        bool canPerformSensitiveOperations = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                UserPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                true,
+                canPerformSensitiveOperations,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
+    }
+
+    private void SetupPermissionsNull()
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserPermissionsDto?)null);
     }
 
     // ---------------------------------------------------------
@@ -632,5 +672,270 @@ public sealed class ChangePinCommandTests : BaseTest
                 It.IsAny<string>(),
                 It.IsAny<string>()),
             Times.Once);
+    }
+
+    // ---------------------------------------------------------
+    // 8. Permissions gating
+    // ---------------------------------------------------------
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("couldn't verify", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotCheckPinState()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _pinService.Verify(
+            x => x.HasPinAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _pinService.Verify(
+            x => x.VerifyPinAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotChangePin()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _pinService.Verify(
+            x => x.ChangePinAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotLookupUser()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _identityService.Verify(
+            x => x.GetByIdentifierAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotSendNotifications()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_ReturnsLocked()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusLabel: "Restricted",
+            statusDescription: "Some features are temporarily limited. Existing wallets and releases continue normally.");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal(
+            "Some features are temporarily limited. Existing wallets and releases continue normally.",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionEmpty()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: string.Empty);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionWhitespace()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: "   ");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotCheckPinState()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _pinService.Verify(
+            x => x.HasPinAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _pinService.Verify(
+            x => x.VerifyPinAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotChangePin()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _pinService.Verify(
+            x => x.ChangePinAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotLookupUser()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _identityService.Verify(
+            x => x.GetByIdentifierAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotSendNotifications()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsGranted_ProceedsToPinValidation()
+    {
+        SetupPermissions(canPerformSensitiveOperations: true);
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+        SetupChangePinSucceeds();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenUserPublicIdMissing_DoesNotCheckPermissions()
+    {
+        var handler = CreateHandler();
+
+        await handler.Handle(
+            CreateCommand(userPublicId: ""),
+            default);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }
