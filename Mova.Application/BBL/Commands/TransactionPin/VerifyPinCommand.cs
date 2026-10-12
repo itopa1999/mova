@@ -18,6 +18,7 @@ public sealed class VerifyPinCommand
     {
         PinChallengeType.CreateWallet,
         PinChallengeType.BankAccountDeletion,
+        PinChallengeType.AccountDeletion,
         PinChallengeType.AddBankAccount,
         PinChallengeType.ManualTransferToBank,
         PinChallengeType.ManualPayUtilities,
