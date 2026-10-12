@@ -146,8 +146,8 @@ public sealed class ProcessPayoutsJob
 
             case PayoutDestination.Utilities:
                 await ProcessUtilityPayoutAsync(
-                    payout, 
-                    op, 
+                    payout,
+                    op,
                     cancellationToken);
                 break;
 

@@ -19,6 +19,8 @@ public sealed class PinChallengeService : IPinChallenge
 
     public async Task<bool> CreateAsync(string userPublicId, PinChallengeType pinChallengeType, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(userPublicId))
+            return false;
         var now = DateTimeOffset.UtcNow;
 
         await _context.PinChallenges
@@ -47,6 +49,12 @@ public sealed class PinChallengeService : IPinChallenge
 
     public async Task<(bool Success, string Message)> ValidateAsync(string userPublicId, PinChallengeType pinChallengeType, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(userPublicId))
+            return (false, "Please verify your PIN again.");
+
+        var publicId = await FindUserPublicIdAsync(userPublicId, cancellationToken);
+        if (string.IsNullOrWhiteSpace(publicId))
+        return (false, "Please verify your PIN again.");
         var now = DateTimeOffset.UtcNow;
         var challenge = await _context.PinChallenges
         .Where(c => c.UserPublicId == userPublicId
@@ -58,7 +66,7 @@ public sealed class PinChallengeService : IPinChallenge
 
         if (challenge is null)
             return (false, "Please verify your PIN again.");
-        
+
         var rowsAffected = await _context.PinChallenges
             .Where(c => c.Id == challenge.Id
                         && !c.IsUsed
@@ -73,4 +81,19 @@ public sealed class PinChallengeService : IPinChallenge
 
         return (true, string.Empty);
     }
+
+    private async Task<string?> FindUserPublicIdAsync(
+        string userPublicId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userPublicId)) return null;
+
+        var normalized = userPublicId.Trim();
+
+        return await _context.Users
+            .Where(u => u.PublicId == normalized && !u.IsDeleted)
+            .Select(u => u.PublicId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+    
 }

@@ -12,7 +12,7 @@ using Mova.Domain.ValueObjects;
 
 namespace Mova.Tests.BankAccountTest;
 
-public sealed class WithdrawalCommandTests : BaseTest
+public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
 {
     private const string OwnerPublicId = "withdrawal-owner";
     private const string OtherUserPublicId = "withdrawal-other";
@@ -228,10 +228,6 @@ public sealed class WithdrawalCommandTests : BaseTest
             validateAllProperties: true);
     }
 
-    // =========================================================
-    // Permissions gating
-    // =========================================================
-
     [Fact]
     public async Task Handle_WhenUserPublicIdMissing_ReturnsBadRequest()
     {
@@ -324,6 +320,7 @@ public sealed class WithdrawalCommandTests : BaseTest
             featureFlags.Object,
             _identityService.Object,
             _notifications.Object,
+            PinChallenge.Object,
             Mock.Of<ILogger<WithdrawalCommand.Handler>>());
 
         await handler.Handle(
@@ -414,6 +411,7 @@ public sealed class WithdrawalCommandTests : BaseTest
             featureFlags.Object,
             _identityService.Object,
             _notifications.Object,
+            PinChallenge.Object,
             Mock.Of<ILogger<WithdrawalCommand.Handler>>());
 
         await handler.Handle(
@@ -526,6 +524,7 @@ public sealed class WithdrawalCommandTests : BaseTest
             featureFlags.Object,
             _identityService.Object,
             _notifications.Object,
+            PinChallenge.Object,
             Mock.Of<ILogger<WithdrawalCommand.Handler>>());
 
         var result = await handler.Handle(
@@ -554,10 +553,6 @@ public sealed class WithdrawalCommandTests : BaseTest
             Times.Once);
     }
 
-    // =========================================================
-    // Helpers
-    // =========================================================
-
     private WithdrawalCommand.Handler CreateHandler(bool withdrawalsEnabled)
     {
         var featureFlags = new Mock<IFeatureFlagService>();
@@ -572,6 +567,7 @@ public sealed class WithdrawalCommandTests : BaseTest
             featureFlags.Object,
             _identityService.Object,
             _notifications.Object,
+            PinChallenge.Object,
             Mock.Of<ILogger<WithdrawalCommand.Handler>>());
     }
 

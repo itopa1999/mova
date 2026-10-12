@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.AccountWallet;
 using Mova.Application.Interfaces.Notification;
+using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -17,6 +18,17 @@ public sealed class BreakWalletCommandTests : BaseTest
     private const string UserFirstName = "Lucky";
 
     private readonly Mock<INotificationQueue> _notifications = new();
+    private readonly Mock<IPinChallenge> _pinChallenge = new();
+
+    public BreakWalletCommandTests()
+    {
+        _pinChallenge
+            .Setup(x => x.ValidateAsync(
+                It.IsAny<string>(),
+                It.IsAny<PinChallengeType>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, string.Empty));
+    }
 
     private BreakWalletCommand.Handler CreateHandler()
     {
@@ -24,9 +36,9 @@ public sealed class BreakWalletCommandTests : BaseTest
             UnitOfWork,
             Mock.Of<MediatR.IMediator>(),
             Mock.Of<ILogger<BreakWalletCommand.Handler>>(),
-            _notifications.Object);
+            _notifications.Object,
+            _pinChallenge.Object);
     }
-
     private BreakWalletCommand.Command CreateCommand(long walletId)
     {
         return new BreakWalletCommand.Command

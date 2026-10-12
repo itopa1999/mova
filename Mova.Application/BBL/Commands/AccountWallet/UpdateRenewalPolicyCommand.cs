@@ -3,8 +3,10 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -61,16 +63,22 @@ public sealed class UpdateRenewalPolicyCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
+        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IPinChallenge _pinChallenge;
 
         public Handler(
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
-            INotificationQueue notificationQueue)
+            IIdentityService identityService,
+            INotificationQueue notificationQueue,
+            IPinChallenge pinChallenge)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _identityService = identityService;
             _notificationQueue = notificationQueue;
+            _pinChallenge = pinChallenge;
         }
 
         public async Task<BaseResult<UpdateRenewalPolicyResponseDto>> Handle(
@@ -82,6 +90,42 @@ public sealed class UpdateRenewalPolicyCommand
                 "UpdateRenewalPolicy",
                 ("UserId", request.UserPublicId),
                 ("WalletId", request.WalletId));
+
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                op.Fail("UserPublicId is required.");
+                return new BaseResult<UpdateRenewalPolicyResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "User identity is required.");
+            }
+
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<UpdateRenewalPolicyResponseDto>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                op.Fail(
+                    $"Sensitive-operation gate blocked UpdateRenewalPolicy for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<UpdateRenewalPolicyResponseDto>(
+                    HttpStatusCode.Locked,
+                    userMessage);
+            }
 
             var triggerType = request.TriggerType?
                 .Trim()
@@ -200,6 +244,20 @@ public sealed class UpdateRenewalPolicyCommand
                 return new BaseResult<UpdateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Max renewals must be greater than zero.");
+            }
+
+            // ─── PIN challenge validation ───
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                PinChallengeType.WalletAutomation,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                return new BaseResult<UpdateRenewalPolicyResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
             }
 
             await _unitOfWork.BeginTransactionAsync(cancellationToken);

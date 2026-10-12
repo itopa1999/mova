@@ -68,9 +68,10 @@ public class TransactionPinController(
 
         var command = new VerifyPinCommand.Command
         {
-            Pin = pin
+            Pin = pin,
+            PinChallengeType = request.PinChallengeType,
+            UserPublicId = UserPublicId ?? string.Empty
         };
-        command.UserPublicId = UserPublicId ?? string.Empty;
 
         var result = await _mediator.Send(command, cancellationToken);
 

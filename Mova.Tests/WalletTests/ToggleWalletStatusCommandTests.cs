@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.AccountWallet;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -10,18 +11,52 @@ using Xunit;
 
 namespace Mova.Tests.Handlers;
 
-public sealed class ToggleWalletStatusCommandTests : BaseTest
+public sealed class ToggleWalletStatusCommandTests : BaseTestWithPinChallenge
 {
     private const string UserPublicId = "user_toggle_test";
 
     private readonly Mock<INotificationQueue> _notifications = new();
+    private readonly Mock<IIdentityService> _identityService = new();
+
+    public ToggleWalletStatusCommandTests()
+    {
+        SetupPermissions();
+    }
 
     private ToggleWalletStatusCommand.Handler CreateHandler()
     {
         return new ToggleWalletStatusCommand.Handler(
             UnitOfWork,
             Mock.Of<ILogger<ToggleWalletStatusCommand.Handler>>(),
-            _notifications.Object);
+            _notifications.Object,
+            _identityService.Object,
+            PinChallenge.Object);
+    }
+
+    private void SetupPermissions(
+        bool canPerformSensitiveOperations = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                UserPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                true,
+                canPerformSensitiveOperations,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
     }
 
     private ToggleWalletStatusCommand.Command CreateCommand(long walletId)
@@ -131,10 +166,6 @@ public sealed class ToggleWalletStatusCommandTests : BaseTest
         return release;
     }
 
-    // ---------------------------------------------------------
-    // 1. Happy path - pause
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WithActiveWallet_PausesWallet()
     {
@@ -205,10 +236,6 @@ public sealed class ToggleWalletStatusCommandTests : BaseTest
         StringComparison.OrdinalIgnoreCase);
     }
 
-    // ---------------------------------------------------------
-    // 2. Happy path - resume
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WithPausedWallet_ResumesWallet()
     {
@@ -258,10 +285,6 @@ public sealed class ToggleWalletStatusCommandTests : BaseTest
         Assert.True(result.IsSuccess);
         Assert.Contains("resumed", result.Message);
     }
-
-    // ---------------------------------------------------------
-    // 3. Validation failures
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
@@ -354,10 +377,6 @@ public sealed class ToggleWalletStatusCommandTests : BaseTest
         Assert.Contains("closed", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ---------------------------------------------------------
-    // 4. REGRESSION: notification failures must not fail the request
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
     {
@@ -415,10 +434,6 @@ public sealed class ToggleWalletStatusCommandTests : BaseTest
 
         Assert.Equal(ReleaseStatus.Paused, updated.Status);
     }
-
-    // ---------------------------------------------------------
-    // 5. REGRESSION: notification content
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WhenPausing_SendsPauseNotificationWithCorrectContent()

@@ -15,7 +15,7 @@ using Xunit;
 
 namespace Mova.Tests.Handlers;
 
-public sealed class CreateWalletCommandTests : BaseTest
+public sealed class CreateWalletCommandTests : BaseTestWithPinChallenge
 {
     private const string UserPublicId = "user_create_test";
     private const string UserEmail = "user@mova.app";
@@ -39,7 +39,8 @@ public sealed class CreateWalletCommandTests : BaseTest
             Mock.Of<ILogger<CreateWalletCommand.Handler>>(),
             _schedulePreview.Object,
             _walletRuleService.Object,
-            _notifications.Object);
+            _notifications.Object,
+            PinChallenge.Object);
     }
 
     private CreateWalletCommand.Command CreateCommand(
@@ -206,10 +207,6 @@ public sealed class CreateWalletCommandTests : BaseTest
             MeterType = "prepaid",
         };
 
-    // =========================================================
-    // 1. Happy path — Bank
-    // =========================================================
-
     [Fact]
     public async Task Handle_WithValidRequest_CreatesWallet()
     {
@@ -329,10 +326,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Equal(0, UnitOfWork.RollbackCount);
     }
 
-    // =========================================================
-    // 2. Happy path — Wallet destination
-    // =========================================================
-
     [Fact]
     public async Task Handle_WithWalletDestination_CreatesWalletWithWalletDestination()
     {
@@ -382,10 +375,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.True(result.IsSuccess);
     }
 
-    // =========================================================
-    // 3. Happy path — Main destination
-    // =========================================================
-
     [Fact]
     public async Task Handle_WithMainDestination_CreatesWalletWithMainDestination()
     {
@@ -406,10 +395,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Null(wallet.UtilityType);
         Assert.Null(wallet.UtilityConfigJson);
     }
-
-    // =========================================================
-    // 4. Happy path — Utilities (all four types)
-    // =========================================================
 
     [Fact]
     public async Task Handle_WithAirtimeUtility_CreatesWalletWithUtilityConfig()
@@ -521,10 +506,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Equal("04512345678", parsed.MeterNumber);
         Assert.Equal("prepaid", parsed.MeterType);
     }
-
-    // =========================================================
-    // 5. Utilities validation failures
-    // =========================================================
 
     [Fact]
     public async Task Handle_WithUtilitiesDestinationAndNoConfig_ReturnsBadRequest()
@@ -795,10 +776,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
-    // =========================================================
-    // 6. Validation failures — general
-    // =========================================================
-
     [Fact]
     public async Task Handle_WithEmptyName_ReturnsBadRequest()
     {
@@ -1014,10 +991,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
-    // =========================================================
-    // 7. REGRESSION: notifications must never fail the request
-    // =========================================================
-
     [Fact]
     public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
     {
@@ -1130,10 +1103,6 @@ public sealed class CreateWalletCommandTests : BaseTest
             Times.Once);
     }
 
-    // =========================================================
-    // 8. REGRESSION: notification content
-    // =========================================================
-
     [Fact]
     public async Task Handle_WithValidRequest_SendsNotificationWithCorrectContent()
     {
@@ -1237,10 +1206,6 @@ public sealed class CreateWalletCommandTests : BaseTest
             Times.Once);
     }
 
-    // =========================================================
-    // 9. REGRESSION: no side effects on failure
-    // =========================================================
-
     [Fact]
     public async Task Handle_WhenUtilityValidationFails_NoWalletPersisted()
     {
@@ -1299,10 +1264,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         var walletCount = await Context.Wallets.CountAsync();
         Assert.Equal(0, walletCount);
     }
-
-    // =========================================================
-    // 10. REGRESSION: ledger invariants
-    // =========================================================
 
     [Fact]
     public async Task Handle_WithValidRequest_CreatesMatchingLedgerEntry()
@@ -1366,10 +1327,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.Equal(TransactionType.Fee, feeTx!.Type);
     }
 
-    // =========================================================
-    // 11. REGRESSION: wallet balance initial state
-    // =========================================================
-
     [Fact]
     public async Task Handle_WithValidRequest_LocksExactTargetAmount()
     {
@@ -1427,10 +1384,6 @@ public sealed class CreateWalletCommandTests : BaseTest
         Assert.True(result.IsSuccess);
         Assert.Equal(69_305m, result.Data!.NewMainBalance);
     }
-
-    // =========================================================
-    // 12. Permissions gating
-    // =========================================================
 
     [Fact]
     public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()

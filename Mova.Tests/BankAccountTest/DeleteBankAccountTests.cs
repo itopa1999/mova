@@ -7,12 +7,11 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Domain.ValueObjects;
 using Xunit;
 
 namespace Mova.Tests.Handlers;
 
-public sealed class DeleteBankAccountTests : BaseTest
+public sealed class DeleteBankAccountTests : BaseTestWithPinChallenge
 {
     private const string UserPublicId = "user_deletebank_test";
     private const string AccountNumber = "0123456789";
@@ -34,6 +33,7 @@ public sealed class DeleteBankAccountTests : BaseTest
             UnitOfWork,
             _notifications.Object,
             _identityService.Object,
+            PinChallenge.Object,
             Mock.Of<ILogger<DeleteBankAccount.Handler>>());
     }
 
@@ -116,10 +116,6 @@ public sealed class DeleteBankAccountTests : BaseTest
         return account;
     }
 
-    // ---------------------------------------------------------
-    // 1. Happy path
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WithValidRequest_ReturnsSuccess()
     {
@@ -178,10 +174,6 @@ public sealed class DeleteBankAccountTests : BaseTest
 
         Assert.True(saved.IsDeleted);
     }
-
-    // ---------------------------------------------------------
-    // 2. Not found
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithUnknownBankAccount_ReturnsNotFound()
@@ -249,10 +241,6 @@ public sealed class DeleteBankAccountTests : BaseTest
         Assert.False(stillThere!.IsDeleted);
     }
 
-    // ---------------------------------------------------------
-    // 3. Notifications
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WithValidRequest_QueuesInAppNotification()
     {
@@ -293,10 +281,6 @@ public sealed class DeleteBankAccountTests : BaseTest
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
-
-    // ---------------------------------------------------------
-    // 4. Regression: notification failures must not fail the request
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
@@ -348,10 +332,6 @@ public sealed class DeleteBankAccountTests : BaseTest
         Assert.NotNull(saved);
         Assert.True(saved!.IsDeleted);
     }
-
-    // ---------------------------------------------------------
-    // 5. Permissions gating
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
@@ -546,8 +526,6 @@ public sealed class DeleteBankAccountTests : BaseTest
     [Fact]
     public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotLookupBankAccount()
     {
-        // Pass a nonexistent account ID — the gate must fire first,
-        // so the response should be 423, not 404.
         SetupPermissions(canPerformSensitiveOperations: false);
 
         var handler = CreateHandler();

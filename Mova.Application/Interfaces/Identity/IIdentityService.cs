@@ -61,7 +61,7 @@ public interface IIdentityService
     Task<bool> UpdateLastKnownDeviceAsync(
         string identifier,
         string deviceId,
-        CancellationToken cancellationToken= default);
+        CancellationToken cancellationToken = default);
 
     Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default);
 

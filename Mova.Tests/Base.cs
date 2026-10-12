@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Services;
 using Mova.Domain.Entities;
+using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
 
 namespace Mova.Tests;
@@ -54,7 +55,6 @@ public class RecordingUnitOfWork : IUnitOfWork
         _context.Set<T>().Remove(entity);
     }
 
-    // virtual — allows test doubles to override
     public virtual Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         SaveChangesCount++;
@@ -111,8 +111,6 @@ public class RecordingUnitOfWork : IUnitOfWork
     }
 }
 
-// ── Test doubles that fail specifically at SaveChangesAsync ──
-
 public sealed class ThrowingSaveChangesUnitOfWork : RecordingUnitOfWork
 {
     public ThrowingSaveChangesUnitOfWork(ApplicationDbContext context)
@@ -166,6 +164,26 @@ public abstract class BaseTest : IAsyncLifetime
         Context.Database.EnsureDeleted();
         Context.Database.EnsureCreated();
         UnitOfWork.ResetCounts();
+    }
+
+    protected async Task<User> SeedUserAsync(
+        string publicId,
+        string? email = null,
+        bool isDeleted = false)
+    {
+        var user = new User
+        {
+            PublicId  = publicId,
+            Email     = email ?? $"{publicId}@mova.test",
+            IsDeleted = isDeleted,
+            // TODO: add remaining required columns for your User entity.
+        };
+
+        await UnitOfWork.AddAsync(user);
+        await UnitOfWork.SaveChangesAsync();
+        UnitOfWork.ResetCounts();
+
+        return user;
     }
 
     private sealed class SqliteTestApplicationDbContext : ApplicationDbContext

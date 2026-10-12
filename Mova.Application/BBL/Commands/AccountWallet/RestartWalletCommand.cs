@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -52,19 +53,22 @@ public sealed class RestartWalletCommand
         private readonly ILogger<Handler> _logger;
         private readonly IWalletRuleService _walletRuleService;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IPinChallenge _pinChallenge;
 
         public Handler(
             IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
             IWalletRuleService walletRuleService,
-            INotificationQueue notificationQueue)
+            INotificationQueue notificationQueue,
+            IPinChallenge pinChallenge)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
             _walletRuleService = walletRuleService;
             _notificationQueue = notificationQueue;
+            _pinChallenge = pinChallenge;
         }
 
         public async Task<BaseResult<RestartWalletResponseDto>> Handle(
@@ -110,10 +114,21 @@ public sealed class RestartWalletCommand
                     "This wallet has no schedule to restart.");
             }
 
+            // ─── PIN challenge validation ───
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                PinChallengeType.RestartWallet,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                return new BaseResult<RestartWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
+            }
+
             // ─── Compute the fee for restarting this wallet ─────
-            // Same helper CreateWallet uses. Charge is based on the
-            // wallet's target amount (the fresh principal going back in)
-            // and the configured per-release amount.
             var targetAmount = wallet.TargetAmount.ToDecimal();
             var releaseAmount = wallet.Rule.Amount.ToDecimal();
 
@@ -164,7 +179,6 @@ public sealed class RestartWalletCommand
 
             try
             {
-                // ─── Debit user's main balance for target + fees ───
                 var balanceDebited = await _identityService.DebitBalanceAsync(
                     request.UserPublicId,
                     totalUpfrontCharge,
@@ -183,9 +197,6 @@ public sealed class RestartWalletCommand
                 var targetMoney = Money.FromNaira(targetAmount);
                 var releaseMoney = Money.FromNaira(releaseAmount);
 
-                // ─── Reset wallet to a fresh active cycle ──────────
-                // Use += rather than = so we don't clobber any principal
-                // that automation may have already injected.
                 wallet.Status = WalletStatus.Active;
                 wallet.TargetAmount = targetMoney;
                 wallet.FundedAmount += targetMoney;
@@ -194,7 +205,6 @@ public sealed class RestartWalletCommand
                 wallet.CompletedAt = null;
                 wallet.RestartCount += 1;
 
-                // ─── Recompute rule end date from the preview ──────
                 var ruleForEndDate = new WalletRule
                 {
                     Amount = releaseMoney,
@@ -231,10 +241,6 @@ public sealed class RestartWalletCommand
                 wallet.Rule.StartDate = DateTimeOffset.UtcNow;
                 wallet.Rule.EndDate = finalEndDate.Value;
 
-                // ─── Mark any un-released scheduled releases ───────
-                // We don't delete them — they're parked in Processing
-                // so the release engine skips them. A separate task
-                // will clean them up / reclassify them later.
                 var pendingReleases = await _unitOfWork.Query<ScheduledRelease>()
                     .Where(sr => sr.WalletId == wallet.Id
                                  && sr.Status == ReleaseStatus.Scheduled)
@@ -253,7 +259,6 @@ public sealed class RestartWalletCommand
                         $"Marked {pendingReleases.Count} pending release(s) as Processing.");
                 }
 
-                // ─── Restart transaction (deposit) ─────────────────
                 var restartTx = new Transaction
                 {
                     UserPublicId = request.UserPublicId,
@@ -280,7 +285,6 @@ public sealed class RestartWalletCommand
                 await _unitOfWork.AddAsync(ledger, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // ─── Restart fee transaction ───────────────────────
                 var feeTx = new Transaction
                 {
                     UserPublicId = request.UserPublicId,
@@ -296,7 +300,6 @@ public sealed class RestartWalletCommand
                 await _unitOfWork.AddAsync(feeTx, cancellationToken);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                // ─── Schedule the first release of the new cycle ───
                 var firstRelease = await _walletRuleService.GetNextReleaseAsync(
                     wallet.Rule,
                     wallet.Rule.StartDate.AddTicks(-1),
