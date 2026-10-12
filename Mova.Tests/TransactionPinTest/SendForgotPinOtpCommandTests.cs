@@ -7,6 +7,7 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
@@ -25,6 +26,11 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
     private readonly Mock<IIdentityService> _identityService = new();
     private readonly Mock<IOtpService> _otpService = new();
     private readonly Mock<INotificationQueue> _notifications = new();
+
+    public SendForgotPinOtpCommandTests()
+    {
+        SetupPermissions();
+    }
 
     private SendForgotPinOtpCommand.Handler CreateHandler()
     {
@@ -97,6 +103,41 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
             .Returns(otp);
     }
 
+    private void SetupPermissions(
+        bool canPerformSensitiveOperations = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                UserPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                true,
+                canPerformSensitiveOperations,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
+    }
+
+    private void SetupPermissionsNull()
+    {
+        _identityService
+            .Setup(x => x.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserPermissionsDto?)null);
+    }
+
     private async Task<OtpVerification> SeedExistingOtpAsync(
         string publicId = UserPublicId,
         string purpose = OtpPurpose.TransactionPin,
@@ -135,6 +176,21 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
 
         _identityService.Verify(
             x => x.GetByIdentifierAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithEmptyUserPublicId_DoesNotCheckPermissions()
+    {
+        var handler = CreateHandler();
+        await handler.Handle(
+            CreateCommand(userPublicId: ""),
+            default);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
@@ -249,7 +305,6 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
             .AsNoTracking()
             .FirstAsync(x => x.UserPublicId == UserPublicId);
 
-        // ExpiresAt should be ~2 minutes from creation time
         Assert.True(saved.ExpiresAt >= before.AddMinutes(2));
         Assert.True(saved.ExpiresAt <= after.AddMinutes(2));
     }
@@ -438,5 +493,227 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
 
         Assert.True(firstOtp.IsUsed);
         Assert.False(secondOtp.IsUsed);
+    }
+
+    // ---------------------------------------------------------
+    // 6. Permissions gating
+    // ---------------------------------------------------------
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("couldn't verify", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotLookupUser()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _identityService.Verify(
+            x => x.GetByIdentifierAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotGenerateOtp()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _otpService.Verify(
+            x => x.GenerateOtp(),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotSendNotification()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _notifications.Verify(
+            x => x.QueueOtpDelivery(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotPersistOtp()
+    {
+        SetupPermissionsNull();
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        var count = await Context.OtpVerifications.CountAsync();
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_ReturnsLocked()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusLabel: "Restricted",
+            statusDescription: "Some features are temporarily limited. Existing wallets and releases continue normally.");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal(
+            "Some features are temporarily limited. Existing wallets and releases continue normally.",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionEmpty()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: string.Empty);
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionWhitespace()
+    {
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: "   ");
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotLookupUser()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _identityService.Verify(
+            x => x.GetByIdentifierAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotGenerateOtp()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _otpService.Verify(
+            x => x.GenerateOtp(),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotPersistOtp()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        var count = await Context.OtpVerifications.CountAsync();
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotSendNotification()
+    {
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        _notifications.Verify(
+            x => x.QueueOtpDelivery(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotInvalidateExistingOtps()
+    {
+        var existing = await SeedExistingOtpAsync();
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var handler = CreateHandler();
+        await handler.Handle(CreateCommand(), default);
+
+        var reloaded = await Context.OtpVerifications
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == existing.Id);
+
+        Assert.False(reloaded.IsUsed);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsGranted_ProceedsToUserLookup()
+    {
+        SetupPermissions(canPerformSensitiveOperations: true);
+        SetupUserExists();
+        SetupOtpGeneration();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.True(result.IsSuccess);
+
+        _identityService.Verify(
+            x => x.GetPermissionsAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        _identityService.Verify(
+            x => x.GetByIdentifierAsync(
+                UserPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

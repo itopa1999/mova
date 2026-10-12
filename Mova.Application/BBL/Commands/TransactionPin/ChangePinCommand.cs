@@ -62,6 +62,34 @@ public sealed class ChangePinCommand
                     "UserPublicId is required.");
             }
 
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<object>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                op.Fail(
+                    $"Sensitive-operation gate blocked PIN change for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<object>(
+                    HttpStatusCode.Locked,
+                    userMessage);
+            }
+
             if (string.IsNullOrWhiteSpace(request.CurrentPin))
             {
                 op.Fail("Current PIN is required.");

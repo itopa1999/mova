@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
@@ -29,15 +30,18 @@ public sealed class DeleteBankAccount
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IIdentityService _identityService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             INotificationQueue notificationQueue,
+            IIdentityService identityService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _notificationQueue = notificationQueue;
+            _identityService = identityService;
             _logger = logger;
         }
 
@@ -50,6 +54,42 @@ public sealed class DeleteBankAccount
                 "DeleteBankAccount",
                 ("UserId", request.UserPublicId),
                 ("BankAccountId", request.BankAccountId));
+
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                op.Fail("UserPublicId is required.");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    "User identity is required.");
+            }
+
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<object>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                op.Fail(
+                    $"Sensitive-operation gate blocked DeleteBankAccount for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<object>(
+                    HttpStatusCode.Locked,
+                    userMessage);
+            }
 
             long bankAccountId = 0;
             string accountName = string.Empty;
@@ -73,7 +113,6 @@ public sealed class DeleteBankAccount
                         "Bank account not found.");
                 }
 
-                // ─── Guard: is this bank account used by a live wallet? ───
                 var walletInUse = await _unitOfWork.Query<Wallet>()
                     .AsNoTracking()
                     .FirstOrDefaultAsync(

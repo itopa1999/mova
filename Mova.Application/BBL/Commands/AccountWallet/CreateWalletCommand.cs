@@ -124,6 +124,34 @@ public sealed class CreateWalletCommand
                 "CreateWallet",
                 ("UserId", request.UserPublicId));
 
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanCreateWallets)
+            {
+                op.Fail(
+                    $"Wallet creation blocked for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from creating wallets. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.Locked,
+                    userMessage);
+            }
+
             if (string.IsNullOrWhiteSpace(request.Name))
             {
                 op.Fail("Wallet name is required.");

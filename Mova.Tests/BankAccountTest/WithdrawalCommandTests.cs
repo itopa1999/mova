@@ -19,6 +19,11 @@ public sealed class WithdrawalCommandTests : BaseTest
     private readonly Mock<IIdentityService> _identityService = new();
     private readonly Mock<INotificationQueue> _notifications = new();
 
+    public WithdrawalCommandTests()
+    {
+        SetupPermissions();
+    }
+
     [Fact]
     public async Task Handle_WhenBalanceIsSufficient_DebitsWalletAndRecordsProcessingWithdrawal()
     {
@@ -149,7 +154,7 @@ public sealed class WithdrawalCommandTests : BaseTest
             },
             CancellationToken.None);
 
-        Assert.Equal(HttpStatusCode.Forbidden, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal(1_000m, wallet.AvailableAmount.ToDecimal());
         Assert.Empty(Context.Transactions);
         VerifyNoWithdrawalNotifications();
@@ -223,6 +228,336 @@ public sealed class WithdrawalCommandTests : BaseTest
             validateAllProperties: true);
     }
 
+    // =========================================================
+    // Permissions gating
+    // =========================================================
+
+    [Fact]
+    public async Task Handle_WhenUserPublicIdMissing_ReturnsBadRequest()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        var handler = CreateHandler(withdrawalsEnabled: true);
+
+        var result = await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = "",
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+
+        _identityService.Verify(
+            service => service.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_ReturnsInternalServerError()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissionsNull();
+        var handler = CreateHandler(withdrawalsEnabled: true);
+
+        var result = await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Contains("couldn't verify", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotDebitWallet()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissionsNull();
+        var handler = CreateHandler(withdrawalsEnabled: true);
+
+        await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.Equal(1_000m, wallet.AvailableAmount.ToDecimal());
+        Assert.Empty(Context.Transactions);
+        Assert.Empty(Context.LedgerEntries);
+        VerifyNoWithdrawalNotifications();
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsUnavailable_DoesNotCheckFeatureFlag()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissionsNull();
+
+        var featureFlags = new Mock<IFeatureFlagService>();
+        featureFlags
+            .Setup(service => service.IsEnabledAsync(
+                It.IsAny<FeatureFlagName>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var handler = new WithdrawalCommand.Handler(
+            UnitOfWork,
+            featureFlags.Object,
+            _identityService.Object,
+            _notifications.Object,
+            Mock.Of<ILogger<WithdrawalCommand.Handler>>());
+
+        await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        featureFlags.Verify(
+            service => service.IsEnabledAsync(
+                It.IsAny<FeatureFlagName>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_ReturnsLocked()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusLabel: "Restricted",
+            statusDescription: "Some features are temporarily limited. Existing wallets and releases continue normally.");
+        var handler = CreateHandler(withdrawalsEnabled: true);
+
+        var result = await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal(
+            "Some features are temporarily limited. Existing wallets and releases continue normally.",
+            result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotDebitWallet()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissions(canPerformSensitiveOperations: false);
+        var handler = CreateHandler(withdrawalsEnabled: true);
+
+        await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.Equal(1_000m, wallet.AvailableAmount.ToDecimal());
+        Assert.Empty(Context.Transactions);
+        Assert.Empty(Context.LedgerEntries);
+        VerifyNoWithdrawalNotifications();
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotCheckFeatureFlag()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissions(canPerformSensitiveOperations: false);
+
+        var featureFlags = new Mock<IFeatureFlagService>();
+        featureFlags
+            .Setup(service => service.IsEnabledAsync(
+                It.IsAny<FeatureFlagName>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var handler = new WithdrawalCommand.Handler(
+            UnitOfWork,
+            featureFlags.Object,
+            _identityService.Object,
+            _notifications.Object,
+            Mock.Of<ILogger<WithdrawalCommand.Handler>>());
+
+        await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        featureFlags.Verify(
+            service => service.IsEnabledAsync(
+                It.IsAny<FeatureFlagName>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionEmpty()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: string.Empty);
+        var handler = CreateHandler(withdrawalsEnabled: true);
+
+        var result = await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenSensitiveOperationsBlocked_UsesFallbackMessageWhenDescriptionWhitespace()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissions(
+            canPerformSensitiveOperations: false,
+            statusDescription: "   ");
+        var handler = CreateHandler(withdrawalsEnabled: true);
+
+        var result = await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Contains("restricted", result.Message.ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task Handle_WhenPermissionsGrantedAndFeatureDisabled_ReturnsForbidden()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupPermissions(canPerformSensitiveOperations: true);
+        var handler = CreateHandler(withdrawalsEnabled: false);
+
+        var result = await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal("Withdrawals are currently unavailable.", result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenBothPermissionsPass_ProceedsToFeatureFlagThenDebit()
+    {
+        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
+        SetupUserForNotifications();
+        SetupPermissions(canPerformSensitiveOperations: true);
+
+        var featureFlags = new Mock<IFeatureFlagService>();
+        featureFlags
+            .Setup(service => service.IsEnabledAsync(
+                FeatureFlagName.AllowWithdrawFunds,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var handler = new WithdrawalCommand.Handler(
+            UnitOfWork,
+            featureFlags.Object,
+            _identityService.Object,
+            _notifications.Object,
+            Mock.Of<ILogger<WithdrawalCommand.Handler>>());
+
+        var result = await handler.Handle(
+            new WithdrawalCommand.Command
+            {
+                UserPublicId = OwnerPublicId,
+                WalletId = wallet.Id,
+                Amount = 100m,
+                Type = "bank",
+                BankAccountId = 12
+            },
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(900m, wallet.AvailableAmount.ToDecimal());
+
+        _identityService.Verify(
+            service => service.GetPermissionsAsync(
+                OwnerPublicId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        featureFlags.Verify(
+            service => service.IsEnabledAsync(
+                FeatureFlagName.AllowWithdrawFunds,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    // =========================================================
+    // Helpers
+    // =========================================================
+
     private WithdrawalCommand.Handler CreateHandler(bool withdrawalsEnabled)
     {
         var featureFlags = new Mock<IFeatureFlagService>();
@@ -238,6 +573,41 @@ public sealed class WithdrawalCommandTests : BaseTest
             _identityService.Object,
             _notifications.Object,
             Mock.Of<ILogger<WithdrawalCommand.Handler>>());
+    }
+
+    private void SetupPermissions(
+        bool canPerformSensitiveOperations = true,
+        string statusLabel = "Active",
+        string statusDescription = "Your account is in good standing and fully operational.",
+        string? restrictionReason = null)
+    {
+        _identityService
+            .Setup(service => service.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserPermissionsDto(
+                OwnerPublicId,
+                UserAccountStatus.Active,
+                statusLabel,
+                statusDescription,
+                true,
+                true,
+                canPerformSensitiveOperations,
+                true,
+                true,
+                restrictionReason,
+                null,
+                null,
+                null));
+    }
+
+    private void SetupPermissionsNull()
+    {
+        _identityService
+            .Setup(service => service.GetPermissionsAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserPermissionsDto?)null);
     }
 
     private void SetupUserForNotifications()

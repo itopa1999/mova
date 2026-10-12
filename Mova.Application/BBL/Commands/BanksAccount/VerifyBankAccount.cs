@@ -2,6 +2,7 @@ using System.Net;
 using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
@@ -12,6 +13,9 @@ public sealed class VerifyBankAccount
 {
     public sealed class Command : IRequest<BaseResult<VerifyBankAccountDto>>
     {
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string UserPublicId { get; set; } = string.Empty;
+
         [Required, RegularExpression(@"^\d{10}$", ErrorMessage = "Account number must be exactly 10 digits.")]
         public string AccountNumber { get; init; } = string.Empty;
 
@@ -31,19 +35,51 @@ public sealed class VerifyBankAccount
     {
         private readonly IPaystackService _paystackService;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IIdentityService _identityService;
 
         public Handler(
             IPaystackService paystackService,
-            IUnitOfWork unitOfWork)
+            IUnitOfWork unitOfWork,
+            IIdentityService identityService)
         {
             _paystackService = paystackService;
             _unitOfWork = unitOfWork;
+            _identityService = identityService;
         }
 
         public async Task<BaseResult<VerifyBankAccountDto>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                return new BaseResult<VerifyBankAccountDto>(
+                    HttpStatusCode.BadRequest,
+                    "User identity is required.");
+            }
+
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                return new BaseResult<VerifyBankAccountDto>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<VerifyBankAccountDto>(
+                    HttpStatusCode.Locked,
+                    userMessage);
+            }
+
             if (string.IsNullOrWhiteSpace(request.AccountNumber))
             {
                 return new BaseResult<VerifyBankAccountDto>(
