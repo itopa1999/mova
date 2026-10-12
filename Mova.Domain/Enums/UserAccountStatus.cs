@@ -30,7 +30,7 @@ public enum UserAction
 {
     Login = 1,
     WalletCreation = 2,
-    SensitiveOperation = 3, 
+    SensitiveOperation = 3,
     ReceivePayout = 4,
     BalanceTopUp = 5,
 }

@@ -176,7 +176,7 @@ public sealed class ProcessScheduledReleasesJob
                 op.Success("Release kept in wallet available balance.");
             }
             else if (wallet.PayoutDestination == PayoutDestination.Bank
-                     || wallet.PayoutDestination == PayoutDestination.Main 
+                     || wallet.PayoutDestination == PayoutDestination.Main
                      || wallet.PayoutDestination == PayoutDestination.Utilities)
             {
                 var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";

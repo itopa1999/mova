@@ -63,10 +63,10 @@ public sealed class HomeQueryTests : BaseTest
                 string.Empty,            // TransactionPinHash
                 true,                    // NotifyLoginAlerts
                 true,                    // NotifyReleaseAlerts
-                true,                   
-                false,                
-                string.Empty,       
-                DateTimeOffset.UtcNow)); 
+                true,
+                false,
+                string.Empty,
+                DateTimeOffset.UtcNow));
     }
 
     private void SetupUserNotFound()
@@ -339,65 +339,65 @@ public sealed class HomeQueryTests : BaseTest
     }
 
     [Fact]
-public async Task Handle_SumsAllUserWalletsForBalance()
-{
-    SetupUserExists();
-    SetupPermissions();
-    var category = await SeedCategoryAsync();
-    await SeedWalletAsync(name: "Active", categoryId: category.Id, availableNaira: 100m, lockedNaira: 200m, status: WalletStatus.Active);
-    await SeedWalletAsync(name: "Paused", categoryId: category.Id, availableNaira: 999m, lockedNaira: 999m, status: WalletStatus.Paused);
-    await SeedWalletAsync(name: "Broken", categoryId: category.Id, availableNaira: 999m, lockedNaira: 999m, status: WalletStatus.Broken);
-    await SeedWalletAsync(name: "Closed", categoryId: category.Id, availableNaira: 999m, lockedNaira: 999m, status: WalletStatus.Closed);
+    public async Task Handle_SumsAllUserWalletsForBalance()
+    {
+        SetupUserExists();
+        SetupPermissions();
+        var category = await SeedCategoryAsync();
+        await SeedWalletAsync(name: "Active", categoryId: category.Id, availableNaira: 100m, lockedNaira: 200m, status: WalletStatus.Active);
+        await SeedWalletAsync(name: "Paused", categoryId: category.Id, availableNaira: 999m, lockedNaira: 999m, status: WalletStatus.Paused);
+        await SeedWalletAsync(name: "Broken", categoryId: category.Id, availableNaira: 999m, lockedNaira: 999m, status: WalletStatus.Broken);
+        await SeedWalletAsync(name: "Closed", categoryId: category.Id, availableNaira: 999m, lockedNaira: 999m, status: WalletStatus.Closed);
 
-    var handler = CreateHandler();
-    var result = await handler.Handle(CreateQuery(), default);
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateQuery(), default);
 
-    // Available: 100 + 999 + 999 + 999 = 3097
-    Assert.Equal(3097m, result.Data!.Balance.TotalAvailableAmount);
+        // Available: 100 + 999 + 999 + 999 = 3097
+        Assert.Equal(3097m, result.Data!.Balance.TotalAvailableAmount);
 
-    // Locked: 200 + 999 + 999 + 999 = 3197
-    Assert.Equal(3197m, result.Data.Balance.TotalLockedAmount);
-}
+        // Locked: 200 + 999 + 999 + 999 = 3197
+        Assert.Equal(3197m, result.Data.Balance.TotalLockedAmount);
+    }
 
     // =========================================================
     // 5. Wallet list
     // =========================================================
 
     [Fact]
-public async Task Handle_ReturnsAtMostEightWallets()
-{
-    SetupUserExists();
-    SetupPermissions();
-    var category = await SeedCategoryAsync();
-    for (var i = 0; i < 10; i++)
+    public async Task Handle_ReturnsAtMostEightWallets()
     {
-        await SeedWalletAsync(name: $"Wallet {i}", categoryId: category.Id);
+        SetupUserExists();
+        SetupPermissions();
+        var category = await SeedCategoryAsync();
+        for (var i = 0; i < 10; i++)
+        {
+            await SeedWalletAsync(name: $"Wallet {i}", categoryId: category.Id);
+        }
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateQuery(), default);
+
+        Assert.Equal(8, result.Data!.Wallets.Count);
     }
-
-    var handler = CreateHandler();
-    var result = await handler.Handle(CreateQuery(), default);
-
-    Assert.Equal(8, result.Data!.Wallets.Count);
-}
 
     [Fact]
-public async Task Handle_WalletList_ReturnsNewestEight()
-{
-    SetupUserExists();
-    SetupPermissions();
-    var category = await SeedCategoryAsync();
-    for (var i = 0; i < 10; i++)
+    public async Task Handle_WalletList_ReturnsNewestEight()
     {
-        await SeedWalletAsync(name: $"Wallet {i}", categoryId: category.Id);
+        SetupUserExists();
+        SetupPermissions();
+        var category = await SeedCategoryAsync();
+        for (var i = 0; i < 10; i++)
+        {
+            await SeedWalletAsync(name: $"Wallet {i}", categoryId: category.Id);
+        }
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateQuery(), default);
+
+        // All 10 wallets are Active → ordered by CreatedAt DESC → top 8
+        Assert.Equal("Wallet 9", result.Data!.Wallets[0].WalletName);
+        Assert.Equal("Wallet 2", result.Data.Wallets[7].WalletName);
     }
-
-    var handler = CreateHandler();
-    var result = await handler.Handle(CreateQuery(), default);
-
-    // All 10 wallets are Active → ordered by CreatedAt DESC → top 8
-    Assert.Equal("Wallet 9", result.Data!.Wallets[0].WalletName);
-    Assert.Equal("Wallet 2", result.Data.Wallets[7].WalletName);
-}
 
     [Fact]
     public async Task Handle_WalletList_OnlyIncludesRequestingUsersWallets()
@@ -416,25 +416,25 @@ public async Task Handle_WalletList_ReturnsNewestEight()
     }
 
     [Fact]
-public async Task Handle_WalletList_IncludesAllStatusesOrderedByStatusPriority()
-{
-    SetupUserExists();
-    SetupPermissions();
-    var category = await SeedCategoryAsync();
-    await SeedWalletAsync(name: "Paused", categoryId: category.Id, status: WalletStatus.Paused);
-    await SeedWalletAsync(name: "Active", categoryId: category.Id, status: WalletStatus.Active);
-    await SeedWalletAsync(name: "Closed", categoryId: category.Id, status: WalletStatus.Closed);
+    public async Task Handle_WalletList_IncludesAllStatusesOrderedByStatusPriority()
+    {
+        SetupUserExists();
+        SetupPermissions();
+        var category = await SeedCategoryAsync();
+        await SeedWalletAsync(name: "Paused", categoryId: category.Id, status: WalletStatus.Paused);
+        await SeedWalletAsync(name: "Active", categoryId: category.Id, status: WalletStatus.Active);
+        await SeedWalletAsync(name: "Closed", categoryId: category.Id, status: WalletStatus.Closed);
 
-    var handler = CreateHandler();
-    var result = await handler.Handle(CreateQuery(), default);
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateQuery(), default);
 
-    Assert.Equal(3, result.Data!.Wallets.Count);
+        Assert.Equal(3, result.Data!.Wallets.Count);
 
-    // Active first, Paused second, Closed last
-    Assert.Equal("Active", result.Data.Wallets[0].WalletName);
-    Assert.Equal("Paused", result.Data.Wallets[1].WalletName);
-    Assert.Equal("Closed", result.Data.Wallets[2].WalletName);
-}
+        // Active first, Paused second, Closed last
+        Assert.Equal("Active", result.Data.Wallets[0].WalletName);
+        Assert.Equal("Paused", result.Data.Wallets[1].WalletName);
+        Assert.Equal("Closed", result.Data.Wallets[2].WalletName);
+    }
 
     [Fact]
     public async Task Handle_WalletList_IncludesCategoryDetails()
@@ -845,27 +845,27 @@ public async Task Handle_WalletList_IncludesAllStatusesOrderedByStatusPriority()
     // =========================================================
 
     [Fact]
-public async Task Handle_WhenQueryThrows_ReturnsInternalServerError()
-{
-    SetupUserExists();
-    SetupPermissions();
+    public async Task Handle_WhenQueryThrows_ReturnsInternalServerError()
+    {
+        SetupUserExists();
+        SetupPermissions();
 
-    // Use a throwing unit of work to simulate a DB failure
-    var throwingUow = new Mock<IUnitOfWork>();
-    throwingUow
-        .Setup(x => x.Query<Wallet>())
-        .Throws(new InvalidOperationException("Simulated DB failure"));
+        // Use a throwing unit of work to simulate a DB failure
+        var throwingUow = new Mock<IUnitOfWork>();
+        throwingUow
+            .Setup(x => x.Query<Wallet>())
+            .Throws(new InvalidOperationException("Simulated DB failure"));
 
-    var handler = new HomeQuery.Handler(
-        throwingUow.Object,
-        _identityService.Object);
+        var handler = new HomeQuery.Handler(
+            throwingUow.Object,
+            _identityService.Object);
 
-    var result = await handler.Handle(CreateQuery(), default);
+        var result = await handler.Handle(CreateQuery(), default);
 
-    Assert.False(result.IsSuccess);
-    Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-    Assert.Equal(
-        "An error occurred while retrieving your home data. Please try again later.",
-        result.Message);
-}
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.Equal(
+            "An error occurred while retrieving your home data. Please try again later.",
+            result.Message);
+    }
 }

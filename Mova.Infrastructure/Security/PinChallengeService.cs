@@ -58,7 +58,7 @@ public sealed class PinChallengeService : IPinChallenge
 
         if (challenge is null)
             return (false, "Please verify your PIN again.");
-        
+
         var rowsAffected = await _context.PinChallenges
             .Where(c => c.Id == challenge.Id
                         && !c.IsUsed

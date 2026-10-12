@@ -79,7 +79,7 @@ public sealed class ResetPasswordCommandTests : BaseTest
         _identityService
             .Setup(x => x.ResetPasswordAsync(
                 It.IsAny<long>(),
-                It.IsAny<string>(), 
+                It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, string.Empty));
     }
@@ -89,7 +89,7 @@ public sealed class ResetPasswordCommandTests : BaseTest
         _identityService
             .Setup(x => x.ResetPasswordAsync(
                 It.IsAny<long>(),
-                It.IsAny<string>(), 
+                It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((false, message));
     }

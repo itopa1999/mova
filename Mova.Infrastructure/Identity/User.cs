@@ -74,12 +74,12 @@ public class User : IdentityUser<long>
 
     public DateTimeOffset? ReactivatedAt { get; set; }
 
-    
+
 
     // ─────────────────────────────────────────────────────────
     // Audit
     // ─────────────────────────────────────────────────────────
-    
+
     public DateTimeOffset? CreatedAt { get; set; }
 
     public DateTimeOffset? ModifiedAt { get; set; }
