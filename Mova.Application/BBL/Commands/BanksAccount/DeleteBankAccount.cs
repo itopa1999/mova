@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
@@ -31,17 +32,20 @@ public sealed class DeleteBankAccount
         private readonly IUnitOfWork _unitOfWork;
         private readonly INotificationQueue _notificationQueue;
         private readonly IIdentityService _identityService;
+        private readonly IPinChallenge _pinChallenge;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             INotificationQueue notificationQueue,
             IIdentityService identityService,
+            IPinChallenge pinChallenge,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _notificationQueue = notificationQueue;
             _identityService = identityService;
+            _pinChallenge = pinChallenge;
             _logger = logger;
         }
 
@@ -89,6 +93,20 @@ public sealed class DeleteBankAccount
                 return new BaseResult<object>(
                     HttpStatusCode.Locked,
                     userMessage);
+            }
+
+            // ─── PIN challenge validation ───
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                PinChallengeType.BankAccountDeletion,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
             }
 
             long bankAccountId = 0;

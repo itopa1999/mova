@@ -113,7 +113,6 @@ jobs:
         run: |
           set -e
 
-          # Check if production branch exists
           if ! git ls-remote --exit-code --heads origin production >/dev/null 2>&1; then
             echo "🆕 production branch does not exist — creating it from main."
             git push origin main:production
@@ -121,7 +120,6 @@ jobs:
             exit 0
           fi
 
-          # Check if there is anything to promote
           git fetch origin main production
           DIFF=$(git rev-list --count origin/production..origin/main)
           if [ "$DIFF" -eq 0 ]; then
@@ -130,7 +128,24 @@ jobs:
           fi
           echo "📦 $DIFF commit(s) to promote from main → production."
 
-          # Check for an existing open PR
+          # ─── Build a PR title from the latest commit message ───
+          RAW_TITLE=$(git log -1 --pretty=%s origin/main)
+
+          # Fallback if the commit subject is empty
+          if [ -z "$RAW_TITLE" ]; then
+            RAW_TITLE="chore: promote main → production"
+          fi
+
+          # Truncate to 70 characters so the title stays readable in the PR list
+          MAX_LEN=70
+          if [ "${#RAW_TITLE}" -gt "$MAX_LEN" ]; then
+            PR_TITLE="${RAW_TITLE:0:$((MAX_LEN - 1))}…"
+          else
+            PR_TITLE="$RAW_TITLE"
+          fi
+
+          echo "🏷️  PR title: $PR_TITLE"
+
           EXISTING_PR=$(gh pr list \
             --base production \
             --head main \
@@ -139,13 +154,14 @@ jobs:
             --jq '.[0].number')
 
           if [ -n "$EXISTING_PR" ]; then
-            echo "♻️  PR #$EXISTING_PR already exists — reusing it."
+            echo "♻️  PR #$EXISTING_PR already exists — updating title."
+            gh pr edit "$EXISTING_PR" --title "$PR_TITLE" >/dev/null
             PR_NUMBER=$EXISTING_PR
           else
             PR_URL=$(gh pr create \
               --base production \
               --head main \
-              --title "chore: promote main → production" \
+              --title "$PR_TITLE" \
               --body "## Automated promotion
 
           This PR promotes \`main\` to \`production\`.
@@ -163,7 +179,6 @@ jobs:
             PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           fi
 
-          # Enable auto-merge — waits for required checks to pass
           echo "🔀 Enabling auto-merge on PR #$PR_NUMBER..."
           gh pr merge "$PR_NUMBER" --auto --merge --delete-branch=false || \
             echo "⚠️  Auto-merge could not be enabled (see notes in the workflow)."

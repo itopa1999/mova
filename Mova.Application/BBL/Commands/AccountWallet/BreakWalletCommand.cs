@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -39,17 +40,20 @@ public sealed class BreakWalletCommand
         private readonly IMediator _mediator;
         private readonly ILogger<Handler> _logger;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IPinChallenge _pinChallenge;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IMediator mediator,
             ILogger<Handler> logger,
-            INotificationQueue notificationQueue)
+            INotificationQueue notificationQueue,
+            IPinChallenge pinChallenge)
         {
             _unitOfWork = unitOfWork;
             _mediator = mediator;
             _logger = logger;
             _notificationQueue = notificationQueue;
+            _pinChallenge = pinChallenge;
         }
 
         public async Task<BaseResult<object>> Handle(
@@ -61,6 +65,28 @@ public sealed class BreakWalletCommand
                 "BreakWallet",
                 ("UserId", request.UserPublicId),
                 ("WalletId", request.WalletId));
+
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                op.Fail("UserPublicId is required.");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    "User identity is required.");
+            }
+
+            // ─── PIN challenge validation ───
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                PinChallengeType.BreakWallet,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
+            }
 
             var walletName = string.Empty;
             var amountReturned = 0m;

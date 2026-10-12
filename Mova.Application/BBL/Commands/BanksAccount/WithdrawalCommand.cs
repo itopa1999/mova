@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -152,6 +153,7 @@ public sealed class WithdrawalCommand
         IFeatureFlagService featureFlagService,
         IIdentityService identityService,
         INotificationQueue notificationQueue,
+        IPinChallenge pinChallenge,
         ILogger<Handler> logger)
         : IRequestHandler<Command, BaseResult<WithdrawalResponse>>
     {
@@ -211,6 +213,32 @@ public sealed class WithdrawalCommand
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.BadRequest,
                     "Withdrawals are currently unavailable.");
+            }
+
+            // ─── PIN challenge validation ───
+            var isBankWithdrawal = string.Equals(
+                request.Type,
+                "bank",
+                StringComparison.OrdinalIgnoreCase);
+
+            var challengeType = isBankWithdrawal
+                ? PinChallengeType.ManualTransferToBank
+                : PinChallengeType.ManualPayUtilities;
+
+            var (challengeValid, challengeMessage) = await pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                challengeType,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Fail(
+                    $"PIN challenge validation failed for {challengeType}: " +
+                    $"{challengeMessage}");
+
+                return new BaseResult<WithdrawalResponse>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
             }
 
             var amount = Money.FromNaira(request.Amount);

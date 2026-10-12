@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Mova.Tests.Handlers;
 
-public sealed class AddBankAccountTests : BaseTest
+public sealed class AddBankAccountTests : BaseTestWithPinChallenge
 {
     private const string UserPublicId = "user_addbank_test";
     private const string UserEmail = "user@mova.app";
@@ -38,6 +38,7 @@ public sealed class AddBankAccountTests : BaseTest
             _paystack.Object,
             _notifications.Object,
             _identityService.Object,
+            PinChallenge.Object,
             Mock.Of<ILogger<AddBankAccount.Handler>>());
     }
 
@@ -142,10 +143,6 @@ public sealed class AddBankAccountTests : BaseTest
     {
         SetupPaystackVerifySucceeds();
     }
-
-    // ---------------------------------------------------------
-    // 1. Happy path
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithValidRequest_ReturnsCreated()
@@ -294,10 +291,6 @@ public sealed class AddBankAccountTests : BaseTest
             Times.Once);
     }
 
-    // ---------------------------------------------------------
-    // 2. Validation failures
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WithEmptyAccountNumber_ReturnsBadRequest()
     {
@@ -440,10 +433,6 @@ public sealed class AddBankAccountTests : BaseTest
         Assert.False(anySaved);
     }
 
-    // ---------------------------------------------------------
-    // 3. Regression: notification failures must not fail the request
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task Handle_WhenInAppNotificationThrows_StillReturnsCreated()
     {
@@ -553,10 +542,6 @@ public sealed class AddBankAccountTests : BaseTest
                 It.IsAny<string>()),
             Times.Once);
     }
-
-    // ---------------------------------------------------------
-    // 4. Permissions gating
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
@@ -753,8 +738,6 @@ public sealed class AddBankAccountTests : BaseTest
     [Fact]
     public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotValidateAccountNumber()
     {
-        // Even with an invalid account number, a blocked user should get
-        // the 423, not the 400 — the gate runs before format validation.
         SetupPermissions(canPerformSensitiveOperations: false);
 
         var handler = CreateHandler();

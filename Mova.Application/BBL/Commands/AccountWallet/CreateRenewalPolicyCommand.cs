@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -66,19 +67,22 @@ public sealed class CreateRenewalPolicyCommand
         private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ISchedulePreviewService _schedulePreviewService;
+        private readonly IPinChallenge _pinChallenge;
 
         public Handler(
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
-            ISchedulePreviewService schedulePreviewService)
+            ISchedulePreviewService schedulePreviewService,
+            IPinChallenge pinChallenge)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
             _schedulePreviewService = schedulePreviewService;
+            _pinChallenge = pinChallenge;
         }
 
         public async Task<BaseResult<CreateRenewalPolicyResponseDto>> Handle(
@@ -90,6 +94,42 @@ public sealed class CreateRenewalPolicyCommand
                 "CreateRenewalPolicy",
                 ("UserId", request.UserPublicId),
                 ("WalletId", request.WalletId));
+
+            if (string.IsNullOrWhiteSpace(request.UserPublicId))
+            {
+                op.Fail("UserPublicId is required.");
+                return new BaseResult<CreateRenewalPolicyResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "User identity is required.");
+            }
+
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<CreateRenewalPolicyResponseDto>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                op.Fail(
+                    $"Sensitive-operation gate blocked CreateRenewalPolicy for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<CreateRenewalPolicyResponseDto>(
+                    HttpStatusCode.Locked,
+                    userMessage);
+            }
 
             var triggerType = request.TriggerType?
                 .Trim()
@@ -213,9 +253,6 @@ public sealed class CreateRenewalPolicyCommand
                 }
             }
 
-            // When the user opted into "refill with whatever remains",
-            // the min-main-balance floor is meaningless — force it to 0
-            // so downstream logic can't accidentally re-apply it.
             var effectiveMinMainBalance = request.RefillUntilMainBalanceExhausted
                 ? 0m
                 : request.MinMainBalance;
@@ -259,6 +296,20 @@ public sealed class CreateRenewalPolicyCommand
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Unable to determine the wallet's release schedule.");
+            }
+
+            // ─── PIN challenge validation ───
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                PinChallengeType.WalletAutomation,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                return new BaseResult<CreateRenewalPolicyResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
             }
 
             long policyId = 0;
@@ -365,7 +416,6 @@ public sealed class CreateRenewalPolicyCommand
                 _ => "MOVA will refill this wallet automatically."
             };
 
-            // Extra sentence when the user opted into partial refills.
             var refillBehaviourClause = refillUntilExhausted
                 ? " Refills will use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
                 : string.Empty;

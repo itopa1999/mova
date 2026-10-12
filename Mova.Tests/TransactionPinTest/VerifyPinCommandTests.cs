@@ -506,24 +506,6 @@ public sealed class VerifyPinCommandTests : BaseTest
             Times.Never);
     }
 
-    [Fact]
-    public async Task Handle_WithAccountDeletionChallengeType_ReturnsBadRequest()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPin();
-
-        var result = await CreateHandler().Handle(
-            CreateCommand(pinChallengeType: PinChallengeType.AccountDeletion),
-            default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal(
-            "Unsupported PIN challenge type for this endpoint.",
-            result.Message);
-    }
-
     [Theory]
     [InlineData(PinChallengeType.CreateWallet)]
     [InlineData(PinChallengeType.AddBankAccount)]

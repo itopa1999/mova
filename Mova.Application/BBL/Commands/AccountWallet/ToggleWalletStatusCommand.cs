@@ -5,8 +5,10 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.BBL.MovaAPIs;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
@@ -31,15 +33,21 @@ public sealed class ToggleWalletStatusCommand
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IIdentityService _identityService;
+        private readonly IPinChallenge _pinChallenge;
 
         public Handler(
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
-            INotificationQueue notificationQueue)
+            INotificationQueue notificationQueue,
+            IIdentityService identityService,
+            IPinChallenge pinChallenge)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _notificationQueue = notificationQueue;
+            _identityService = identityService;
+            _pinChallenge = pinChallenge;
         }
 
         public async Task<BaseResult<object>> Handle(
@@ -58,6 +66,34 @@ public sealed class ToggleWalletStatusCommand
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
+            }
+
+            var permissions = await _identityService.GetPermissionsAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (permissions is null)
+            {
+                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                return new BaseResult<object>(
+                    HttpStatusCode.InternalServerError,
+                    "We couldn't verify your account permissions right now. Please try again in a moment.");
+            }
+
+            if (!permissions.CanPerformSensitiveOperations)
+            {
+                op.Fail(
+                    $"Sensitive-operation gate blocked ToggleWalletStatus for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, " +
+                    $"Reason: {permissions.RestrictionReason}");
+
+                var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
+                    ? "Your account is currently restricted from performing this operation. Please contact support."
+                    : permissions.StatusDescription;
+
+                return new BaseResult<object>(
+                    HttpStatusCode.Locked,
+                    userMessage);
             }
 
             string walletName = string.Empty;
@@ -97,6 +133,27 @@ public sealed class ToggleWalletStatusCommand
                 }
 
                 isPausing = wallet.Status == WalletStatus.Active;
+
+                // ─── PIN challenge validation (type depends on direction) ───
+                var challengeType = isPausing
+                    ? PinChallengeType.PausedWallet
+                    : PinChallengeType.UnpausedWallet;
+
+                var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                    request.UserPublicId,
+                    challengeType,
+                    cancellationToken);
+
+                if (!challengeValid)
+                {
+                    op.Fail(
+                        $"PIN challenge validation failed for {challengeType}: " +
+                        $"{challengeMessage}");
+
+                    return new BaseResult<object>(
+                        HttpStatusCode.BadRequest,
+                        challengeMessage);
+                }
 
                 wallet.Status = isPausing
                     ? WalletStatus.Paused

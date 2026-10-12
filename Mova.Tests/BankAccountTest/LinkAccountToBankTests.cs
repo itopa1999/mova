@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Mova.Tests.Handlers;
 
-public sealed class LinkAccountToBankTests : BaseTest
+public sealed class LinkAccountToBankTests : BaseTestWithPinChallenge
 {
     private const string UserPublicId = "user_linkbank_test";
     private const string OtherUserPublicId = "someone_else";
@@ -40,6 +40,7 @@ public sealed class LinkAccountToBankTests : BaseTest
             UnitOfWork,
             _notifications.Object,
             _identityService.Object,
+            PinChallenge.Object,
             Mock.Of<ILogger<LinkAccountToBank.Handler>>());
     }
 
@@ -95,10 +96,6 @@ public sealed class LinkAccountToBankTests : BaseTest
             .ReturnsAsync((UserPermissionsDto?)null);
     }
 
-    // ---------------------------------------------------------
-    // Seed helpers
-    // ---------------------------------------------------------
-
     private async Task<Wallet> SeedWalletAsync(
         string userPublicId = UserPublicId,
         string name = WalletName,
@@ -111,6 +108,7 @@ public sealed class LinkAccountToBankTests : BaseTest
         };
         await UnitOfWork.AddAsync(category);
         await UnitOfWork.SaveChangesAsync();
+
         var wallet = new Wallet
         {
             UserPublicId = userPublicId,
@@ -872,8 +870,6 @@ public sealed class LinkAccountToBankTests : BaseTest
     [Fact]
     public async Task Handle_WhenSensitiveOperationsBlocked_DoesNotLookupWallet()
     {
-        // Pass a wallet ID that doesn't exist — the gate must fire first,
-        // so the response should be 423, not 404.
         var bank = await SeedBankAccountAsync();
         SetupPermissions(canPerformSensitiveOperations: false);
 

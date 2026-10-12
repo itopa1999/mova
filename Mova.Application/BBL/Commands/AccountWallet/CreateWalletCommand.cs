@@ -9,6 +9,7 @@ using Mova.Application.Validation;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
+using Mova.Application.Interfaces.Security;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -98,6 +99,7 @@ public sealed class CreateWalletCommand
         private readonly ISchedulePreviewService _schedulePreviewService;
         private readonly IWalletRuleService _walletRuleService;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IPinChallenge _pinChallenge;
 
         public Handler(
             IIdentityService identityService,
@@ -105,7 +107,8 @@ public sealed class CreateWalletCommand
             ILogger<Handler> logger,
             ISchedulePreviewService schedulePreviewService,
             IWalletRuleService walletRuleService,
-            INotificationQueue notificationQueue)
+            INotificationQueue notificationQueue,
+            IPinChallenge pinChallenge)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
@@ -113,6 +116,7 @@ public sealed class CreateWalletCommand
             _schedulePreviewService = schedulePreviewService;
             _walletRuleService = walletRuleService;
             _notificationQueue = notificationQueue;
+            _pinChallenge = pinChallenge;
         }
 
         public async Task<BaseResult<CreateWalletResponseDto>> Handle(
@@ -150,6 +154,20 @@ public sealed class CreateWalletCommand
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.Locked,
                     userMessage);
+            }
+
+            // ─── PIN challenge validation ───
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                PinChallengeType.CreateWallet,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
             }
 
             if (string.IsNullOrWhiteSpace(request.Name))

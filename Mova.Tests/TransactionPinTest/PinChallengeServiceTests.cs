@@ -13,6 +13,8 @@ public sealed class PinChallengeServiceTests : BaseTest
 
     private PinChallengeService CreateService() => new(Context);
 
+    private Task SeedCallerAsync() => SeedUserAsync(UserPublicId);
+
     private async Task<PinChallenge> SeedChallengeAsync(
         string userPublicId,
         PinChallengeType type,
@@ -33,10 +35,6 @@ public sealed class PinChallengeServiceTests : BaseTest
         await Context.SaveChangesAsync();
         return challenge;
     }
-
-    // ---------------------------------------------------------
-    // CreateAsync — happy path
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task CreateAsync_WithValidUser_ReturnsTrue()
@@ -96,10 +94,6 @@ public sealed class PinChallengeServiceTests : BaseTest
 
         Assert.Equal(2, count);
     }
-
-    // ---------------------------------------------------------
-    // CreateAsync — invalidation of prior challenges
-    // ---------------------------------------------------------
 
     [Fact]
     public async Task CreateAsync_InvalidatesPriorActiveChallengeOfSameType()
@@ -192,13 +186,10 @@ public sealed class PinChallengeServiceTests : BaseTest
         Assert.Equal(default, reloaded.UsedAt);
     }
 
-    // ---------------------------------------------------------
-    // ValidateAsync — happy path
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task ValidateAsync_WithActiveChallenge_ReturnsSuccess()
     {
+        await SeedCallerAsync();
         await SeedChallengeAsync(UserPublicId, PinChallengeType.CreateWallet);
         var service = CreateService();
 
@@ -212,6 +203,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_ConsumesTheChallenge()
     {
+        await SeedCallerAsync();
         var challenge = await SeedChallengeAsync(
             UserPublicId, PinChallengeType.CreateWallet);
         var service = CreateService();
@@ -229,6 +221,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_CannotBeConsumedTwice()
     {
+        await SeedCallerAsync();
         await SeedChallengeAsync(UserPublicId, PinChallengeType.CreateWallet);
         var service = CreateService();
 
@@ -245,6 +238,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_WithMultipleActive_ConsumesMostRecent()
     {
+        await SeedCallerAsync();
         var older = await SeedChallengeAsync(
             UserPublicId,
             PinChallengeType.CreateWallet,
@@ -270,13 +264,10 @@ public sealed class PinChallengeServiceTests : BaseTest
         Assert.True(newerReloaded.IsUsed);
     }
 
-    // ---------------------------------------------------------
-    // ValidateAsync — failure cases
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task ValidateAsync_WithNoChallenge_ReturnsFailure()
     {
+        await SeedCallerAsync();
         var service = CreateService();
 
         var (success, message) = await service.ValidateAsync(
@@ -289,6 +280,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_WithExpiredChallenge_ReturnsFailure()
     {
+        await SeedCallerAsync();
         await SeedChallengeAsync(
             UserPublicId,
             PinChallengeType.CreateWallet,
@@ -305,6 +297,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_WithUsedChallenge_ReturnsFailure()
     {
+        await SeedCallerAsync();
         await SeedChallengeAsync(
             UserPublicId,
             PinChallengeType.CreateWallet,
@@ -321,6 +314,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_WithWrongChallengeType_ReturnsFailure()
     {
+        await SeedCallerAsync();
         await SeedChallengeAsync(UserPublicId, PinChallengeType.CreateWallet);
         var service = CreateService();
 
@@ -334,6 +328,9 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_WithDifferentUser_ReturnsFailure()
     {
+        await SeedCallerAsync();
+        await SeedUserAsync(OtherUserPublicId);
+
         await SeedChallengeAsync(UserPublicId, PinChallengeType.CreateWallet);
         var service = CreateService();
 
@@ -346,6 +343,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task ValidateAsync_DoesNotConsumeChallengeForWrongType()
     {
+        await SeedCallerAsync();
         var challenge = await SeedChallengeAsync(
             UserPublicId, PinChallengeType.CreateWallet);
 
@@ -358,13 +356,10 @@ public sealed class PinChallengeServiceTests : BaseTest
         Assert.False(reloaded.IsUsed);
     }
 
-    // ---------------------------------------------------------
-    // Interaction between Create and Validate
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task CreateThenValidate_Succeeds()
     {
+        await SeedCallerAsync();
         var service = CreateService();
 
         await service.CreateAsync(UserPublicId, PinChallengeType.CreateWallet);
@@ -377,6 +372,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task CreateTwiceThenValidate_OnlyLatestIsValid()
     {
+        await SeedCallerAsync();
         var service = CreateService();
 
         await service.CreateAsync(UserPublicId, PinChallengeType.CreateWallet);
@@ -396,6 +392,7 @@ public sealed class PinChallengeServiceTests : BaseTest
     [Fact]
     public async Task CreateAfterValidate_IssuesFreshChallenge()
     {
+        await SeedCallerAsync();
         var service = CreateService();
 
         await service.CreateAsync(UserPublicId, PinChallengeType.CreateWallet);
@@ -410,13 +407,10 @@ public sealed class PinChallengeServiceTests : BaseTest
         Assert.True(secondSuccess);
     }
 
-    // ---------------------------------------------------------
-    // Concurrency
-    // ---------------------------------------------------------
-
     [Fact]
     public async Task ValidateAsync_ConcurrentRequests_OnlyOneSucceeds()
     {
+        await SeedCallerAsync();
         await SeedChallengeAsync(UserPublicId, PinChallengeType.CreateWallet);
         var service = CreateService();
 
