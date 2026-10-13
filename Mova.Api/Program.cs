@@ -1,30 +1,26 @@
+
 using DotNetEnv;
 using Mova.Api;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence.Seeding;
 
-var currentDirectory = Directory.GetCurrentDirectory();
-
-var projectRoot = Path.GetFullPath(
-    Path.Combine(currentDirectory, "..")
-);
-
 var builder = WebApplication.CreateBuilder(args);
 
-var envFileName = builder.Environment.IsDevelopment()
-    ? ".env.dev"
-    : ".env.prod";
-
-var envPath = Path.Combine(projectRoot, envFileName);
-
-if (!File.Exists(envPath))
+if (builder.Environment.IsDevelopment())
 {
-    throw new FileNotFoundException(
-        $"Required environment file was not found at: {envPath}",
-        envPath);
-}
+    var currentDirectory = Directory.GetCurrentDirectory();
 
-Env.Load(envPath);
+    var projectRoot = Path.GetFullPath(
+        Path.Combine(currentDirectory, "..")
+    );
+
+    var envPath = Path.Combine(projectRoot, ".env.dev");
+
+    if (File.Exists(envPath))
+    {
+        Env.Load(envPath);
+    }
+}
 
 builder.Configuration.AddEnvironmentVariables();
 

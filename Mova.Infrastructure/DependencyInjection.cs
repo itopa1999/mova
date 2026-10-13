@@ -51,21 +51,24 @@ public static class DependencyInjection
 
         services.AddHangfireServer();
 
-        // ─── Redis (required — fails startup if unreachable) ──
+        
+        // Redis
         var redisConnectionString = configuration["Redis:URL"]
-            ?? throw new InvalidOperationException("Redis connection string is missing.");
+            ?? throw new InvalidOperationException(
+                "Redis connection string is missing.");
 
-        var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
-        redisOptions.AbortOnConnectFail = true;
-        redisOptions.ConnectTimeout = 3000;
+        var redisOptions = ConfigurationOptions.Parse(
+            redisConnectionString);
+
+        redisOptions.AbortOnConnectFail = false;
+        redisOptions.ConnectTimeout = 5000;
+        redisOptions.ClientName = "MOVA-API";
 
         var redis = ConnectionMultiplexer.Connect(redisOptions);
 
-        if (!redis.IsConnected)
-        {
-            throw new InvalidOperationException(
-                $"Unable to connect to Redis at '{redisConnectionString}'.");
-        }
+        services.AddSingleton<IConnectionMultiplexer>(redis);
+        services.AddScoped<ICacheService, RedisCacheService>();
+
 
         services.AddSingleton<IConnectionMultiplexer>(redis);
         services.AddScoped<ICacheService, RedisCacheService>();

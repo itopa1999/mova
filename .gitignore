@@ -37,6 +37,7 @@ obj/
 # =========================
 .env
 .env.*
+!.env.example
 
 # =========================
 # APP SETTINGS SECRETS
@@ -126,5 +127,5 @@ docker-data/
 # =========================
 Desktop.ini
 
-Migrations/
-**/Migrations/
+# Local development settings
+appsettings.Development.json
