@@ -229,7 +229,14 @@ public class Startup(IConfiguration configuration)
         // ─────────────────────────────────────────────────────────────
         // 3. CORS — must run before endpoints it protects.
         // ─────────────────────────────────────────────────────────────
-        app.UseCors("AllowSpecificOrigin");
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseCors("AllowAllDev");
+        }
+        else
+        {
+            app.UseCors("AllowSpecificOrigin");
+        }
 
         // ─────────────────────────────────────────────────────────────
         // 4. Swagger — gated by basic auth via SwaggerAuthMiddleware.
@@ -295,6 +302,13 @@ public class Startup(IConfiguration configuration)
         // 7. Static files and controllers.
         // ─────────────────────────────────────────────────────────────
         app.UseStaticFiles();
+
+        app.MapHealthChecks("/health/live");
+
+        app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("ready")
+        });
 
         app.MapControllers();
     }
