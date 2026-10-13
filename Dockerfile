@@ -12,7 +12,7 @@ COPY Mova.Infrastructure/Mova.Infrastructure.csproj Mova.Infrastructure/
 COPY Mova.Shared/Mova.Shared.csproj Mova.Shared/
 
 # Restore dependencies
-RUN dotnet restore Mova.sln
+RUN dotnet restore Mova.Api/Mova.Api.csproj
 
 # Copy the remaining source files
 COPY . .
