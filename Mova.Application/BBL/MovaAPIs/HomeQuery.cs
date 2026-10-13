@@ -112,8 +112,6 @@ public sealed class HomeQuery
                 request.UserPublicId,
                 cancellationToken);
 
-            Console.WriteLine("User", user);
-
             if (user == null)
             {
                 return new BaseResult<HomeQueryDto>(

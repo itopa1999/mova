@@ -18,6 +18,11 @@ public interface IRefreshTokenService
         string? reason = null,
         CancellationToken cancellationToken = default);
 
+    Task<int> RevokeAllForUserAsync(
+        string userPublicId,
+        string? reason = null,
+        CancellationToken cancellationToken = default);
+
     Task<(string Token, RefreshToken RefreshToken)> RotateAsync(
         RefreshToken refreshToken,
         CancellationToken cancellationToken = default);

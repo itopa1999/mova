@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Common;
 using Mova.Infrastructure.Identity.Extensions;
@@ -629,6 +630,25 @@ public sealed class IdentityService : IIdentityService
         if (user is null) return null;
 
         return BuildPermissions(user);
+    }
+
+    public async Task<bool> CloseAccountAsync(
+        string userPublicId,
+        AccountRestrictionReason reason,
+        string details,
+        string performedBy,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await FindUserEntityByPublicIdAsync(userPublicId, cancellationToken);
+        if (user is null) return false;
+
+        user.ClosePermanently(reason, details, performedBy);
+
+        _context.Users.Update(user);
+
+        return await _context.SaveChangesAsync(cancellationToken) > 0;
     }
 
     // ─────────────────────────────────────────────────────
