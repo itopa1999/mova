@@ -1,4 +1,3 @@
-
 #!/bin/sh
 set -eu
 
@@ -9,8 +8,6 @@ fi
 
 echo "Applying pending MOVA database migrations..."
 
-# The container exits if migrations fail.
-# The API will not start against an outdated schema.
 /app/migrate --connection "$ConnectionStrings__Postgres"
 
 echo "Database migrations completed successfully."
