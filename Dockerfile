@@ -16,7 +16,7 @@ RUN dotnet restore Mova.Api/Mova.Api.csproj
 
 # Install EF Core CLI.
 # Ideally, match this version to your EF Core package version.
-RUN dotnet tool install --global dotnet-ef --version 8.0.0
+RUN dotnet tool install --global dotnet-ef --version 8.0.10
 ENV PATH="${PATH}:/root/.dotnet/tools"
 
 # Copy the remaining source, including Infrastructure migrations

@@ -12,11 +12,11 @@ namespace Mova.Infrastructure.Persistence;
 public class ApplicationDbContext
     : IdentityDbContext<User, IdentityRole<long>, long>
 {
-    private readonly ICurrentUserService _currentUser;
+    private readonly ICurrentUserService? _currentUser;
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
-        ICurrentUserService currentUser)
+        ICurrentUserService? currentUser)
         : base(options)
     {
         _currentUser = currentUser;
@@ -90,14 +90,14 @@ public class ApplicationDbContext
 
                 case EntityState.Modified:
                     entry.Entity.ModifiedAt = DateTimeOffset.UtcNow;
-                    entry.Entity.ModifiedBy = _currentUser.UserId.ToString();
+                    entry.Entity.ModifiedBy = _currentUser?.UserId.ToString();
                     break;
 
                 case EntityState.Deleted:
                     entry.State = EntityState.Modified;
                     entry.Entity.IsDeleted = true;
                     entry.Entity.DeletedAt = DateTimeOffset.UtcNow;
-                    entry.Entity.DeletedBy = _currentUser.UserId.ToString();
+                    entry.Entity.DeletedBy = _currentUser?.UserId.ToString();
                     break;
             }
         }
