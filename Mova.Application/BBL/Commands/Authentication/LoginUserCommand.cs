@@ -149,7 +149,7 @@ public sealed class LoginUserCommand
             {
                 op.Fail($"Permissions unavailable for user {user.PublicId}.");
                 return new BaseResult<LoginResultDto>(
-                    HttpStatusCode.InternalServerError,
+                    HttpStatusCode.BadRequest,
                     "Invalid email or password.");
             }
 

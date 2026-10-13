@@ -104,4 +104,11 @@ public interface IIdentityService
     Task<UserPermissionsDto?> GetPermissionsAsync(
         string userPublicId,
         CancellationToken cancellationToken = default);
+
+    Task<bool> CloseAccountAsync(
+        string userPublicId,
+        AccountRestrictionReason reason,
+        string details,
+        string performedBy,
+        CancellationToken cancellationToken = default);
 }

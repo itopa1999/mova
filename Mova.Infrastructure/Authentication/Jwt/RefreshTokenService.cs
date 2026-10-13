@@ -100,4 +100,25 @@ public sealed class RefreshTokenService : IRefreshTokenService
 
         return newRefreshToken;
     }
+
+    public async Task<int> RevokeAllForUserAsync(
+        string userPublicId,
+        string? reason = null,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var now = DateTimeOffset.UtcNow;
+
+        var affected = await _context.RefreshTokens
+            .Where(x => x.UserPublicId == userPublicId
+                    && x.RevokedAt == null
+                    && x.ExpiresAt > now)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.RevokedAt, now)
+                .SetProperty(x => x.RevocationReason, reason ?? "Account closed"),
+                cancellationToken);
+
+        return affected;
+    }
 }

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -330,21 +329,47 @@ public class AuthenticationController(
     }
 
 
-    [HttpPost("request-deactivation")]
+    [HttpGet("account-deletion")]
     [Authorize(Roles = Roles.Customer)]
-    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(
         typeof(BaseResult<UpdateNotificationPreferenceResponseDto>),
         (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetRequestForAccountDeletion(CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetRequestForAccountDeletion.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+
+    [HttpDelete("account-deletion")]
+    [Authorize(Roles = Roles.Customer)]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> RequestForAccountDeletion(
-        [FromBody] UpdateNotificationPreferenceCommand.Command command,
+        [FromBody] RequestAccountDeletion.Command command,
         CancellationToken cancellationToken)
     {
         command.UserPublicId = UserPublicId ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
 
         var result = await _mediator.Send(command, cancellationToken);
+        
+        if (result.IsSuccess)
+        {
+            ClearAuthenticationCookies();
+        }
 
         return StatusCode((int)result.StatusCode, result);
     }
