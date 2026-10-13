@@ -33,8 +33,10 @@ RUN dotnet ef migrations bundle \
     --project Mova.Infrastructure \
     --startup-project Mova.Api \
     --configuration Release \
-    --output /app/migrate \
-    --self-contained false
+    --runtime linux-x64 \
+    --self-contained \
+    --output /app/migrate
+
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
