@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -61,7 +61,7 @@ public sealed class DeleteBankAccount
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
@@ -73,7 +73,7 @@ public sealed class DeleteBankAccount
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -81,10 +81,9 @@ public sealed class DeleteBankAccount
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked DeleteBankAccount for user {request.UserPublicId}. " +
-                    $"Status: {permissions.StatusLabel}, " +
-                    $"Reason: {permissions.RestrictionReason}");
+                    $"Status: {permissions.StatusLabel}, Reason: {permissions.RestrictionReason}");
 
                 var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
                     ? "Your account is currently restricted from performing this operation. Please contact support."
@@ -95,7 +94,6 @@ public sealed class DeleteBankAccount
                     userMessage);
             }
 
-            // ─── PIN challenge validation ───
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
                 PinChallengeType.BankAccountDeletion,
@@ -103,103 +101,67 @@ public sealed class DeleteBankAccount
 
             if (!challengeValid)
             {
-                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
             }
 
-            long bankAccountId = 0;
-            string accountName = string.Empty;
-            string bankName = string.Empty;
+            var account = await _unitOfWork.Query<BankAccount>()
+                .FirstOrDefaultAsync(
+                    x => x.Id == request.BankAccountId
+                         && x.UserPublicId == request.UserPublicId,
+                    cancellationToken);
 
-            try
+            if (account is null)
             {
-                var account = await _unitOfWork.Query<BankAccount>()
-                    .FirstOrDefaultAsync(
-                        x =>
-                            x.Id == request.BankAccountId &&
-                            x.UserPublicId == request.UserPublicId,
-                        cancellationToken);
-
-                if (account is null)
-                {
-                    op.Fail($"Bank account not found: {request.BankAccountId}");
-
-                    return new BaseResult<object>(
-                        HttpStatusCode.NotFound,
-                        "Bank account not found.");
-                }
-
-                var walletInUse = await _unitOfWork.Query<Wallet>()
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        w => w.BankAccountId == request.BankAccountId
-                             && w.Status != WalletStatus.Broken
-                             && w.Status != WalletStatus.Completed
-                             && w.Status != WalletStatus.Closed,
-                        cancellationToken);
-
-                if (walletInUse is not null)
-                {
-                    op.Fail(
-                        $"Bank account still linked to wallet: {walletInUse.Id} " +
-                        $"({walletInUse.Status})");
-
-                    return new BaseResult<object>(
-                        HttpStatusCode.Conflict,
-                        $"This bank account is linked to the active wallet " +
-                        $"\"{walletInUse.Name}\". Please change the wallet's payout " +
-                        $"destination or close the wallet first.");
-                }
-
-                account.IsDeleted = true;
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                bankAccountId = account.Id;
-                accountName = account.AccountName;
-                bankName = account.BankName;
-
-                op.Success(
-                    $"Bank account deleted successfully. " +
-                    $"Id: {bankAccountId}, Bank: {bankName}");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Error deleting bank account. BankAccountId: {request.BankAccountId}",
-                    ex);
-
-                throw;
+                op.Warning($"Bank account not found: {request.BankAccountId}");
+                return new BaseResult<object>(
+                    HttpStatusCode.NotFound,
+                    "Bank account not found.");
             }
 
-            try
+            var walletInUse = await _unitOfWork.Query<Wallet>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    w => w.BankAccountId == request.BankAccountId
+                         && w.Status != WalletStatus.Broken
+                         && w.Status != WalletStatus.Completed
+                         && w.Status != WalletStatus.Closed,
+                    cancellationToken);
+
+            if (walletInUse is not null)
             {
-                _notificationQueue.InAppNotificationAsync(
-                    request.UserPublicId,
-                    NotificationType.System,
-                    "Bank account removed",
-                    $"{accountName} ({bankName}) has been removed from your MOVA account.",
-                    "/bank",
-                    null,
-                    CancellationToken.None);
+                op.Warning(
+                    $"Bank account still linked to wallet: {walletInUse.Id} ({walletInUse.Status}).");
+
+                return new BaseResult<object>(
+                    HttpStatusCode.Conflict,
+                    $"This bank account is linked to the active wallet " +
+                    $"\"{walletInUse.Name}\". Please change the wallet's payout " +
+                    $"destination or close the wallet first.");
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for deleted bank account {BankAccountId}.",
-                    bankAccountId);
-            }
+
+            account.IsDeleted = true;
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            op.Success(
+                $"Bank account deleted. Id: {account.Id}, Bank: {account.BankName}.");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.System,
+                "Bank account removed",
+                $"{account.AccountName} ({account.BankName}) has been removed from your MOVA account.",
+                "/bank",
+                null,
+                CancellationToken.None);
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,
                 "Bank account deleted successfully.",
-                new
-                {
-                    notification = true,
-                });
+                new { notification = true });
         }
     }
 }

@@ -32,11 +32,6 @@ public sealed class LoginUserCommand
         public string? DeviceId { get; init; }
     }
 
-    /// <summary>
-    /// Login success payload. Does NOT carry account status fields —
-    /// those are only relevant when login is blocked and are returned
-    /// via <see cref="LoginBlockedDto"/> instead.
-    /// </summary>
     public class LoginResponseDto
     {
         public string UserPublicId { get; set; } = string.Empty;
@@ -51,11 +46,6 @@ public sealed class LoginUserCommand
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
     }
 
-    /// <summary>
-    /// Returned only when the login is blocked (Restricted, Suspended,
-    /// Closed, Deactivated, or locked out). Contains just enough info
-    /// for the FE to render the exact reason.
-    /// </summary>
     public class LoginBlockedDto
     {
         public string UserPublicId { get; set; } = string.Empty;
@@ -68,11 +58,6 @@ public sealed class LoginUserCommand
         public DateTimeOffset? LockoutEndsAt { get; set; }
     }
 
-    /// <summary>
-    /// Unified result: on success, <see cref="Data"/> is the login payload
-    /// and <see cref="Blocked"/> is null. On block, <see cref="Data"/> is
-    /// null and <see cref="Blocked"/> carries the status info.
-    /// </summary>
     public class LoginResultDto
     {
         public LoginResponseDto? Data { get; set; }
@@ -93,7 +78,7 @@ public sealed class LoginUserCommand
             {
                 Platforms.Web,
                 Platforms.Mobile,
-                Platforms.Swagger
+                Platforms.Swagger,
             };
 
         public Handler(
@@ -123,7 +108,7 @@ public sealed class LoginUserCommand
 
             if (!ValidPlatforms.Contains(request.Platform))
             {
-                op.Fail($"Invalid platform: {request.Platform}");
+                op.Warning($"Invalid platform: {request.Platform}");
                 return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid platform specified.");
@@ -133,9 +118,9 @@ public sealed class LoginUserCommand
                 request.Identifier,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail("User not found.");
+                op.Warning("User not found.");
                 return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid email or password.");
@@ -147,18 +132,15 @@ public sealed class LoginUserCommand
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {user.PublicId}.");
+                op.Error($"Permissions unavailable for user {user.PublicId}.");
                 return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid email or password.");
             }
 
-            // ─────────────────────────────────────────────────────
-            // Login gate — blocked status returns 403 with the reason
-            // ─────────────────────────────────────────────────────
             if (!permissions.CanLogin)
             {
-                op.Fail(
+                op.Warning(
                     $"Login blocked for user {user.PublicId}. " +
                     $"Status: {permissions.StatusLabel}, " +
                     $"Reason: {permissions.RestrictionReason}");
@@ -176,26 +158,21 @@ public sealed class LoginUserCommand
             {
                 var lockoutEnd = await _identityService.GetLockoutEndAsync(
                     user.Id, cancellationToken);
-                var minutesLeft = lockoutEnd.HasValue
-                    ? (int)Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalMinutes)
-                    : 15;
 
-                op.Fail($"Account locked for user {user.PublicId}");
+                op.Warning($"Account locked for user {user.PublicId}.");
 
                 return new BaseResult<LoginResultDto>(
                     HttpStatusCode.Locked,
-                    $"Too many failed login attempts. Your account is locked. " +
-                    $"Please try again in {minutesLeft} minute(s).",
+                    BuildLockoutMessage(lockoutEnd),
                     new LoginResultDto
                     {
-                        Blocked = BuildBlockedDto(
-                            user.PublicId, permissions, lockoutEnd),
+                        Blocked = BuildBlockedDto(user.PublicId, permissions, lockoutEnd),
                     });
             }
 
             if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
             {
-                op.Fail($"Account not verified for user {user.PublicId}");
+                op.Warning($"Account not verified for user {user.PublicId}.");
                 return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Please verify your account before logging in.");
@@ -214,24 +191,20 @@ public sealed class LoginUserCommand
                 {
                     var lockoutEnd = await _identityService.GetLockoutEndAsync(
                         user.Id, cancellationToken);
-                    var minutesLeft = lockoutEnd.HasValue
-                        ? (int)Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalMinutes)
-                        : 15;
 
-                    op.Fail($"Account locked after failed attempt for user {user.PublicId}");
+                    op.Warning(
+                        $"Account locked after failed attempt for user {user.PublicId}.");
 
                     return new BaseResult<LoginResultDto>(
-                        HttpStatusCode.BadRequest,
-                        $"Too many failed login attempts. Your account has been locked " +
-                        $"for {minutesLeft} minute(s).",
+                        HttpStatusCode.Locked,
+                        BuildLockoutMessage(lockoutEnd),
                         new LoginResultDto
                         {
-                            Blocked = BuildBlockedDto(
-                                user.PublicId, permissions, lockoutEnd),
+                            Blocked = BuildBlockedDto(user.PublicId, permissions, lockoutEnd),
                         });
                 }
 
-                op.Fail($"Invalid password for user {user.PublicId}");
+                op.Warning($"Invalid password for user {user.PublicId}.");
                 return new BaseResult<LoginResultDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid email or password.");
@@ -250,7 +223,7 @@ public sealed class LoginUserCommand
                 user.Email,
                 user.PhoneNumber,
                 user.Balance.ToDecimal(),
-                user.FullName ?? string.Empty,
+                user.FullName,
                 request.Platform,
                 roles);
 
@@ -262,15 +235,11 @@ public sealed class LoginUserCommand
             await _unitOfWork.AddAsync(refreshTokenEntity, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // ─── Device check ────────────────────────────────
             var incomingDeviceId = request.DeviceId?.Trim();
             var previousDeviceId = user.LastKnownDeviceId?.Trim();
 
-            var hasIncomingDevice =
-                !string.IsNullOrWhiteSpace(incomingDeviceId);
-
-            var hasPreviousDevice =
-                !string.IsNullOrWhiteSpace(previousDeviceId);
+            var hasIncomingDevice = !string.IsNullOrWhiteSpace(incomingDeviceId);
+            var hasPreviousDevice = !string.IsNullOrWhiteSpace(previousDeviceId);
 
             var isNewDevice =
                 hasIncomingDevice &&
@@ -278,53 +247,27 @@ public sealed class LoginUserCommand
                 previousDeviceId != incomingDeviceId;
 
             op.Success(
-                $"User {user.PublicId} logged in successfully " +
-                $"(Identifier: {request.Identifier}, " +
-                $"NewDevice: {isNewDevice})");
+                $"User {user.PublicId} logged in " +
+                $"(Identifier: {request.Identifier}, NewDevice: {isNewDevice}).");
 
-            // ─── Alert on new device ─────────────────────────
             if (isNewDevice && user.NotifyLoginAlerts)
             {
-                try
-                {
-                    await SendNewDeviceAlertAsync(
-                        user.PublicId,
-                        user.Email ?? string.Empty,
-                        user.FirstName ?? string.Empty,
-                        request.Platform,
-                        incomingDeviceId!);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "New-device alert failed for user {UserPublicId}.",
-                        user.PublicId);
-                }
+                SendNewDeviceAlert(
+                    user.PublicId,
+                    user.Email ?? string.Empty,
+                    user.FirstName,
+                    request.Platform,
+                    incomingDeviceId!);
             }
 
-            // ─── Remember this device ────────────────────────
             if (hasIncomingDevice && previousDeviceId != incomingDeviceId)
             {
-                try
-                {
-                    await _identityService.UpdateLastKnownDeviceAsync(
-                        user.PublicId,
-                        incomingDeviceId!,
-                        cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "Failed to update LastKnownDeviceId for user {UserPublicId}.",
-                        user.PublicId);
-                }
+                await _identityService.UpdateLastKnownDeviceAsync(
+                    user.PublicId,
+                    incomingDeviceId!,
+                    cancellationToken);
             }
 
-            // ─────────────────────────────────────────────────────
-            // Success — clean payload only. No status block.
-            // ─────────────────────────────────────────────────────
             return new BaseResult<LoginResultDto>(
                 HttpStatusCode.OK,
                 "Login successful.",
@@ -356,17 +299,54 @@ public sealed class LoginUserCommand
             {
                 UserPublicId = userPublicId,
                 AccountStatus = permissions.AccountStatus.ToString(),
-                StatusLabel = permissions.StatusLabel,
-                StatusDescription = permissions.StatusDescription,
+
+                // Lockout is a different axis than account status. Never
+                // inherit "Active / fully operational" — the FE would render
+                // a success-looking screen on a blocked login.
+                StatusLabel = lockoutEndsAt.HasValue
+                    ? "Temporarily Locked"
+                    : permissions.StatusLabel,
+
+                StatusDescription = lockoutEndsAt.HasValue
+                    ? "Your account is temporarily locked due to too many failed " +
+                      "login attempts. It will unlock automatically once the " +
+                      "lockout period ends."
+                    : permissions.StatusDescription,
+
                 RestrictionReason = permissions.RestrictionReason,
                 RestrictionReasonDetails = permissions.RestrictionReasonDetails,
                 RestrictionExpiresAt = permissions.RestrictionExpiresAt,
                 LockoutEndsAt = lockoutEndsAt,
             };
 
+        private static string BuildLockoutMessage(DateTimeOffset? lockoutEnd)
+        {
+            if (!lockoutEnd.HasValue)
+            {
+                return "Too many failed login attempts. Your account is locked. " +
+                       "Please try again later.";
+            }
+
+            var remaining = lockoutEnd.Value - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                return "Too many failed login attempts. Your account was " +
+                       "temporarily locked. Please try again.";
+            }
+
+            var timeText = remaining.TotalMinutes < 1
+                ? $"{(int)Math.Ceiling(remaining.TotalSeconds)} second(s)"
+                : remaining.TotalHours < 1
+                    ? $"{(int)Math.Ceiling(remaining.TotalMinutes)} minute(s)"
+                    : $"{(int)Math.Ceiling(remaining.TotalHours)} hour(s)";
+
+            return $"Too many failed login attempts. Your account is locked. " +
+                   $"Please try again in {timeText}.";
+        }
+
         // ─── Alerts ──────────────────────────────────────────
 
-        private async Task SendNewDeviceAlertAsync(
+        private void SendNewDeviceAlert(
             string userPublicId,
             string email,
             string firstName,
@@ -381,61 +361,39 @@ public sealed class LoginUserCommand
                 ? deviceId[..8]
                 : deviceId;
 
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.System,
-                    "New device login",
-                    $"Your MOVA account was just accessed from a new device ({platformLabel}). " +
-                    $"If this wasn't you, please change your password and review your account.",
-                    "/settings/security",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app new-device notification failed for user {UserPublicId}.",
-                    userPublicId);
-            }
+            _notificationQueue.InAppNotificationAsync(
+                userPublicId,
+                NotificationType.System,
+                "New device login",
+                $"Your MOVA account was just accessed from a new device ({platformLabel}). " +
+                $"If this wasn't you, please change your password and review your account.",
+                "/settings/security",
+                null,
+                CancellationToken.None);
 
             if (string.IsNullOrWhiteSpace(email))
             {
                 return;
             }
 
-            try
-            {
-                var subject = "New device login to your MOVA account";
+            var body =
+                $"Hi {firstName},\n\n" +
+                $"We noticed a login to your MOVA account from a device we don't recognise.\n\n" +
+                $"Platform: {platformLabel}\n" +
+                $"Device reference: {shortDeviceId}\n" +
+                $"Time: {DateTimeOffset.UtcNow:MMM d, yyyy h:mm tt} UTC\n\n" +
+                $"If this was you, you can ignore this message — we'll remember this device.\n\n" +
+                $"If this wasn't you, please:\n" +
+                $"  1. Change your password immediately\n" +
+                $"  2. Review your recent activity\n" +
+                $"  3. Contact support if anything looks wrong\n\n" +
+                $"— The MOVA team";
 
-                var body =
-                    $"Hi {firstName},\n\n" +
-                    $"We noticed a login to your MOVA account from a device we don't recognise.\n\n" +
-                    $"Platform: {platformLabel}\n" +
-                    $"Device reference: {shortDeviceId}\n" +
-                    $"Time: {DateTimeOffset.UtcNow:MMM d, yyyy h:mm tt} UTC\n\n" +
-                    $"If this was you, you can ignore this message — we'll remember this device.\n\n" +
-                    $"If this wasn't you, please:\n" +
-                    $"  1. Change your password immediately\n" +
-                    $"  2. Review your recent activity\n" +
-                    $"  3. Contact support if anything looks wrong\n\n" +
-                    $"— The MOVA team";
-
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    body,
-                    subject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email new-device notification failed for user {UserPublicId}.",
-                    userPublicId);
-            }
+            _notificationQueue.QueueNotificationEmail(
+                firstName,
+                email,
+                body,
+                "New device login to your MOVA account");
         }
     }
 }

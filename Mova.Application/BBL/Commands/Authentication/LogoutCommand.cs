@@ -1,6 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json.Serialization;
-using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Persistence;
@@ -27,64 +27,74 @@ public sealed class LogoutCommand
         private readonly IRefreshTokenService _refreshTokenService;
         private readonly ILogger<Handler> _logger;
 
-        public Handler(IUnitOfWork unitOfWork, IRefreshTokenService refreshTokenService, ILogger<Handler> logger)
+        public Handler(
+            IUnitOfWork unitOfWork,
+            IRefreshTokenService refreshTokenService,
+            ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _refreshTokenService = refreshTokenService;
             _logger = logger;
         }
 
-        public async Task<BaseResult> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
-            using var op = OperationLogger.Start(_logger, "Logout",
-                ("UserPublicId", request.UserPublicId)
-            );
+            using var op = OperationLogger.Start(
+                _logger,
+                "Logout",
+                ("UserPublicId", request.UserPublicId));
 
-            var refreshToken = await _refreshTokenService.ValidateAsync(request.RefreshToken, cancellationToken);
+            var refreshToken = await _refreshTokenService.ValidateAsync(
+                request.RefreshToken,
+                cancellationToken);
 
             if (refreshToken is null)
             {
-                op.Fail("Invalid refresh token provided.");
-                return new BaseResult(HttpStatusCode.Unauthorized, "Invalid refresh token.");
+                op.Warning("Invalid refresh token provided.");
+                return new BaseResult(
+                    HttpStatusCode.Unauthorized,
+                    "Invalid refresh token.");
             }
 
             if (refreshToken.IsExpired)
             {
-                op.Fail($"Refresh token expired (UserId: {request.UserPublicId})");
-                return new BaseResult(HttpStatusCode.Unauthorized, "Refresh token has expired.");
+                op.Warning($"Refresh token expired for user {request.UserPublicId}.");
+                return new BaseResult(
+                    HttpStatusCode.Unauthorized,
+                    "Refresh token has expired.");
             }
 
             if (refreshToken.IsRevoked)
             {
-                op.Fail($"Refresh token already revoked (UserId: {request.UserPublicId})");
-                return new BaseResult(HttpStatusCode.Unauthorized, "Refresh token has been revoked.");
+                op.Warning($"Refresh token already revoked for user {request.UserPublicId}.");
+                return new BaseResult(
+                    HttpStatusCode.Unauthorized,
+                    "Refresh token has been revoked.");
             }
 
             if (refreshToken.UserPublicId != request.UserPublicId)
             {
-                op.Fail($"Token owner mismatch: token belongs to {refreshToken.UserPublicId}, request user is {request.UserPublicId}");
-                return new BaseResult(HttpStatusCode.Unauthorized, "Token does not belong to the authenticated user.");
+                op.Warning(
+                    $"Token owner mismatch. Token: {refreshToken.UserPublicId}, " +
+                    $"Request: {request.UserPublicId}.");
+                return new BaseResult(
+                    HttpStatusCode.Unauthorized,
+                    "Token does not belong to the authenticated user.");
             }
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
-            {
-                refreshToken.RevokedAt = DateTimeOffset.UtcNow;
-                _unitOfWork.Update(refreshToken);
+            refreshToken.RevokedAt = DateTimeOffset.UtcNow;
+            _unitOfWork.Update(refreshToken);
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                op.Success($"User {request.UserPublicId} logged out successfully.");
-                return new BaseResult(HttpStatusCode.OK, "Logout Successful");
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Logout failed for user {request.UserPublicId}", ex);
-                throw;
-            }
+            op.Success($"User {request.UserPublicId} logged out successfully.");
+
+            return new BaseResult(HttpStatusCode.OK, "Logout Successful");
         }
     }
 }

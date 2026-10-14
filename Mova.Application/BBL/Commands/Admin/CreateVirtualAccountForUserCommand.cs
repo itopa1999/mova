@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -42,18 +42,15 @@ public sealed class CreateVirtualAccountForUserCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
-        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
-            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
-            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -68,7 +65,7 @@ public sealed class CreateVirtualAccountForUserCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<CreateVirtualAccountForUserResponseDto>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -80,7 +77,7 @@ public sealed class CreateVirtualAccountForUserCommand
 
             if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult<CreateVirtualAccountForUserResponseDto>(
                     HttpStatusCode.NotFound,
                     "User not found.");
@@ -88,7 +85,7 @@ public sealed class CreateVirtualAccountForUserCommand
 
             if (string.IsNullOrWhiteSpace(user.Email))
             {
-                op.Fail($"User {request.UserPublicId} has no email on record.");
+                op.Warning($"User {request.UserPublicId} has no email on record.");
                 return new BaseResult<CreateVirtualAccountForUserResponseDto>(
                     HttpStatusCode.BadRequest,
                     "User does not have an email on record.");
@@ -112,69 +109,23 @@ public sealed class CreateVirtualAccountForUserCommand
                     {
                         UserPublicId = request.UserPublicId,
                         Message = "Virtual account already exists for this user.",
-                        VirtualAccount = new VirtualAccountDto
-                        {
-                            AccountNumber = existing.AccountNumber,
-                            AccountName = existing.AccountName,
-                            BankName = existing.BankName,
-                            Currency = existing.Currency,
-                            Provider = existing.Provider.ToString(),
-                        },
+                        VirtualAccount = ToDto(existing),
                     });
             }
 
-            // ─── Create virtual account (random, synchronous) ───
-            VirtualAccount createdVirtualAccount;
+            // Inline random account for now. When the real provider call is
+            // wired up, this becomes an enqueue and the account is created
+            // off-request by QueueCreateVirtualAccount.
+            var virtualAccount = BuildRandomVirtualAccount(
+                user.PublicId,
+                user.FullName);
 
-            try
-            {
-                createdVirtualAccount = BuildRandomVirtualAccount(
-                    user.PublicId,
-                    user.FullName ?? $"{user.FirstName ?? "Customer"} Customer");
+            await _unitOfWork.AddAsync(virtualAccount, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                await _unitOfWork.AddAsync(createdVirtualAccount, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                op.Success(
-                    $"Virtual account generated for {request.UserPublicId}. " +
-                    $"AccountNumber: {createdVirtualAccount.AccountNumber}");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Failed to create virtual account for {request.UserPublicId}.",
-                    ex);
-
-                return new BaseResult<CreateVirtualAccountForUserResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "Failed to create virtual account. Please try again.");
-            }
-
-            // ─────────────────────────────────────────────────────
-            // Background queue is disabled for now — the account is
-            // created inline above. Uncomment when the real provider
-            // call is wired up and you want to move it off the request.
-            // ─────────────────────────────────────────────────────
-            //
-            // try
-            // {
-            //     _notificationQueue.QueueCreateVirtualAccount(
-            //         user.PublicId,
-            //         user.FirstName ?? string.Empty,
-            //         user.LastName ?? string.Empty,
-            //         user.Email ?? string.Empty,
-            //         user.PhoneNumber ?? string.Empty);
-            // }
-            // catch (Exception ex)
-            // {
-            //     op.Fail(
-            //         $"Failed to enqueue virtual account job for {request.UserPublicId}.",
-            //         ex);
-            //
-            //     return new BaseResult<CreateVirtualAccountForUserResponseDto>(
-            //         HttpStatusCode.InternalServerError,
-            //         "Failed to queue virtual account creation. Please try again.");
-            // }
+            op.Success(
+                $"Virtual account generated for {request.UserPublicId}. " +
+                $"AccountNumber: {virtualAccount.AccountNumber}");
 
             return new BaseResult<CreateVirtualAccountForUserResponseDto>(
                 HttpStatusCode.Created,
@@ -183,18 +134,19 @@ public sealed class CreateVirtualAccountForUserCommand
                 {
                     UserPublicId = request.UserPublicId,
                     Message = "Virtual account created successfully.",
-                    VirtualAccount = new VirtualAccountDto
-                    {
-                        AccountNumber = createdVirtualAccount.AccountNumber,
-                        AccountName = createdVirtualAccount.AccountName,
-                        BankName = createdVirtualAccount.BankName,
-                        Currency = createdVirtualAccount.Currency,
-                        Provider = createdVirtualAccount.Provider.ToString(),
-                    },
+                    VirtualAccount = ToDto(virtualAccount),
                 });
         }
 
-        // ─── Random virtual account generator ─────────────────
+        private static VirtualAccountDto ToDto(VirtualAccount account) => new()
+        {
+            AccountNumber = account.AccountNumber,
+            AccountName = account.AccountName,
+            BankName = account.BankName,
+            Currency = account.Currency,
+            Provider = account.Provider.ToString(),
+        };
+
         private static VirtualAccount BuildRandomVirtualAccount(
             string userPublicId,
             string fullName)
@@ -211,8 +163,6 @@ public sealed class CreateVirtualAccountForUserCommand
             };
 
             var bankName = partnerBanks[rng.Next(partnerBanks.Length)];
-
-            // Paystack-style 10-digit NUBAN starting with "9"
             var accountNumber = "9" + rng.Next(100_000_000, 999_999_999).ToString();
 
             return new VirtualAccount
@@ -230,3 +180,29 @@ public sealed class CreateVirtualAccountForUserCommand
         }
     }
 }
+
+// ─────────────────────────────────────────────────────
+// Background queue is disabled for now — the account is
+// created inline above. Uncomment when the real provider
+// call is wired up and you want to move it off the request.
+// ─────────────────────────────────────────────────────
+//
+// try
+// {
+//     _notificationQueue.QueueCreateVirtualAccount(
+//         user.PublicId,
+//         user.FirstName ?? string.Empty,
+//         user.LastName ?? string.Empty,
+//         user.Email ?? string.Empty,
+//         user.PhoneNumber ?? string.Empty);
+// }
+// catch (Exception ex)
+// {
+//     op.Fail(
+//         $"Failed to enqueue virtual account job for {request.UserPublicId}.",
+//         ex);
+//
+//     return new BaseResult<CreateVirtualAccountForUserResponseDto>(
+//         HttpStatusCode.InternalServerError,
+//         "Failed to queue virtual account creation. Please try again.");
+// }

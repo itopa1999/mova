@@ -203,7 +203,7 @@ public sealed class DatabaseSeeder
                 return;
             }
 
-            op.Fail(
+            op.Error(
                 "Failed to seed bootstrap admin: " +
                 string.Join(", ", createResult.Errors.Select(e => e.Description)));
             return;
@@ -216,7 +216,7 @@ public sealed class DatabaseSeeder
             var roleResult = await _userManager.AddToRoleAsync(admin, role);
             if (!roleResult.Succeeded)
             {
-                op.Fail(
+                op.Error(
                     $"Failed to assign {role}: " +
                     string.Join(", ", roleResult.Errors.Select(e => e.Description)));
                 return;
@@ -250,7 +250,7 @@ public sealed class DatabaseSeeder
         {
             // Local dev with no internet, or provider is down.
             _logger.LogWarning(ex, "Bank refresh could not reach the provider.");
-            op.Fail(
+            op.Warning(
                 "Bank refresh could not reach the payment provider. " +
                 "/health/ready will stay unhealthy until banks are populated.");
             return;
@@ -259,7 +259,7 @@ public sealed class DatabaseSeeder
         {
             // HttpClient timeout — treat the same as a network failure.
             _logger.LogWarning(ex, "Bank refresh timed out.");
-            op.Fail(
+            op.Warning(
                 "Bank refresh timed out. " +
                 "/health/ready will stay unhealthy until banks are populated.");
             return;
@@ -267,7 +267,7 @@ public sealed class DatabaseSeeder
         catch (Exception ex)
         {
             _logger.LogError(ex, "Bank refresh failed at startup.");
-            op.Fail(
+            op.Warning(
                 "Bank refresh failed. /health/ready will stay unhealthy " +
                 "until banks are populated.");
             return;
@@ -278,7 +278,7 @@ public sealed class DatabaseSeeder
 
         if (bankCountAfter == 0)
         {
-            op.Fail(
+            op.Warning(
                 "Bank refresh completed but no banks were inserted. " +
                 "The provider may be returning an empty list.");
             return;

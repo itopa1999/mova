@@ -72,7 +72,7 @@ public sealed class VerifyPinCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -80,7 +80,7 @@ public sealed class VerifyPinCommand
 
             if (string.IsNullOrWhiteSpace(request.Pin))
             {
-                op.Fail("PIN is required.");
+                op.Warning("PIN is required.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "PIN is required.");
@@ -88,7 +88,7 @@ public sealed class VerifyPinCommand
 
             if (request.Pin.Length != 6)
             {
-                op.Fail($"Invalid PIN length: {request.Pin.Length}");
+                op.Warning($"Invalid PIN length: {request.Pin.Length}.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "PIN must be exactly 6 digits.");
@@ -96,7 +96,7 @@ public sealed class VerifyPinCommand
 
             if (!request.Pin.All(char.IsDigit))
             {
-                op.Fail("PIN contains non-digit characters.");
+                op.Warning("PIN contains non-digit characters.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "PIN must contain only digits.");
@@ -104,7 +104,7 @@ public sealed class VerifyPinCommand
 
             if (!Enum.IsDefined(typeof(PinChallengeType), request.PinChallengeType))
             {
-                op.Fail($"Invalid PinChallengeType value: {(int)request.PinChallengeType}");
+                op.Warning($"Invalid PinChallengeType value: {(int)request.PinChallengeType}.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "A valid PIN challenge type is required.");
@@ -112,7 +112,7 @@ public sealed class VerifyPinCommand
 
             if (!AllowedChallengeTypes.Contains(request.PinChallengeType))
             {
-                op.Fail($"Disallowed PinChallengeType for /verify-pin: {request.PinChallengeType}");
+                op.Warning($"Disallowed PinChallengeType: {request.PinChallengeType}.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "Unsupported PIN challenge type for this endpoint.");
@@ -122,105 +122,66 @@ public sealed class VerifyPinCommand
                 request.UserPublicId,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "User not found.");
             }
 
-            try
+            var hasPin = await _transactionPinService.HasPinAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (!hasPin)
             {
-                var hasPin = await _transactionPinService.HasPinAsync(
-                    request.UserPublicId,
-                    cancellationToken);
+                op.Warning($"PIN not set for user {request.UserPublicId}.");
+                return new BaseResult(
+                    HttpStatusCode.BadRequest,
+                    "Transaction PIN has not been set.");
+            }
 
-                if (!hasPin)
+            var verificationResult = await _transactionPinService.VerifyPinWithStatusAsync(
+                request.UserPublicId,
+                request.Pin,
+                request.PinChallengeType,
+                cancellationToken);
+
+            if (verificationResult != TransactionPinVerificationResult.Verified)
+            {
+                if (verificationResult is TransactionPinVerificationResult.Locked
+                    or TransactionPinVerificationResult.LockedNow)
                 {
-                    op.Fail($"PIN not set for user {request.UserPublicId}");
-                    return new BaseResult(
-                        HttpStatusCode.BadRequest,
-                        "Transaction PIN has not been set.");
-                }
-
-                var verificationResult = await _transactionPinService.VerifyPinWithStatusAsync(
-                    request.UserPublicId,
-                    request.Pin,
-                    request.PinChallengeType,
-                    cancellationToken);
-
-                if (verificationResult != TransactionPinVerificationResult.Verified)
-                {
-                    if (verificationResult is TransactionPinVerificationResult.Locked
-                        or TransactionPinVerificationResult.LockedNow)
+                    if (verificationResult == TransactionPinVerificationResult.LockedNow
+                        && !string.IsNullOrWhiteSpace(user.Email))
                     {
-                        if (verificationResult == TransactionPinVerificationResult.LockedNow
-                            && !string.IsNullOrWhiteSpace(user.Email))
-                        {
-                            QueuePinLockoutEmail(user.FirstName, user.Email);
-                        }
-
-                        op.Fail($"Transaction PIN locked for user {request.UserPublicId}.");
-                        return new BaseResult(
-                            HttpStatusCode.Locked,
-                            "Too many incorrect PIN attempts. Your transaction PIN is locked for 1 hour. Please try again in 1 hour.");
+                        _notificationQueue.QueueNotificationEmail(
+                            user.FirstName,
+                            user.Email,
+                            "We locked your transaction PIN for 1 hour after 3 incorrect attempts. " +
+                            "Please try again in 1 hour. If you did not make these attempts, " +
+                            "please contact MOVA support.",
+                            "Transaction PIN temporarily locked");
                     }
 
-                    op.Fail($"Invalid PIN provided for user {request.UserPublicId}");
+                    op.Warning($"Transaction PIN locked for user {request.UserPublicId}.");
                     return new BaseResult(
-                        HttpStatusCode.Unauthorized,
-                        "Invalid transaction PIN.");
+                        HttpStatusCode.Locked,
+                        "Too many incorrect PIN attempts. Your transaction PIN is locked for 1 hour. Please try again in 1 hour.");
                 }
 
-                op.Success($"Transaction PIN verified successfully for user {request.UserPublicId}");
+                op.Warning($"Invalid PIN provided for user {request.UserPublicId}.");
+                return new BaseResult(
+                    HttpStatusCode.Unauthorized,
+                    "Invalid transaction PIN.");
+            }
 
-                return new BaseResult(
-                    HttpStatusCode.OK,
-                    "Transaction PIN verified successfully.");
-            }
-            catch (ArgumentException argEx)
-            {
-                op.Fail($"Invalid PIN format: {argEx.Message}", argEx);
-                return new BaseResult(
-                    HttpStatusCode.BadRequest,
-                    "The PIN format is invalid.");
-            }
-            catch (InvalidOperationException invEx)
-            {
-                op.Fail($"PIN operation error: {invEx.Message}", invEx);
-                return new BaseResult(
-                    HttpStatusCode.BadRequest,
-                    "The PIN operation could not be completed.");
-            }
-            catch (Exception ex)
-            {
-                op.Fail($"Error verifying PIN for user {request.UserPublicId}: {ex.Message}", ex);
-                return new BaseResult(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while verifying your transaction PIN. Please try again later.");
-            }
-        }
+            op.Success($"Transaction PIN verified for user {request.UserPublicId}.");
 
-        private void QueuePinLockoutEmail(string firstName, string email)
-        {
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    "We locked your transaction PIN for 1 hour after 3 incorrect attempts. " +
-                    "Please try again in 1 hour. If you did not make these attempts, " +
-                    "please contact MOVA support.",
-                    "Transaction PIN temporarily locked");
-            }
-            catch (Exception exception)
-            {
-                _logger.LogError(
-                    exception,
-                    "Unable to queue transaction PIN lockout email for {Email}.",
-                    email);
-            }
+            return new BaseResult(
+                HttpStatusCode.OK,
+                "Transaction PIN verified successfully.");
         }
     }
 }

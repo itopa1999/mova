@@ -60,7 +60,7 @@ public sealed class SendForgotPinOtpCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -72,7 +72,7 @@ public sealed class SendForgotPinOtpCommand
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -80,10 +80,9 @@ public sealed class SendForgotPinOtpCommand
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked forgot-PIN OTP for user {request.UserPublicId}. " +
-                    $"Status: {permissions.StatusLabel}, " +
-                    $"Reason: {permissions.RestrictionReason}");
+                    $"Status: {permissions.StatusLabel}, Reason: {permissions.RestrictionReason}");
 
                 var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
                     ? "Your account is currently restricted from performing this operation. Please contact support."
@@ -100,11 +99,13 @@ public sealed class SendForgotPinOtpCommand
 
             if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.NotFound,
                     "User not found.");
             }
+
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             var existingOtps = await _unitOfWork.Query<OtpVerification>()
                 .Where(x => x.UserPublicId == request.UserPublicId
@@ -115,6 +116,7 @@ public sealed class SendForgotPinOtpCommand
             foreach (var existing in existingOtps)
             {
                 existing.IsUsed = true;
+                _unitOfWork.Update(existing);
             }
 
             var otpCode = _otpService.GenerateOtp();
@@ -131,6 +133,11 @@ public sealed class SendForgotPinOtpCommand
 
             await _unitOfWork.AddAsync(otp, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success(
+                $"Forgot-PIN OTP sent. Expires in {OtpExpiryMinutes} minutes. " +
+                $"Superseded: {existingOtps.Count}.");
 
             _notificationQueue.QueueOtpDelivery(
                 user.FirstName,
@@ -138,9 +145,6 @@ public sealed class SendForgotPinOtpCommand
                 user.PhoneNumber,
                 otpCode,
                 otp.Purpose);
-
-            op.Success(
-                $"Forgot-PIN OTP sent. Expires in {OtpExpiryMinutes} minutes.");
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,

@@ -90,6 +90,16 @@ public class ExceptionHandlingMiddleware
 
     private (HttpStatusCode statusCode, string message) GetExceptionDetails(Exception exception)
     {
+        // Explicit system-failure marker — beats every branch below it so
+        // an InfrastructureException that inherits from InvalidOperationException
+        // still maps to 500 and reaches Sentry.
+        if (exception is InfrastructureException)
+        {
+            return (
+                HttpStatusCode.InternalServerError,
+                "An error occurred while completing your request. Please try again later.");
+        }
+
         if (ContainsException<DbUpdateException>(exception))
         {
             return (

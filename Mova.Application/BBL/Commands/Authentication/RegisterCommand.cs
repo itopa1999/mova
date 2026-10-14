@@ -79,7 +79,9 @@ public sealed class RegisterCommand
             _logger = logger;
         }
 
-        public async Task<BaseResult<RegistrationResponseDto>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult<RegistrationResponseDto>> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
                 _logger,
@@ -88,19 +90,17 @@ public sealed class RegisterCommand
                 ("Phone", request.PhoneNumber));
 
             var firstName = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(
-                request.FirstName.Trim().ToLower()
-            );
+                request.FirstName.Trim().ToLower());
 
             var lastName = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(
-                request.LastName.Trim().ToLower()
-            );
+                request.LastName.Trim().ToLower());
 
             var normalizedEmail = request.Email.Trim().ToLowerInvariant();
             var normalizedPhoneNumber = ExtensionHelpers.Normalize(request.PhoneNumber);
 
             if (normalizedPhoneNumber is null)
             {
-                op.Fail("Invalid phone number format.");
+                op.Warning("Invalid phone number format.");
                 return new BaseResult<RegistrationResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Please provide a valid Nigerian phone number.");
@@ -112,7 +112,7 @@ public sealed class RegisterCommand
 
             if (emailExists)
             {
-                op.Fail($"Email already exists: {normalizedEmail}");
+                op.Warning($"Email already exists: {normalizedEmail}");
                 return new BaseResult<RegistrationResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Email is already in use.");
@@ -124,7 +124,7 @@ public sealed class RegisterCommand
 
             if (bvnExists)
             {
-                op.Fail("BVN already registered.");
+                op.Warning("BVN already registered.");
                 return new BaseResult<RegistrationResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This BVN is already registered to another account.");
@@ -136,20 +136,16 @@ public sealed class RegisterCommand
 
             if (phoneExists)
             {
-                op.Fail($"Phone already exists: {normalizedPhoneNumber}");
+                op.Warning($"Phone already exists: {normalizedPhoneNumber}");
                 return new BaseResult<RegistrationResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Phone number is already in use.");
             }
 
-            var userPublicId = string.Empty;
-            var otpCode = string.Empty;
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                var (success, errorMessage, createdPublicId, userId) = await _identityService.CreateUserAsync(
+            var (success, errorMessage, createdPublicId, userId) =
+                await _identityService.CreateUserAsync(
                     firstName,
                     lastName,
                     normalizedEmail,
@@ -157,93 +153,62 @@ public sealed class RegisterCommand
                     request.Bvn,
                     request.Password);
 
-                if (!success)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail($"User creation failed: {errorMessage}");
-                    return new BaseResult<RegistrationResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        errorMessage);
-                }
-
-                var (roleSuccess, roleError) = await _identityService.AddToRoleAsync(userId, Roles.Customer);
-                if (!roleSuccess)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail($"Role assignment failed: {roleError}");
-                    return new BaseResult<RegistrationResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        roleError);
-                }
-
-                otpCode = _otpService.GenerateOtp();
-
-                var otp = new OtpVerification
-                {
-                    UserPublicId = createdPublicId,
-                    OtpCode = otpCode,
-                    Purpose = OtpPurpose.AccountVerification,
-                    ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    IsUsed = false
-                };
-
-                await _unitOfWork.AddAsync(otp, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                userPublicId = createdPublicId;
-
-                op.Success($"User {userPublicId} registered successfully.");
-            }
-            catch (DbUpdateException dbEx)
+            if (!success)
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error during registration: {dbEx.Message}", dbEx);
-
+                op.Warning($"User creation failed: {errorMessage}");
                 return new BaseResult<RegistrationResponseDto>(
-                    HttpStatusCode.Conflict,
-                    "An error occurred. Please try again.");
+                    HttpStatusCode.BadRequest,
+                    errorMessage);
             }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail("Registration failed", ex);
 
+            var (roleSuccess, roleError) = await _identityService.AddToRoleAsync(
+                userId,
+                Roles.Customer);
+
+            if (!roleSuccess)
+            {
+                op.Warning($"Role assignment failed: {roleError}");
                 return new BaseResult<RegistrationResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred during registration. Please try again later.");
+                    HttpStatusCode.BadRequest,
+                    roleError);
             }
 
-            try
+            var otpCode = _otpService.GenerateOtp();
+
+            var otp = new OtpVerification
             {
-                _notificationQueue.QueueOtpDelivery(
-                    firstName,
-                    normalizedEmail,
-                    normalizedPhoneNumber,
-                    otpCode,
-                    OtpPurpose.AccountVerification.ToString());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to queue OTP delivery for {UserPublicId}.",
-                    userPublicId);
-            }
+                UserPublicId = createdPublicId,
+                OtpCode = otpCode,
+                Purpose = OtpPurpose.AccountVerification,
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
+                CreatedAt = DateTimeOffset.UtcNow,
+                IsUsed = false,
+            };
+
+            await _unitOfWork.AddAsync(otp, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success($"User {createdPublicId} registered successfully.");
+
+            _notificationQueue.QueueOtpDelivery(
+                firstName,
+                normalizedEmail,
+                normalizedPhoneNumber,
+                otpCode,
+                OtpPurpose.AccountVerification.ToString());
 
             return new BaseResult<RegistrationResponseDto>(
                 HttpStatusCode.Created,
                 "Account created successfully.",
                 new RegistrationResponseDto
                 {
-                    UserPublicId = userPublicId,
+                    UserPublicId = createdPublicId,
                     Email = normalizedEmail,
                     Phone = normalizedPhoneNumber,
                     FullName = $"{firstName} {lastName}",
                     Data = "Account created. Please verify your email/phone with the OTP sent.",
-                    NextStep = NextSteps.EmailVerification
+                    NextStep = NextSteps.EmailVerification,
                 });
         }
     }

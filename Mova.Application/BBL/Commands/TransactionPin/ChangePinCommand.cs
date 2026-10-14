@@ -56,7 +56,7 @@ public sealed class ChangePinCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -68,7 +68,7 @@ public sealed class ChangePinCommand
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -76,10 +76,9 @@ public sealed class ChangePinCommand
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked PIN change for user {request.UserPublicId}. " +
-                    $"Status: {permissions.StatusLabel}, " +
-                    $"Reason: {permissions.RestrictionReason}");
+                    $"Status: {permissions.StatusLabel}, Reason: {permissions.RestrictionReason}");
 
                 var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
                     ? "Your account is currently restricted from performing this operation. Please contact support."
@@ -92,7 +91,7 @@ public sealed class ChangePinCommand
 
             if (string.IsNullOrWhiteSpace(request.CurrentPin))
             {
-                op.Fail("Current PIN is required.");
+                op.Warning("Current PIN is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Current PIN is required.");
@@ -100,7 +99,7 @@ public sealed class ChangePinCommand
 
             if (request.CurrentPin.Length != 6)
             {
-                op.Fail($"Invalid current PIN length: {request.CurrentPin.Length}");
+                op.Warning($"Invalid current PIN length: {request.CurrentPin.Length}.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Current PIN must be exactly 6 digits.");
@@ -108,7 +107,7 @@ public sealed class ChangePinCommand
 
             if (!request.CurrentPin.All(char.IsDigit))
             {
-                op.Fail("Current PIN contains non-digit characters.");
+                op.Warning("Current PIN contains non-digit characters.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Current PIN must contain only digits.");
@@ -116,7 +115,7 @@ public sealed class ChangePinCommand
 
             if (string.IsNullOrWhiteSpace(request.NewPin))
             {
-                op.Fail("New PIN is required.");
+                op.Warning("New PIN is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "New PIN is required.");
@@ -124,7 +123,7 @@ public sealed class ChangePinCommand
 
             if (request.NewPin.Length != 6)
             {
-                op.Fail($"Invalid new PIN length: {request.NewPin.Length}");
+                op.Warning($"Invalid new PIN length: {request.NewPin.Length}.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "New PIN must be exactly 6 digits.");
@@ -132,7 +131,7 @@ public sealed class ChangePinCommand
 
             if (!request.NewPin.All(char.IsDigit))
             {
-                op.Fail("New PIN contains non-digit characters.");
+                op.Warning("New PIN contains non-digit characters.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "New PIN must contain only digits.");
@@ -140,7 +139,7 @@ public sealed class ChangePinCommand
 
             if (request.NewPin == request.CurrentPin)
             {
-                op.Fail("New PIN cannot be the same as current PIN.");
+                op.Warning("New PIN matches current PIN.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "New PIN cannot be the same as current PIN.");
@@ -150,9 +149,9 @@ public sealed class ChangePinCommand
                 request.UserPublicId,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "User not found.");
@@ -164,7 +163,7 @@ public sealed class ChangePinCommand
 
             if (!hasPin)
             {
-                op.Fail("Transaction PIN has not been set.");
+                op.Warning("Transaction PIN not set.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Transaction PIN has not been set.");
@@ -177,123 +176,44 @@ public sealed class ChangePinCommand
 
             if (!isCurrentPinValid)
             {
-                op.Fail("Invalid current PIN provided.");
+                op.Warning("Invalid current PIN.");
                 return new BaseResult<object>(
                     HttpStatusCode.Unauthorized,
                     "Invalid current PIN.");
             }
 
-            try
-            {
-                await _transactionPinService.ChangePinAsync(
-                    request.UserPublicId,
-                    request.NewPin,
-                    cancellationToken);
+            await _transactionPinService.ChangePinAsync(
+                request.UserPublicId,
+                request.NewPin,
+                cancellationToken);
 
-                op.Success(
-                    $"Transaction PIN changed successfully for user {request.UserPublicId}");
-            }
-            catch (ArgumentException argEx)
-            {
-                op.Fail($"Invalid PIN format: {argEx.Message}", argEx);
-                return new BaseResult<object>(
-                    HttpStatusCode.BadRequest,
-                    "The PIN format is invalid.");
-            }
-            catch (InvalidOperationException invEx)
-            {
-                op.Fail($"PIN operation error: {invEx.Message}", invEx);
-                return new BaseResult<object>(
-                    HttpStatusCode.BadRequest,
-                    "The PIN operation could not be completed.");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Error changing PIN for user {request.UserPublicId}: {ex.Message}",
-                    ex);
+            op.Success($"Transaction PIN changed for user {request.UserPublicId}.");
 
-                return new BaseResult<object>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while changing your transaction PIN. Please try again later.");
-            }
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Security,
+                "Transaction PIN changed",
+                "Your transaction PIN was changed successfully. " +
+                "If this wasn't you, contact support immediately.",
+                "/settings",
+                null,
+                CancellationToken.None);
 
-            try
+            if (!string.IsNullOrWhiteSpace(user.Email))
             {
-                await SendPinChangedNotificationsAsync(
-                    request.UserPublicId,
+                _notificationQueue.QueueNotificationEmail(
+                    user.FirstName,
                     user.Email,
-                    user.FirstName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for PIN change. UserPublicId: {UserPublicId}",
-                    request.UserPublicId);
+                    "Your transaction PIN was changed successfully. " +
+                    "If you didn't make this change, contact support immediately " +
+                    "to secure your account.",
+                    "Your MOVA transaction PIN was changed");
             }
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,
                 "Transaction PIN changed successfully.",
-                new
-                {
-                    notification = true,
-                });
-        }
-
-        private async Task SendPinChangedNotificationsAsync(
-            string userPublicId,
-            string email,
-            string firstName)
-        {
-            var title = "Transaction PIN changed";
-
-            var inAppMessage =
-                "Your transaction PIN was changed successfully. " +
-                "If this wasn't you, contact support immediately.";
-
-            var emailSubject = "Your MOVA transaction PIN was changed";
-
-            var emailMessage =
-                "Your transaction PIN was changed successfully. " +
-                "If you didn't make this change, contact support immediately " +
-                "to secure your account.";
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Security,
-                    title,
-                    inAppMessage,
-                    "/settings",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for PIN change. UserPublicId: {UserPublicId}",
-                    userPublicId);
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for PIN change. UserPublicId: {UserPublicId}",
-                    userPublicId);
-            }
+                new { notification = true });
         }
     }
 }

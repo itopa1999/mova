@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -68,7 +68,7 @@ public sealed class VerifyForgotPinOtpCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -76,7 +76,7 @@ public sealed class VerifyForgotPinOtpCommand
 
             if (string.IsNullOrWhiteSpace(request.Password))
             {
-                op.Fail("Password is required.");
+                op.Warning("Password is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Please enter your account password.");
@@ -86,7 +86,7 @@ public sealed class VerifyForgotPinOtpCommand
                 request.Otp.Length != 6 ||
                 !request.Otp.All(char.IsDigit))
             {
-                op.Fail("Invalid OTP format.");
+                op.Warning("Invalid OTP format.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Please enter a valid 6-digit code.");
@@ -98,7 +98,7 @@ public sealed class VerifyForgotPinOtpCommand
 
             if (!passwordValid)
             {
-                op.Fail("Invalid account password.");
+                op.Warning("Invalid account password.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Incorrect password. Please try again.");
@@ -108,12 +108,12 @@ public sealed class VerifyForgotPinOtpCommand
                 .Where(x => x.UserPublicId == request.UserPublicId
                             && x.Purpose == OtpPurpose.TransactionPin
                             && !x.IsUsed)
-                .OrderByDescending(x => x.CreatedAt) // TODO change to x.CreatedAt
+                .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (otpRecord is null)
             {
-                op.Fail("No pending OTP found for user.");
+                op.Warning("No pending OTP found.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "No verification code found. Please request a new one.");
@@ -121,7 +121,7 @@ public sealed class VerifyForgotPinOtpCommand
 
             if (!string.Equals(otpRecord.OtpCode, request.Otp))
             {
-                op.Fail($"Invalid OTP code for user {request.UserPublicId}");
+                op.Warning($"Invalid OTP code for user {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "Invalid OTP code.");
@@ -129,72 +129,47 @@ public sealed class VerifyForgotPinOtpCommand
 
             if (otpRecord.ExpiresAt < DateTimeOffset.UtcNow)
             {
-                op.Fail($"OTP expired for user {request.UserPublicId}");
+                op.Warning($"OTP expired for user {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "OTP has expired. Please request a new one.");
             }
 
-            try
+            var isReset = await _transactionPinService.ResetPinAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (!isReset)
             {
-                var isReset = await _transactionPinService.ResetPinAsync(
-                    request.UserPublicId,
-                    cancellationToken);
-
-                if (!isReset)
-                {
-                    op.Fail("Failed to reset the existing transaction PIN.");
-                    return new BaseResult<object>(
-                        HttpStatusCode.BadRequest,
-                        "Unable to reset PIN. Please try again.");
-                }
-
-                otpRecord.IsUsed = true;
-                otpRecord.UsedAt = DateTimeOffset.UtcNow;
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                op.Success("Forgot-PIN verified with password + OTP.");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Error resetting PIN for user {request.UserPublicId}",
-                    ex);
-
+                op.Warning("ResetPinAsync returned false.");
                 return new BaseResult<object>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while resetting your PIN. Please try again later.");
+                    HttpStatusCode.BadRequest,
+                    "Unable to reset PIN. Please try again.");
             }
 
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    request.UserPublicId,
-                    NotificationType.Security,
-                    "PIN reset verified",
-                    "Your identity was verified and your transaction PIN has been cleared. " +
-                    "Set a new PIN to continue using secure actions. " +
-                    "If this wasn't you, contact support immediately.",
-                    "/pin-gate",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for forgot PIN verification. UserPublicId: {UserPublicId}",
-                    request.UserPublicId);
-            }
+            otpRecord.IsUsed = true;
+            otpRecord.UsedAt = DateTimeOffset.UtcNow;
+            _unitOfWork.Update(otpRecord);
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            op.Success("Forgot-PIN verified with password + OTP.");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Security,
+                "PIN reset verified",
+                "Your identity was verified and your transaction PIN has been cleared. " +
+                "Set a new PIN to continue using secure actions. " +
+                "If this wasn't you, contact support immediately.",
+                "/pin-gate",
+                null,
+                CancellationToken.None);
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,
                 "Verified. You can now set a new PIN.",
-                new
-                {
-                    notification = true,
-                });
+                new { notification = true });
         }
     }
 }

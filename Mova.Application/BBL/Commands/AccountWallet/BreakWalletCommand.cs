@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -37,20 +37,17 @@ public sealed class BreakWalletCommand
         private const decimal BreakFeePercentage = 0.02m;
 
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IMediator _mediator;
         private readonly ILogger<Handler> _logger;
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IMediator mediator,
             ILogger<Handler> logger,
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge)
         {
             _unitOfWork = unitOfWork;
-            _mediator = mediator;
             _logger = logger;
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
@@ -68,13 +65,12 @@ public sealed class BreakWalletCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
             }
 
-            // ─── PIN challenge validation ───
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
                 PinChallengeType.BreakWallet,
@@ -82,210 +78,174 @@ public sealed class BreakWalletCommand
 
             if (!challengeValid)
             {
-                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
             }
 
-            var walletName = string.Empty;
-            var amountReturned = 0m;
-            var breakFee = 0m;
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            var wallet = await _unitOfWork.Query<Wallet>()
+                .FirstOrDefaultAsync(
+                    x => x.Id == request.WalletId &&
+                         x.UserPublicId == request.UserPublicId,
+                    cancellationToken);
 
-            try
+            if (wallet is null)
             {
-                var wallet = await _unitOfWork.Query<Wallet>()
-                    .FirstOrDefaultAsync(
-                        x => x.Id == request.WalletId &&
-                             x.UserPublicId == request.UserPublicId,
-                        cancellationToken);
+                op.Warning("Wallet not found.");
+                return new BaseResult<object>(
+                    HttpStatusCode.NotFound,
+                    "Wallet not found.");
+            }
 
-                if (wallet is null)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            if (wallet.Status != WalletStatus.Active)
+            {
+                op.Warning($"Wallet is not active. Status: {wallet.Status}");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    "Only an active wallet can be broken.");
+            }
 
-                    op.Fail("Wallet not found.");
+            var totalWalletAmount = wallet.LockedAmount + wallet.AvailableAmount;
 
-                    return new BaseResult<object>(
-                        HttpStatusCode.NotFound,
-                        "Wallet not found.");
-                }
+            if (totalWalletAmount.MinorUnits <= 0)
+            {
+                op.Warning("Wallet has no funds to return.");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    "This wallet has no funds to return.");
+            }
 
-                if (wallet.Status != WalletStatus.Active)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            var breakFeeMoney = Money.FromNaira(
+                Math.Round(
+                    wallet.LockedAmount.ToDecimal() * BreakFeePercentage,
+                    2,
+                    MidpointRounding.ToEven));
 
-                    op.Fail($"Wallet is not active. Current status: {wallet.Status}");
+            var amountToReturn = totalWalletAmount - breakFeeMoney;
 
-                    return new BaseResult<object>(
-                        HttpStatusCode.BadRequest,
-                        "Only an active wallet can be broken.");
-                }
+            if (amountToReturn.MinorUnits <= 0)
+            {
+                op.Warning(
+                    $"Amount after break fee is invalid. " +
+                    $"Total: {totalWalletAmount.ToDecimal():N2}, " +
+                    $"Fee: {breakFeeMoney.ToDecimal():N2}");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    "The amount available after the break fee is invalid.");
+            }
 
-                var totalWalletAmount =
-                    wallet.LockedAmount +
-                    wallet.AvailableAmount;
-                if (totalWalletAmount.MinorUnits <= 0)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            var reference = $"wallet-break:{wallet.Id}";
 
-                    op.Fail("This wallet has no funds to return.");
+            var alreadyProcessed = await _unitOfWork.Query<Transaction>()
+                .AnyAsync(x => x.Reference == reference, cancellationToken);
 
-                    return new BaseResult<object>(
-                        HttpStatusCode.BadRequest,
-                        "This wallet has no funds to return.");
-                }
+            if (alreadyProcessed)
+            {
+                op.Warning($"Wallet break already processed. Reference: {reference}");
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    "This wallet break has already been processed.");
+            }
 
-                var breakFeeMoney = Money.FromNaira(
-                    Math.Round(
-                        wallet.LockedAmount.ToDecimal() *
-                        BreakFeePercentage,
-                        2,
-                        MidpointRounding.ToEven));
+            var scheduledReleases = await _unitOfWork.Query<ScheduledRelease>()
+                .Where(x =>
+                    x.WalletId == wallet.Id &&
+                    (x.Status == ReleaseStatus.Scheduled ||
+                     x.Status == ReleaseStatus.Processing))
+                .ToListAsync(cancellationToken);
 
-                var amountToReturn = totalWalletAmount - breakFeeMoney;
+            foreach (var scheduledRelease in scheduledReleases)
+            {
+                scheduledRelease.Status = ReleaseStatus.Cancelled;
+            }
 
-                if (amountToReturn.MinorUnits <= 0)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            var breakTransaction = new Transaction
+            {
+                UserPublicId = request.UserPublicId,
+                WalletId = wallet.Id,
+                Title = "Wallet Broken",
+                Amount = amountToReturn,
+                Type = TransactionType.Refund,
+                Status = TransactionStatus.Processing,
+                Reference = reference,
+            };
 
-                    op.Fail(
-                        $"Amount after break fee is invalid. " +
-                        $"Total: {totalWalletAmount.ToDecimal():N2}, " +
-                        $"Fee: {breakFeeMoney.ToDecimal():N2}");
+            await _unitOfWork.AddAsync(breakTransaction, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                    return new BaseResult<object>(
-                        HttpStatusCode.BadRequest,
-                        "The amount available after the break fee is invalid.");
-                }
-
-                var reference = $"wallet-break:{wallet.Id}";
-
-                var alreadyProcessed = await _unitOfWork
-                    .Query<Transaction>()
-                    .AnyAsync(
-                        x => x.Reference == reference,
-                        cancellationToken);
-
-                if (alreadyProcessed)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-
-                    op.Fail($"Wallet break already processed. Reference: {reference}");
-
-                    return new BaseResult<object>(
-                        HttpStatusCode.Conflict,
-                        "This wallet break has already been processed.");
-                }
-
-                var scheduledReleases = await _unitOfWork
-                    .Query<ScheduledRelease>()
-                    .Where(x =>
-                        x.WalletId == wallet.Id &&
-                        (x.Status == ReleaseStatus.Scheduled ||
-                         x.Status == ReleaseStatus.Processing))
-                    .ToListAsync(cancellationToken);
-
-                foreach (var scheduledRelease in scheduledReleases)
-                {
-                    scheduledRelease.Status = ReleaseStatus.Cancelled;
-                }
-
-                var breakTransaction = new Transaction
-                {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = wallet.Id,
-                    Title = "Wallet Broken",
-                    Amount = amountToReturn,
-                    Type = TransactionType.Refund,
-                    Status = TransactionStatus.Processing,
-                    Reference = reference,
-                };
-
-                await _unitOfWork.AddAsync(breakTransaction, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var returnLedgerEntry = new LedgerEntry
+            await _unitOfWork.AddAsync(
+                new LedgerEntry
                 {
                     WalletId = wallet.Id,
                     TransactionId = breakTransaction.Id,
                     Amount = amountToReturn,
                     IsCredit = false,
-                };
+                },
+                cancellationToken);
 
-                await _unitOfWork.AddAsync(returnLedgerEntry, cancellationToken);
+            var feeTransaction = new Transaction
+            {
+                UserPublicId = request.UserPublicId,
+                WalletId = wallet.Id,
+                Title = "Wallet Break Fee",
+                Amount = breakFeeMoney,
+                Type = TransactionType.Fee,
+                Status = TransactionStatus.Completed,
+                Reference = $"wallet-break-fee:{wallet.Id}",
+                CompletedAt = DateTimeOffset.UtcNow,
+            };
 
-                var feeTransaction = new Transaction
-                {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = wallet.Id,
-                    Title = "Wallet Break Fee",
-                    Amount = breakFeeMoney,
-                    Type = TransactionType.Fee,
-                    Status = TransactionStatus.Completed,
-                    Reference = $"wallet-break-fee:{wallet.Id}",
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
+            await _unitOfWork.AddAsync(feeTransaction, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                await _unitOfWork.AddAsync(feeTransaction, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var feeLedgerEntry = new LedgerEntry
+            await _unitOfWork.AddAsync(
+                new LedgerEntry
                 {
                     WalletId = wallet.Id,
                     TransactionId = feeTransaction.Id,
                     Amount = breakFeeMoney,
                     IsCredit = false,
-                };
+                },
+                cancellationToken);
 
-                await _unitOfWork.AddAsync(feeLedgerEntry, cancellationToken);
+            wallet.LockedAmount = Money.FromNaira(0);
+            wallet.AvailableAmount = Money.FromNaira(0);
+            wallet.Status = WalletStatus.Broken;
 
-                wallet.LockedAmount = Money.FromNaira(0);
-                wallet.AvailableAmount = Money.FromNaira(0);
-                wallet.Status = WalletStatus.Broken;
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            var amountReturned = amountToReturn.ToDecimal();
+            var breakFee = breakFeeMoney.ToDecimal();
 
-                walletName = wallet.Name;
-                amountReturned = amountToReturn.ToDecimal();
-                breakFee = breakFeeMoney.ToDecimal();
+            op.Success(
+                $"Wallet broken successfully. " +
+                $"Amount returned: ₦{amountReturned:N2}, " +
+                $"Break fee: ₦{breakFee:N2}");
 
-                op.Success(
-                    $"Wallet broken successfully. " +
-                    $"Amount returned: ₦{amountReturned:N2}, " +
-                    $"Break fee: ₦{breakFee:N2}");
-            }
-            catch (Exception ex)
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Wallet,
+                $"{wallet.Name} wallet broken",
+                $"₦{amountReturned:N0} is being returned to your linked bank " +
+                $"account within a few minutes.",
+                $"/wallet/{wallet.Id}",
+                null,
+                CancellationToken.None);
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-
-                op.Fail(
-                    $"Error breaking wallet. WalletId: {request.WalletId}",
-                    ex);
-
-                throw;
-            }
-
-            try
-            {
-                await SendBreakNotificationsAsync(
-                    request.UserPublicId,
-                    request.Email,
+                _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
-                    request.WalletId,
-                    walletName,
-                    amountReturned,
-                    breakFee);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for broken wallet {WalletId}.",
-                    request.WalletId);
+                    request.Email,
+                    $"₦{amountReturned:N0} is on its way to your linked bank " +
+                    $"account and should arrive within a few minutes. " +
+                    $"A break fee of ₦{breakFee:N0} was applied, and the " +
+                    $"remaining ₦{amountReturned:N0} is being returned to you.",
+                    $"Your {wallet.Name} wallet has been broken");
             }
 
             return new BaseResult<object>(
@@ -293,78 +253,7 @@ public sealed class BreakWalletCommand
                 $"Wallet broken successfully. " +
                 $"₦{amountReturned:N2} is being returned " +
                 $"to your linked bank account.",
-                new
-                {
-                    notification = true,
-                });
-        }
-
-        private async Task SendBreakNotificationsAsync(
-            string userPublicId,
-            string email,
-            string firstName,
-            long walletId,
-            string walletName,
-            decimal amountReturned,
-            decimal breakFee)
-        {
-            var title = $"{walletName} wallet broken";
-
-            var inAppMessage =
-                $"₦{amountReturned:N0} is being returned to " +
-                $"your linked bank account within a few minutes.";
-
-            var emailSubject =
-                $"Your {walletName} wallet has been broken";
-
-            var emailMessage =
-                $"₦{amountReturned:N0} is on its way to your linked bank " +
-                $"account and should arrive within a few minutes. " +
-                $"A break fee of ₦{breakFee:N0} was applied, and the " +
-                $"remaining ₦{amountReturned:N0} is being returned to you.";
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Wallet,
-                    title,
-                    inAppMessage,
-                    $"/wallet/{walletId}",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for broken wallet {WalletId}.",
-                    walletId);
-            }
-
-            if (string.IsNullOrWhiteSpace(email))
-            {
-                _logger.LogWarning(
-                    "Skipped email for broken wallet {WalletId} — no email on record.",
-                    walletId);
-                return;
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for broken wallet {WalletId}.",
-                    walletId);
-            }
+                new { notification = true });
         }
     }
 }

@@ -18,11 +18,9 @@ namespace Mova.Application.BBL.Commands.WebHook;
 
 public sealed class FlutterwaveWebHookCommand
 {
-    public sealed class Command
-        : IRequest<BaseResult<FlutterwaveWebhookResponseDto>>
+    public sealed class Command : IRequest<BaseResult<FlutterwaveWebhookResponseDto>>
     {
         public byte[] RawBody { get; set; } = Array.Empty<byte>();
-
         public string? Signature { get; set; }
     }
 
@@ -132,9 +130,7 @@ public sealed class FlutterwaveWebHookCommand
     }
 
     public sealed class Handler
-        : IRequestHandler<
-            Command,
-            BaseResult<FlutterwaveWebhookResponseDto>>
+        : IRequestHandler<Command, BaseResult<FlutterwaveWebhookResponseDto>>
     {
         private static readonly JsonSerializerOptions JsonOptions =
             new(JsonSerializerDefaults.Web);
@@ -159,413 +155,215 @@ public sealed class FlutterwaveWebHookCommand
             _logger = logger;
         }
 
-        public async Task<
-            BaseResult<FlutterwaveWebhookResponseDto>> Handle(
+        public async Task<BaseResult<FlutterwaveWebhookResponseDto>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
                 _logger,
                 "FlutterwaveWebHook",
-                (
-                    "Signature",
-                    !string.IsNullOrWhiteSpace(request.Signature)
-                        ? "Present"
-                        : "Missing"
-                ));
+                ("Signature", string.IsNullOrWhiteSpace(request.Signature) ? "Missing" : "Present"));
 
             if (string.IsNullOrWhiteSpace(request.Signature))
             {
-                op.Fail("Webhook signature is missing.");
-
-                return Result(
-                    HttpStatusCode.Unauthorized,
-                    "Invalid webhook signature.");
+                op.Warning("Webhook signature is missing.");
+                return Fail(HttpStatusCode.Unauthorized, "Invalid webhook signature.");
             }
 
             if (request.RawBody.Length == 0)
             {
-                op.Fail("Webhook body is empty.");
-
-                return Result(
-                    HttpStatusCode.BadRequest,
-                    "Webhook body is empty.");
+                op.Warning("Webhook body is empty.");
+                return Fail(HttpStatusCode.BadRequest, "Webhook body is empty.");
             }
 
-            var isValid =
-                await _flutterwaveService
-                    .VerifyWebhookSignatureAsync(
-                        request.RawBody,
-                        request.Signature);
+            var isValid = await _flutterwaveService.VerifyWebhookSignatureAsync(
+                request.RawBody,
+                request.Signature);
 
             if (!isValid)
             {
-                op.Fail("Invalid webhook signature.");
-
-                return Result(
-                    HttpStatusCode.Unauthorized,
-                    "Invalid webhook signature.");
+                op.Warning("Invalid webhook signature.");
+                return Fail(HttpStatusCode.Unauthorized, "Invalid webhook signature.");
             }
 
-            FlutterwaveWebhookResponseDto? webhook;
-
-            try
+            if (!TryDeserialize(request.RawBody, out FlutterwaveWebhookResponseDto? webhook))
             {
-                webhook =
-                    JsonSerializer.Deserialize<
-                        FlutterwaveWebhookResponseDto>(
-                            request.RawBody,
-                            JsonOptions);
-            }
-            catch (JsonException jsonEx)
-            {
-                op.Fail(
-                    $"Invalid JSON payload: {jsonEx.Message}",
-                    jsonEx);
-
-                return Result(
-                    HttpStatusCode.BadRequest,
-                    "Invalid webhook payload.");
-            }
-
-            if (webhook is null)
-            {
-                op.Fail("Webhook payload is null.");
-
-                return Result(
-                    HttpStatusCode.BadRequest,
-                    "Invalid webhook payload.");
+                op.Warning("Invalid JSON payload.");
+                return Fail(HttpStatusCode.BadRequest, "Invalid webhook payload.");
             }
 
             op.Success(
-                $"Webhook received. " +
-                $"FlutterwaveId: {webhook.Id}, " +
-                $"TxRef: {webhook.TxRef}, " +
-                $"Status: {webhook.Status}, " +
-                $"Amount: ₦{webhook.Amount:N2}, " +
-                $"Currency: {webhook.Currency}, " +
-                $"Event: {webhook.EventType}");
+                $"Webhook received. FlutterwaveId: {webhook.Id}, TxRef: {webhook.TxRef}, " +
+                $"Status: {webhook.Status}, Amount: ₦{webhook.Amount:N2}, " +
+                $"Currency: {webhook.Currency}, Event: {webhook.EventType}.");
 
-            if (!string.Equals(
-                    webhook.EventType,
-                    "BANK_TRANSFER_TRANSACTION",
-                    StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(webhook.EventType, "BANK_TRANSFER_TRANSACTION", StringComparison.OrdinalIgnoreCase))
             {
-                op.Success(
-                    $"Webhook event ignored: {webhook.EventType}");
-
-                return Result(
-                    HttpStatusCode.OK,
-                    "Webhook event ignored.",
-                    webhook);
+                op.Success($"Webhook event ignored: {webhook.EventType}.");
+                return Ok("Webhook event ignored.", webhook);
             }
 
-            if (!string.Equals(
-                    webhook.Status,
-                    "successful",
-                    StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(webhook.Status, "successful", StringComparison.OrdinalIgnoreCase))
             {
-                op.Success(
-                    $"Transaction is not successful. " +
-                    $"Status: {webhook.Status}");
-
-                return Result(
-                    HttpStatusCode.OK,
-                    "Transaction is not successful.",
-                    webhook);
+                op.Success($"Transaction is not successful. Status: {webhook.Status}.");
+                return Ok("Transaction is not successful.", webhook);
             }
 
             if (string.IsNullOrWhiteSpace(webhook.TxRef))
             {
-                op.Fail("Transaction reference is missing.");
-
-                return Result(
-                    HttpStatusCode.BadRequest,
-                    "Transaction reference is required.");
+                op.Warning("Transaction reference is missing.");
+                return Fail(HttpStatusCode.BadRequest, "Transaction reference is required.");
             }
 
             if (webhook.Amount <= 0)
             {
-                op.Fail(
-                    $"Invalid transaction amount: {webhook.Amount}");
-
-                return Result(
-                    HttpStatusCode.BadRequest,
-                    "Invalid transaction amount.");
+                op.Warning($"Invalid transaction amount: {webhook.Amount}.");
+                return Fail(HttpStatusCode.BadRequest, "Invalid transaction amount.");
             }
 
-            if (!string.Equals(
-                    webhook.Currency,
-                    "NGN",
-                    StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(webhook.Currency, "NGN", StringComparison.OrdinalIgnoreCase))
             {
-                op.Fail(
-                    $"Unsupported currency: {webhook.Currency}");
-
-                return Result(
-                    HttpStatusCode.BadRequest,
-                    "Unsupported transaction currency.");
+                op.Warning($"Unsupported currency: {webhook.Currency}.");
+                return Fail(HttpStatusCode.BadRequest, "Unsupported transaction currency.");
             }
 
-            var transaction =
-                await _unitOfWork.Query<Transaction>()
-                    .FirstOrDefaultAsync(
-                        x => x.Reference == webhook.TxRef,
-                        cancellationToken);
+            var transaction = await _unitOfWork.Query<Transaction>()
+                .FirstOrDefaultAsync(x => x.Reference == webhook.TxRef, cancellationToken);
 
             if (transaction is null)
             {
-                op.Fail(
-                    $"Transaction not found. " +
-                    $"Reference: {webhook.TxRef}");
-
-                return Result(
-                    HttpStatusCode.NotFound,
-                    "Transaction not found.");
+                op.Warning($"Transaction not found: {webhook.TxRef}.");
+                return Fail(HttpStatusCode.NotFound, "Transaction not found.");
             }
 
             if (transaction.Status == TransactionStatus.Completed)
             {
-                op.Success(
-                    $"Duplicate webhook ignored. " +
-                    $"Reference: {webhook.TxRef}");
-
-                return Result(
-                    HttpStatusCode.OK,
-                    "Transaction already processed.",
-                    webhook);
+                op.Success($"Duplicate webhook ignored. Reference: {webhook.TxRef}.");
+                return Ok("Transaction already processed.", webhook);
             }
 
-            var receivedAmountMinorUnits =
-                Convert.ToInt64(
-                    Math.Round(
-                        webhook.Amount * 100m,
-                        MidpointRounding.AwayFromZero));
+            var receivedAmountMinorUnits = Convert.ToInt64(
+                Math.Round(webhook.Amount * 100m, MidpointRounding.AwayFromZero));
 
             if (receivedAmountMinorUnits < transaction.Amount.MinorUnits)
             {
-                op.Fail(
-                    $"Webhook amount is less than expected. Expected at least: " +
-                    $"{transaction.Amount.MinorUnits}, Received: {receivedAmountMinorUnits}, " +
-                    $"Reference: {webhook.TxRef}");
-
-                return Result(
-                    HttpStatusCode.BadRequest,
-                    "Transaction amount mismatch.");
+                op.Warning(
+                    $"Amount mismatch. Expected at least: {transaction.Amount.MinorUnits}, " +
+                    $"Received: {receivedAmountMinorUnits}, Reference: {webhook.TxRef}.");
+                return Fail(HttpStatusCode.BadRequest, "Transaction amount mismatch.");
             }
 
-            string creditedUserPublicId = string.Empty;
+            var user = await _identityService.GetByIdentifierAsync(
+                transaction.UserPublicId,
+                cancellationToken);
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-            try
+            if (user is null)
             {
-                var freshTransaction =
-                    await _unitOfWork.Query<Transaction>()
-                        .FirstOrDefaultAsync(
-                            x => x.Reference == webhook.TxRef,
-                            cancellationToken);
+                op.Warning($"User not found: {transaction.UserPublicId}.");
+                return Fail(HttpStatusCode.NotFound, "User not found.");
+            }
 
-                if (freshTransaction is null)
-                {
-                    await _unitOfWork
-                        .RollbackTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicSerializableAsync(cancellationToken);
 
-                    op.Fail(
-                        $"Transaction not found inside " +
-                        $"transaction scope. " +
-                        $"Reference: {webhook.TxRef}");
+            var freshTransaction = await _unitOfWork.Query<Transaction>()
+                .FirstOrDefaultAsync(x => x.Reference == webhook.TxRef, cancellationToken);
 
-                    return Result(
-                        HttpStatusCode.NotFound,
-                        "Transaction not found.");
-                }
+            if (freshTransaction is null)
+            {
+                op.Warning($"Transaction disappeared inside scope: {webhook.TxRef}.");
+                return Fail(HttpStatusCode.NotFound, "Transaction not found.");
+            }
 
-                if (freshTransaction.Status == TransactionStatus.Completed)
-                {
-                    await _unitOfWork
-                        .RollbackTransactionAsync(cancellationToken);
+            if (freshTransaction.Status == TransactionStatus.Completed)
+            {
+                op.Success($"Duplicate webhook detected inside scope. Reference: {webhook.TxRef}.");
+                return Ok("Transaction already processed.", webhook);
+            }
 
-                    op.Success(
-                        $"Duplicate webhook detected inside " +
-                        $"transaction. Reference: {webhook.TxRef}");
+            var updated = await _identityService.CreditBalanceAsync(
+                freshTransaction.UserPublicId,
+                freshTransaction.Amount.ToDecimal(),
+                cancellationToken);
 
-                    return Result(
-                        HttpStatusCode.OK,
-                        "Transaction already processed.",
-                        webhook);
-                }
+            if (!updated)
+            {
+                op.Warning($"CreditBalanceAsync returned false for user {freshTransaction.UserPublicId}.");
+                return Fail(HttpStatusCode.BadRequest, "Failed to update user balance.");
+            }
 
-                var updated =
-                    await _identityService.CreditBalanceAsync(
-                        freshTransaction.UserPublicId,
-                        transaction.Amount.ToDecimal(),
-                        cancellationToken);
+            freshTransaction.Status = TransactionStatus.Completed;
+            freshTransaction.CompletedAt = DateTimeOffset.UtcNow;
 
-                if (!updated)
-                {
-                    await _unitOfWork
-                        .RollbackTransactionAsync(cancellationToken);
-
-                    op.Fail(
-                        $"Failed to update balance. " +
-                        $"User: {freshTransaction.UserPublicId}");
-
-                    return Result(
-                        HttpStatusCode.BadRequest,
-                        "Failed to update user balance.");
-                }
-
-                freshTransaction.Status = TransactionStatus.Completed;
-
-                freshTransaction.CompletedAt = DateTimeOffset.UtcNow;
-
-                var ledgerEntry = new LedgerEntry
+            await _unitOfWork.AddAsync(
+                new LedgerEntry
                 {
                     WalletId = null,
                     TransactionId = freshTransaction.Id,
                     Amount = Money.FromNaira(webhook.Amount),
                     IsCredit = true,
-                };
+                },
+                cancellationToken);
 
-                await _unitOfWork.AddAsync(
-                    ledgerEntry,
-                    cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            op.Success(
+                $"Flutterwave webhook processed. Reference: {webhook.TxRef}, " +
+                $"Amount: ₦{webhook.Amount:N2}, User: {freshTransaction.UserPublicId}.");
 
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            SendDepositNotifications(user, webhook.Amount);
 
-                creditedUserPublicId = freshTransaction.UserPublicId;
-
-                op.Success(
-                    $"Flutterwave webhook processed successfully. " +
-                    $"Reference: {webhook.TxRef}, " +
-                    $"Amount: ₦{webhook.Amount:N2}, " +
-                    $"User: {creditedUserPublicId}");
-            }
-            catch (DbUpdateException dbEx)
-            {
-                await _unitOfWork
-                    .RollbackTransactionAsync(cancellationToken);
-
-                op.Fail(
-                    $"Database error processing Flutterwave " +
-                    $"webhook: {dbEx.Message}",
-                    dbEx);
-
-                return Result(
-                    HttpStatusCode.Conflict,
-                    "A database conflict occurred while processing the webhook.");
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork
-                    .RollbackTransactionAsync(cancellationToken);
-
-                op.Fail(
-                    $"Error processing Flutterwave webhook: {ex.Message}",
-                    ex);
-
-                return Result(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while processing the webhook.");
-            }
-
-            try
-            {
-                await SendDepositNotificationsAsync(
-                    creditedUserPublicId,
-                    webhook.Amount,
-                    webhook.TxRef);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for Flutterwave webhook. Reference: {Reference}",
-                    webhook.TxRef);
-            }
-
-            return Result(
-                HttpStatusCode.OK,
-                "Webhook processed successfully.",
-                webhook);
+            return Ok("Webhook processed successfully.", webhook);
         }
 
-        private async Task SendDepositNotificationsAsync(
-            string userPublicId,
-            decimal amount,
-            string reference)
+        private void SendDepositNotifications(UserIdentityDto user, decimal amount)
         {
-            var title = "Deposit successful";
+            var inAppMessage = $"₦{amount:N0} has been added to your available balance.";
 
-            var inAppMessage =
-                $"₦{amount:N0} has been added to your available balance.";
+            _notificationQueue.InAppNotificationAsync(
+                user.PublicId,
+                NotificationType.Deposit,
+                "Deposit successful",
+                inAppMessage,
+                "/add-funds?tab=history",
+                null,
+                CancellationToken.None);
 
-            var emailSubject = "Your MOVA deposit is complete";
-
-            var emailMessage =
-                $"₦{amount:N0} has been added to your MOVA available balance. " +
-                $"You can now allocate it to wallets or use it as you wish.";
-
-            try
+            if (!string.IsNullOrWhiteSpace(user.Email))
             {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Deposit,
-                    title,
-                    inAppMessage,
-                    "/add-funds?tab=history",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for Flutterwave deposit. Reference: {Reference}",
-                    reference);
-            }
-
-            try
-            {
-                var user = await _identityService.GetByIdentifierAsync(
-                    userPublicId,
-                    CancellationToken.None);
-
-                if (user is null || string.IsNullOrWhiteSpace(user.Email))
-                {
-                    _logger.LogWarning(
-                        "Skipped deposit email for reference {Reference} — no user email on record.",
-                        reference);
-                    return;
-                }
-
                 _notificationQueue.QueueNotificationEmail(
                     user.FirstName,
                     user.Email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for Flutterwave deposit. Reference: {Reference}",
-                    reference);
+                    $"₦{amount:N0} has been added to your MOVA available balance. " +
+                    "You can now allocate it to wallets or use it as you wish.",
+                    "Your MOVA deposit is complete");
             }
         }
 
-        private static BaseResult<FlutterwaveWebhookResponseDto> Result(
-            HttpStatusCode statusCode,
+        private static bool TryDeserialize(
+            byte[] body,
+            out FlutterwaveWebhookResponseDto? result)
+        {
+            try
+            {
+                result = JsonSerializer.Deserialize<FlutterwaveWebhookResponseDto>(body, JsonOptions);
+                return result is not null;
+            }
+            catch (JsonException)
+            {
+                result = null;
+                return false;
+            }
+        }
+
+        private static BaseResult<FlutterwaveWebhookResponseDto> Ok(
             string message,
             FlutterwaveWebhookResponseDto? data = null)
-        {
-            return new BaseResult<FlutterwaveWebhookResponseDto>(
-                statusCode,
-                message,
-                data);
-        }
+            => new(HttpStatusCode.OK, message, data);
+
+        private static BaseResult<FlutterwaveWebhookResponseDto> Fail(
+            HttpStatusCode status,
+            string message)
+            => new(status, message, null);
     }
 }

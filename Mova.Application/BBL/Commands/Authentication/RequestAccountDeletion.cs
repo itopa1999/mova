@@ -66,7 +66,7 @@ public sealed class RequestAccountDeletion
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
@@ -79,7 +79,7 @@ public sealed class RequestAccountDeletion
 
             if (!challengeValid)
             {
-                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
@@ -91,7 +91,7 @@ public sealed class RequestAccountDeletion
 
             if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult(
                     HttpStatusCode.NotFound,
                     "User not found.");
@@ -99,10 +99,11 @@ public sealed class RequestAccountDeletion
 
             if (user.Balance.ToDecimal() > MainBalanceResolutionThreshold)
             {
-                op.Fail(
+                op.Warning(
                     $"Main balance above threshold. " +
                     $"Balance: {user.Balance.ToDecimal():N2}, " +
                     $"Threshold: {MainBalanceResolutionThreshold:N2}");
+
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     $"Your main account balance is above ₦{MainBalanceResolutionThreshold:N0}");
@@ -111,16 +112,17 @@ public sealed class RequestAccountDeletion
             var eligibility = await _mediator.Send(
                 new GetRequestForAccountDeletion.Query
                 {
-                    UserPublicId = request.UserPublicId
+                    UserPublicId = request.UserPublicId,
                 },
                 cancellationToken);
 
             if (!eligibility.IsSuccess || eligibility.Data is null)
             {
-                op.Fail(
+                op.Warning(
                     $"Eligibility query failed. " +
                     $"StatusCode: {eligibility.StatusCode}, " +
                     $"Message: {eligibility.Message}");
+
                 return new BaseResult(
                     eligibility.StatusCode,
                     eligibility.Message);
@@ -128,7 +130,7 @@ public sealed class RequestAccountDeletion
 
             if (!eligibility.Data.CanRequestAccountDeletion)
             {
-                op.Fail("Account is not eligible for deletion.");
+                op.Warning("Account is not eligible for deletion.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "Your account is not eligible for deletion yet. " +
@@ -139,110 +141,52 @@ public sealed class RequestAccountDeletion
                 ? "User requested account deletion."
                 : $"User requested account deletion. Reason: {request.Reason}";
 
-            try
-            {
-                var closed = await _identityService.CloseAccountAsync(
-                    request.UserPublicId,
-                    AccountRestrictionReason.UserRequestedDeactivation,
-                    details,
-                    performedBy: "self-service",
-                    cancellationToken);
-
-                if (!closed)
-                {
-                    op.Fail($"CloseAccountAsync returned false for user {request.UserPublicId}.");
-                    return new BaseResult(
-                        HttpStatusCode.InternalServerError,
-                        "Failed to submit your account deletion request. Please try again.");
-                }
-            }
-            catch (Exception ex)
-            {
-                op.Fail($"Error closing account for user {request.UserPublicId}.", ex);
-                throw;
-            }
-
-            try
-            {
-                var revoked = await _refreshTokenService.RevokeAllForUserAsync(
-                    request.UserPublicId,
-                    reason: "Account closed",
-                    cancellationToken);
-
-                op.Success(
-                    $"Account closed and refresh tokens revoked. " +
-                    $"RevokedTokens: {revoked}");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Account closed but refresh token revocation failed for user {request.UserPublicId}.",
-                    ex);
-                throw;
-            }
-
-            await SendDeletionNotificationsAsync(
-                op,
+            var closed = await _identityService.CloseAccountAsync(
                 request.UserPublicId,
+                AccountRestrictionReason.UserRequestedDeactivation,
+                details,
+                performedBy: "self-service",
+                cancellationToken);
+
+            if (!closed)
+            {
+                op.Error($"CloseAccountAsync returned false for user {request.UserPublicId}.");
+                return new BaseResult(
+                    HttpStatusCode.InternalServerError,
+                    "Failed to submit your account deletion request. Please try again.");
+            }
+
+            var revoked = await _refreshTokenService.RevokeAllForUserAsync(
+                request.UserPublicId,
+                reason: "Account closed",
+                cancellationToken);
+
+            op.Success(
+                $"Account closed and refresh tokens revoked. " +
+                $"RevokedTokens: {revoked}");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Account,
+                "Account deletion confirmed",
+                "Your account has been closed. Thank you for using MOVA — we hope to see you again.",
+                "/",
+                null,
+                CancellationToken.None);
+
+            _notificationQueue.QueueNotificationEmail(
                 user.FirstName,
-                user.Email);
+                user.Email,
+                "Your MOVA account has been successfully closed. " +
+                "Thank you for choosing MOVA — we're grateful you gave us a try. " +
+                "If you ever want to come back, our support team will be happy to help you set up a new account.",
+                "Your MOVA account has been closed");
 
             op.Success("Account deletion request completed.");
 
             return new BaseResult(
                 HttpStatusCode.OK,
                 "Your account deletion request has been submitted.");
-        }
-
-        private async Task SendDeletionNotificationsAsync(
-            IDisposable op,
-            string userPublicId,
-            string firstName,
-            string email)
-        {
-            var title = "Account deletion confirmed";
-            var inAppMessage =
-                "Your account has been closed. Thank you for using MOVA — we hope to see you again.";
-            var emailSubject = "Your MOVA account has been closed";
-            var emailMessage =
-                "Your MOVA account has been successfully closed. " +
-                "Thank you for choosing MOVA — we're grateful you gave us a try. " +
-                "If you ever want to come back, our support team will be happy to help you set up a new account.";
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Account,
-                    title,
-                    inAppMessage,
-                    "/",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for account deletion. UserPublicId: {UserPublicId}",
-                    userPublicId);
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for account deletion. UserPublicId: {UserPublicId}",
-                    userPublicId);
-            }
         }
     }
 }

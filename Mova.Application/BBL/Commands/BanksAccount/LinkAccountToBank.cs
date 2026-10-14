@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -38,15 +38,10 @@ public sealed class LinkAccountToBank
     public sealed class LinkAccountToBankDto
     {
         public long Id { get; init; }
-
         public string AccountName { get; init; } = string.Empty;
-
         public string AccountNumber { get; init; } = string.Empty;
-
         public string BankName { get; init; } = string.Empty;
-
         public string BankImageUrl { get; init; } = string.Empty;
-
         public bool Notification { get; init; }
     }
 
@@ -86,7 +81,7 @@ public sealed class LinkAccountToBank
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<LinkAccountToBankDto>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
@@ -98,7 +93,7 @@ public sealed class LinkAccountToBank
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<LinkAccountToBankDto>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -106,10 +101,9 @@ public sealed class LinkAccountToBank
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked LinkAccountToBank for user {request.UserPublicId}. " +
-                    $"Status: {permissions.StatusLabel}, " +
-                    $"Reason: {permissions.RestrictionReason}");
+                    $"Status: {permissions.StatusLabel}, Reason: {permissions.RestrictionReason}");
 
                 var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
                     ? "Your account is currently restricted from performing this operation. Please contact support."
@@ -120,192 +114,101 @@ public sealed class LinkAccountToBank
                     userMessage);
             }
 
-            long walletId = 0;
-            string walletName = string.Empty;
-            long bankAccountId = 0;
-            string accountName = string.Empty;
-            string accountNumber = string.Empty;
-            string bankName = string.Empty;
-            string bankImageUrl = string.Empty;
-
-            try
-            {
-                var wallet = await _unitOfWork
-                    .Query<Wallet>()
-                    .FirstOrDefaultAsync(
-                        w =>
-                            w.Id == request.WalletId &&
-                            w.UserPublicId == request.UserPublicId,
-                        cancellationToken);
-
-                if (wallet is null)
-                {
-                    op.Fail($"Wallet not found: {request.WalletId}");
-
-                    return new BaseResult<LinkAccountToBankDto>(
-                        HttpStatusCode.NotFound,
-                        "Wallet not found.");
-                }
-
-                if (wallet.PayoutDestination == PayoutDestination.Main)
-                {
-                    op.Fail($"Bank linking not applicable for Main destination. WalletId: {request.WalletId}");
-                    return new BaseResult<LinkAccountToBankDto>(
-                        HttpStatusCode.BadRequest,
-                        "This wallet sends releases to your main MOVA balance. A bank account can't be linked.");
-                }
-
-                var bankAccount = await _unitOfWork
-                    .Query<BankAccount>()
-                    .FirstOrDefaultAsync(
-                        b =>
-                            b.Id == request.BankAccountId &&
-                            b.UserPublicId == request.UserPublicId &&
-                            b.ConsentGiven &&
-                            b.Status == BankAccountStatus.Active &&
-                            b.IsDeleted == false,
-                        cancellationToken);
-
-                if (bankAccount is null)
-                {
-                    op.Fail($"Bank account not found: {request.BankAccountId}");
-
-                    return new BaseResult<LinkAccountToBankDto>(
-                        HttpStatusCode.NotFound,
-                        "Bank account not found.");
-                }
-
-                // ─── PIN challenge validation ───
-                var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
-                    request.UserPublicId,
-                    PinChallengeType.LinkBankAccountToWallet,
+            var wallet = await _unitOfWork.Query<Wallet>()
+                .FirstOrDefaultAsync(
+                    w => w.Id == request.WalletId
+                         && w.UserPublicId == request.UserPublicId,
                     cancellationToken);
 
-                if (!challengeValid)
-                {
-                    op.Fail($"PIN challenge validation failed: {challengeMessage}");
-                    return new BaseResult<LinkAccountToBankDto>(
-                        HttpStatusCode.BadRequest,
-                        challengeMessage);
-                }
-
-                wallet.BankAccountId = bankAccount.Id;
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                walletId = wallet.Id;
-                walletName = wallet.Name;
-                bankAccountId = bankAccount.Id;
-                accountName = bankAccount.AccountName;
-                accountNumber = bankAccount.AccountNumber;
-                bankName = bankAccount.BankName;
-                bankImageUrl = bankAccount.BankImageUrl;
-
-                op.Success(
-                    $"Bank account linked to wallet successfully. " +
-                    $"WalletId: {walletId}, BankAccountId: {bankAccountId}");
-            }
-            catch (Exception ex)
+            if (wallet is null)
             {
-                op.Fail(
-                    $"Error linking bank account. WalletId: {request.WalletId}, BankAccountId: {request.BankAccountId}",
-                    ex);
-
-                throw;
+                op.Warning($"Wallet not found: {request.WalletId}");
+                return new BaseResult<LinkAccountToBankDto>(
+                    HttpStatusCode.NotFound,
+                    "Wallet not found.");
             }
 
-            try
+            if (wallet.PayoutDestination == PayoutDestination.Main)
             {
-                await SendBankLinkedNotificationsAsync(
-                    request.UserPublicId,
-                    request.Email,
+                op.Warning(
+                    $"Bank linking not applicable for Main destination. WalletId: {request.WalletId}");
+                return new BaseResult<LinkAccountToBankDto>(
+                    HttpStatusCode.BadRequest,
+                    "This wallet sends releases to your main MOVA balance. A bank account can't be linked.");
+            }
+
+            var bankAccount = await _unitOfWork.Query<BankAccount>()
+                .FirstOrDefaultAsync(
+                    b => b.Id == request.BankAccountId
+                         && b.UserPublicId == request.UserPublicId
+                         && b.ConsentGiven
+                         && b.Status == BankAccountStatus.Active
+                         && !b.IsDeleted,
+                    cancellationToken);
+
+            if (bankAccount is null)
+            {
+                op.Warning($"Bank account not found: {request.BankAccountId}");
+                return new BaseResult<LinkAccountToBankDto>(
+                    HttpStatusCode.NotFound,
+                    "Bank account not found.");
+            }
+
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                PinChallengeType.LinkBankAccountToWallet,
+                cancellationToken);
+
+            if (!challengeValid)
+            {
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
+                return new BaseResult<LinkAccountToBankDto>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
+            }
+
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
+
+            wallet.BankAccountId = bankAccount.Id;
+            _unitOfWork.Update(wallet);
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success(
+                $"Bank account linked. WalletId: {wallet.Id}, BankAccountId: {bankAccount.Id}.");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Wallet,
+                "Bank account linked",
+                $"{bankAccount.BankName} ({bankAccount.AccountNumber}) has been linked to your {wallet.Name} wallet.",
+                $"/wallet/{wallet.Id}",
+                null,
+                CancellationToken.None);
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
-                    walletId,
-                    walletName,
-                    bankAccountId,
-                    bankName,
-                    accountNumber);
+                    request.Email,
+                    $"{bankAccount.BankName} ({bankAccount.AccountNumber}) has been linked to your {wallet.Name} wallet. " +
+                    "When a release is due, MOVA will send the money to this account automatically.",
+                    $"A bank account was linked to your {wallet.Name} wallet");
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for linked bank account {BankAccountId}.",
-                    bankAccountId);
-            }
-
-            var response = new LinkAccountToBankDto
-            {
-                Id = bankAccountId,
-                AccountName = accountName,
-                AccountNumber = accountNumber,
-                BankName = bankName,
-                BankImageUrl = bankImageUrl,
-                Notification = true,
-            };
 
             return new BaseResult<LinkAccountToBankDto>(
                 HttpStatusCode.OK,
                 "Bank account linked to wallet successfully.",
-                response);
-        }
-
-        private async Task SendBankLinkedNotificationsAsync(
-            string userPublicId,
-            string email,
-            string firstName,
-            long walletId,
-            string walletName,
-            long bankAccountId,
-            string bankName,
-            string accountNumber)
-        {
-            var title = "Bank account linked";
-
-            var inAppMessage =
-                $"{bankName} ({accountNumber}) has been linked to your {walletName} wallet.";
-
-            var emailSubject =
-                $"A bank account was linked to your {walletName} wallet";
-
-            var emailMessage =
-                $"{bankName} ({accountNumber}) has been linked to your {walletName} wallet. " +
-                $"When a release is due, MOVA will send the money to this account automatically.";
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Wallet,
-                    title,
-                    inAppMessage,
-                    $"/wallet/{walletId}",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for linked bank account {BankAccountId}.",
-                    bankAccountId);
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for linked bank account {BankAccountId}.",
-                    bankAccountId);
-            }
+                new LinkAccountToBankDto
+                {
+                    Id = bankAccount.Id,
+                    AccountName = bankAccount.AccountName,
+                    AccountNumber = bankAccount.AccountNumber,
+                    BankName = bankAccount.BankName,
+                    BankImageUrl = bankAccount.BankImageUrl,
+                    Notification = true,
+                });
         }
     }
 }

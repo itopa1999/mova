@@ -81,22 +81,54 @@ public class RecordingUnitOfWork : IUnitOfWork
     public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
     {
         CommitCount++;
-        if (_transaction is not null)
+
+        var tx = _transaction;
+        _transaction = null;
+
+        if (tx is not null)
         {
-            await _transaction.CommitAsync(cancellationToken);
-            await _transaction.DisposeAsync();
-            _transaction = null;
+            try
+            {
+                await tx.CommitAsync(cancellationToken);
+            }
+            finally
+            {
+                await tx.DisposeAsync();
+            }
         }
     }
 
     public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
     {
         RollbackCount++;
+
+        var tx = _transaction;
+        _transaction = null;
+
+        if (tx is not null)
+        {
+            try
+            {
+                await tx.RollbackAsync(cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                // SQLite throws "This SqliteTransaction has completed"
+                // when the underlying transaction was already committed
+                // or disposed. Rollback is a no-op in that case.
+            }
+            finally
+            {
+                await tx.DisposeAsync();
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
         if (_transaction is not null)
         {
-            await _transaction.RollbackAsync(cancellationToken);
-            await _transaction.DisposeAsync();
-            _transaction = null;
+            await RollbackTransactionAsync();
         }
     }
 

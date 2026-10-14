@@ -1,10 +1,9 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -62,7 +61,7 @@ public sealed class ToggleWalletStatusCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -74,7 +73,7 @@ public sealed class ToggleWalletStatusCommand
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -82,7 +81,7 @@ public sealed class ToggleWalletStatusCommand
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked ToggleWalletStatus for user {request.UserPublicId}. " +
                     $"Status: {permissions.StatusLabel}, " +
                     $"Reason: {permissions.RestrictionReason}");
@@ -96,132 +95,101 @@ public sealed class ToggleWalletStatusCommand
                     userMessage);
             }
 
-            string walletName = string.Empty;
-            string notificationTitle = string.Empty;
-            string notificationMessage = string.Empty;
-            int affectedReleases = 0;
-            bool isPausing = false;
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
-            {
-                var wallet = await _unitOfWork.Query<Wallet>()
-                    .FirstOrDefaultAsync(
-                        x => x.Id == request.WalletId
-                             && x.UserPublicId == request.UserPublicId,
-                        cancellationToken);
-
-                if (wallet is null)
-                {
-                    op.Fail($"Wallet not found: {request.WalletId}");
-                    return new BaseResult<object>(
-                        HttpStatusCode.NotFound,
-                        "Wallet not found.");
-                }
-
-                if (wallet.Status is not (WalletStatus.Active or WalletStatus.Paused))
-                {
-                    op.Fail($"Wallet cannot be toggled. Status: {wallet.Status}");
-                    return new BaseResult<object>(
-                        HttpStatusCode.BadRequest,
-                        wallet.Status switch
-                        {
-                            WalletStatus.Broken => "A broken wallet cannot be paused or resumed.",
-                            WalletStatus.Completed => "A completed wallet cannot be paused or resumed.",
-                            WalletStatus.Closed => "A closed wallet cannot be paused or resumed.",
-                            _ => "This wallet cannot be toggled.",
-                        });
-                }
-
-                isPausing = wallet.Status == WalletStatus.Active;
-
-                // ─── PIN challenge validation (type depends on direction) ───
-                var challengeType = isPausing
-                    ? PinChallengeType.PausedWallet
-                    : PinChallengeType.UnpausedWallet;
-
-                var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
-                    request.UserPublicId,
-                    challengeType,
+            var wallet = await _unitOfWork.Query<Wallet>()
+                .FirstOrDefaultAsync(
+                    x => x.Id == request.WalletId
+                         && x.UserPublicId == request.UserPublicId,
                     cancellationToken);
 
-                if (!challengeValid)
+            if (wallet is null)
+            {
+                op.Warning($"Wallet not found: {request.WalletId}");
+                return new BaseResult<object>(
+                    HttpStatusCode.NotFound,
+                    "Wallet not found.");
+            }
+
+            if (wallet.Status is not (WalletStatus.Active or WalletStatus.Paused))
+            {
+                var rejection = wallet.Status switch
                 {
-                    op.Fail(
-                        $"PIN challenge validation failed for {challengeType}: " +
-                        $"{challengeMessage}");
+                    WalletStatus.Broken => "A broken wallet cannot be paused or resumed.",
+                    WalletStatus.Completed => "A completed wallet cannot be paused or resumed.",
+                    WalletStatus.Closed => "A closed wallet cannot be paused or resumed.",
+                    _ => "This wallet cannot be toggled.",
+                };
 
-                    return new BaseResult<object>(
-                        HttpStatusCode.BadRequest,
-                        challengeMessage);
-                }
+                op.Warning($"Wallet cannot be toggled. Status: {wallet.Status}");
+                return new BaseResult<object>(HttpStatusCode.BadRequest, rejection);
+            }
 
-                wallet.Status = isPausing
-                    ? WalletStatus.Paused
-                    : WalletStatus.Active;
+            var isPausing = wallet.Status == WalletStatus.Active;
 
-                var targetReleaseStatus = isPausing
-                    ? ReleaseStatus.Scheduled
-                    : ReleaseStatus.Paused;
+            var challengeType = isPausing
+                ? PinChallengeType.PausedWallet
+                : PinChallengeType.UnpausedWallet;
 
-                var newReleaseStatus = isPausing
-                    ? ReleaseStatus.Paused
-                    : ReleaseStatus.Scheduled;
+            var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
+                request.UserPublicId,
+                challengeType,
+                cancellationToken);
 
-                var releasesToUpdate = await _unitOfWork.Query<ScheduledRelease>()
-                    .Where(x => x.WalletId == wallet.Id
-                                && x.Status == targetReleaseStatus)
-                    .ToListAsync(cancellationToken);
+            if (!challengeValid)
+            {
+                op.Warning(
+                    $"PIN challenge validation failed for {challengeType}: {challengeMessage}");
 
-                foreach (var release in releasesToUpdate)
-                {
-                    release.Status = newReleaseStatus;
-                }
+                return new BaseResult<object>(
+                    HttpStatusCode.BadRequest,
+                    challengeMessage);
+            }
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            wallet.Status = isPausing
+                ? WalletStatus.Paused
+                : WalletStatus.Active;
 
-                walletName = wallet.Name;
-                affectedReleases = releasesToUpdate.Count;
+            var targetReleaseStatus = isPausing
+                ? ReleaseStatus.Scheduled
+                : ReleaseStatus.Paused;
 
-                notificationTitle = isPausing
-                    ? $"{walletName} wallet paused"
-                    : $"{walletName} wallet resumed";
+            var newReleaseStatus = isPausing
+                ? ReleaseStatus.Paused
+                : ReleaseStatus.Scheduled;
 
-                notificationMessage = isPausing
+            var releasesToUpdate = await _unitOfWork.Query<ScheduledRelease>()
+                .Where(x => x.WalletId == wallet.Id
+                            && x.Status == targetReleaseStatus)
+                .ToListAsync(cancellationToken);
+
+            foreach (var release in releasesToUpdate)
+            {
+                release.Status = newReleaseStatus;
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            var affectedReleases = releasesToUpdate.Count;
+
+            op.Success(
+                isPausing
+                    ? $"Wallet paused. {affectedReleases} release(s) on hold."
+                    : $"Wallet resumed. {affectedReleases} release(s) rescheduled.");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Wallet,
+                isPausing
+                    ? $"{wallet.Name} wallet paused"
+                    : $"{wallet.Name} wallet resumed",
+                isPausing
                     ? "All upcoming releases for this wallet are now on hold. Your funds remain safe and you can resume anytime."
-                    : "Your wallet is active again. All scheduled releases have been rescheduled and will resume as normal.";
-
-                op.Success(
-                    isPausing
-                        ? $"Wallet paused. {affectedReleases} release(s) on hold."
-                        : $"Wallet resumed. {affectedReleases} release(s) rescheduled.");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Error toggling wallet status. WalletId: {request.WalletId}",
-                    ex);
-
-                throw;
-            }
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    request.UserPublicId,
-                    NotificationType.Wallet,
-                    notificationTitle,
-                    notificationMessage,
-                    $"/wallet/{request.WalletId}",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for toggled wallet {WalletId}.",
-                    request.WalletId);
-            }
+                    : "Your wallet is active again. All scheduled releases have been rescheduled and will resume as normal.",
+                $"/wallet/{request.WalletId}",
+                null,
+                CancellationToken.None);
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,

@@ -90,7 +90,7 @@ public class SwaggerAuthMiddleware
             if (!SecureEquals(username, _settings.Username) ||
                 !SecureEquals(password, _settings.Password))
             {
-                op.Fail("Failed Swagger login attempt.");
+                op.Warning("Failed Swagger login attempt.");
 
                 await Challenge(context);
                 return;
@@ -104,7 +104,8 @@ public class SwaggerAuthMiddleware
         }
         catch (Exception ex)
         {
-            op.Fail("Invalid Swagger Authorization header.", ex);
+            _logger.LogWarning(ex, "Invalid Swagger Authorization header.");
+            op.Warning("Invalid Swagger Authorization header.");
 
             await Challenge(context);
         }

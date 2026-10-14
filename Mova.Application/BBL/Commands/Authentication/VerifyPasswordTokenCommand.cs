@@ -45,7 +45,9 @@ public sealed class VerifyPasswordTokenCommand
             _logger = logger;
         }
 
-        public async Task<BaseResult<VerifyPasswordTokenResponseDto>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult<VerifyPasswordTokenResponseDto>> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
                 _logger,
@@ -54,7 +56,7 @@ public sealed class VerifyPasswordTokenCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -62,7 +64,7 @@ public sealed class VerifyPasswordTokenCommand
 
             if (string.IsNullOrWhiteSpace(request.Token))
             {
-                op.Fail("Token is required.");
+                op.Warning("Token is required.");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Token is required.");
@@ -70,7 +72,7 @@ public sealed class VerifyPasswordTokenCommand
 
             if (request.Token.Length != 6)
             {
-                op.Fail($"Invalid token length: {request.Token.Length}");
+                op.Warning($"Invalid token length: {request.Token.Length}.");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Token must be exactly 6 characters.");
@@ -80,9 +82,9 @@ public sealed class VerifyPasswordTokenCommand
                 request.UserPublicId,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.BadRequest,
                     "User not found.");
@@ -92,12 +94,12 @@ public sealed class VerifyPasswordTokenCommand
                 .Where(x => x.UserPublicId == user.PublicId
                             && x.Purpose == OtpPurpose.PasswordReset.ToString()
                             && !x.IsUsed)
-                .OrderByDescending(x => x.CreatedAt) // TODO change to x.CreatedAt
+                .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (otpVerification is null)
             {
-                op.Fail($"No valid OTP found for user {request.UserPublicId}");
+                op.Warning($"No valid OTP found for user {request.UserPublicId}.");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid OTP. Please request a new one.");
@@ -105,7 +107,7 @@ public sealed class VerifyPasswordTokenCommand
 
             if (otpVerification.OtpCode != request.Token)
             {
-                op.Fail($"Invalid OTP code for user {request.UserPublicId}");
+                op.Warning($"Invalid OTP code for user {request.UserPublicId}.");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid OTP code.");
@@ -113,61 +115,31 @@ public sealed class VerifyPasswordTokenCommand
 
             if (otpVerification.ExpiresAt < DateTimeOffset.UtcNow)
             {
-                op.Fail($"OTP expired for user {request.UserPublicId}");
+                op.Warning($"OTP expired for user {request.UserPublicId}.");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
                     HttpStatusCode.BadRequest,
                     "OTP has expired. Please request a new one.");
             }
 
-            if (otpVerification.IsUsed)
-            {
-                op.Fail($"OTP already used for user {request.UserPublicId}");
-                return new BaseResult<VerifyPasswordTokenResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "This OTP has already been used.");
-            }
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            otpVerification.IsUsed = true;
+            otpVerification.UsedAt = DateTimeOffset.UtcNow;
+            _unitOfWork.Update(otpVerification);
 
-            try
-            {
-                otpVerification.IsUsed = true;
-                otpVerification.UsedAt = DateTimeOffset.UtcNow;
-                _unitOfWork.Update(otpVerification);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            op.Success($"Password reset OTP verified for user {request.UserPublicId}.");
 
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                op.Success($"Password reset OTP verified for user {request.UserPublicId}");
-
-                return new BaseResult<VerifyPasswordTokenResponseDto>(
-                    HttpStatusCode.OK,
-                    "OTP verified successfully. You can now reset your password.",
-                    new VerifyPasswordTokenResponseDto
-                    {
-                        UserPublicId = user.PublicId,
-                        IsVerified = true
-                    });
-            }
-            catch (DbUpdateException dbEx)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error while verifying OTP for user {request.UserPublicId}: {dbEx.Message}", dbEx);
-
-                return new BaseResult<VerifyPasswordTokenResponseDto>(
-                    HttpStatusCode.Conflict,
-                    "An error occurred. Please try again.");
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"OTP verification failed for user {request.UserPublicId}: {ex.Message}", ex);
-
-                return new BaseResult<VerifyPasswordTokenResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while verifying your OTP. Please try again later.");
-            }
+            return new BaseResult<VerifyPasswordTokenResponseDto>(
+                HttpStatusCode.OK,
+                "OTP verified successfully. You can now reset your password.",
+                new VerifyPasswordTokenResponseDto
+                {
+                    UserPublicId = user.PublicId,
+                    IsVerified = true,
+                });
         }
     }
 }

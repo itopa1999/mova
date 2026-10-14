@@ -1,7 +1,6 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
@@ -9,7 +8,6 @@ using Mova.Application.Interfaces.Security;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
 
 namespace Mova.Application.BBL.Commands.Authentication;
 
@@ -26,7 +24,7 @@ public sealed class RefreshTokenCommand
 
     public class RefreshTokenResponseDto
     {
-        public string UserPublicId { get; set; }
+        public string UserPublicId { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
@@ -45,13 +43,14 @@ public sealed class RefreshTokenCommand
         private readonly IJwtTokenGenerator _jwtTokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
         private readonly ILogger<Handler> _logger;
+
         private static readonly HashSet<string> ValidPlatforms =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            Platforms.Web,
-            Platforms.Mobile,
-            Platforms.Swagger
-        };
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                Platforms.Web,
+                Platforms.Mobile,
+                Platforms.Swagger,
+            };
 
         public Handler(
             IIdentityService identityService,
@@ -67,117 +66,125 @@ public sealed class RefreshTokenCommand
             _logger = logger;
         }
 
-        public async Task<BaseResult<RefreshTokenResponseDto>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult<RefreshTokenResponseDto>> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
-            using var op = OperationLogger.Start(_logger, "RefreshToken",
-                ("RefreshToken", request.RefreshToken),
-                ("Platform", request.Platform)
-            );
+            using var op = OperationLogger.Start(
+                _logger,
+                "RefreshToken",
+                ("Platform", request.Platform),
+                ("TokenPrefix", RedactToken(request.RefreshToken)));
 
             if (!ValidPlatforms.Contains(request.Platform))
             {
-                op.Fail($"Invalid platform: {request.Platform}");
-
+                op.Warning($"Invalid platform: {request.Platform}");
                 return new BaseResult<RefreshTokenResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "Invalid platform specified."
-                );
+                    "Invalid platform specified.");
             }
 
-            var refreshToken = await _refreshTokenService.ValidateAsync(request.RefreshToken, cancellationToken);
+            var refreshToken = await _refreshTokenService.ValidateAsync(
+                request.RefreshToken,
+                cancellationToken);
 
             if (refreshToken is null)
             {
-                op.Fail("Invalid refresh token provided.");
+                op.Warning("Invalid refresh token provided.");
                 return new BaseResult<RefreshTokenResponseDto>(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "Invalid refresh token.");
             }
 
             if (refreshToken.IsExpired)
             {
-                op.Fail($"Refresh token expired (UserId: {refreshToken.UserPublicId})");
+                op.Warning($"Refresh token expired for user {refreshToken.UserPublicId}.");
                 return new BaseResult<RefreshTokenResponseDto>(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "Refresh token has expired.");
             }
 
             if (refreshToken.IsRevoked)
             {
-                op.Fail($"Refresh token already revoked (UserId: {refreshToken.UserPublicId})");
+                op.Warning($"Refresh token already revoked for user {refreshToken.UserPublicId}.");
                 return new BaseResult<RefreshTokenResponseDto>(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "Refresh token has been revoked.");
             }
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
+            refreshToken.RevokedAt = DateTimeOffset.UtcNow;
+            refreshToken.RevocationReason = "Token refreshed";
+            _unitOfWork.Update(refreshToken);
+
+            var user = await _identityService.GetByIdentifierAsync(
+                refreshToken.UserPublicId,
+                cancellationToken);
+
+            if (user is null)
             {
-                refreshToken.RevokedAt = DateTimeOffset.UtcNow;
-                refreshToken.RevocationReason = "Token refreshed";
-                _unitOfWork.Update(refreshToken);
-
-                var user = await _identityService.GetByIdentifierAsync(
-                        refreshToken.UserPublicId,
-                        cancellationToken);
-
-                if (user is null)
-                {
-                    op.Fail($"User not found for refresh token user {refreshToken.UserPublicId}");
-                    return new BaseResult<RefreshTokenResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "User profile not found."
-                    );
-                }
-
-                var roles = await _identityService.GetRolesAsync(user.Id);
-
-
-                var accessToken = _jwtTokenGenerator.GenerateToken(
-                    user.Id,
-                    user.PublicId,
-                    user.FirstName,
-                    user.OtherNames,
-                    user.LastName,
-                    user.Email,
-                    user.PhoneNumber,
-                    user.Balance.ToDecimal(),
-                    user.FullName ?? string.Empty,
-                    request.Platform,
-                    roles);
-
-                var (newToken, newRefreshToken) = await _refreshTokenService.CreateAsync(user.PublicId, cancellationToken);
-
-                await _unitOfWork.AddAsync(newRefreshToken, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                op.Success($"Token refreshed successfully for user {refreshToken.UserPublicId}");
-
+                op.Warning(
+                    $"User not found for refresh token: {refreshToken.UserPublicId}.");
                 return new BaseResult<RefreshTokenResponseDto>(
-                    HttpStatusCode.OK,
-                    "Token refreshed successfully.",
-                    new RefreshTokenResponseDto
-                    {
-                        UserPublicId = user.PublicId,
-                        Email = user.Email ?? string.Empty,
-                        Phone = user.PhoneNumber ?? string.Empty,
-                        FullName = user.FullName,
-                        ProfilePicture = user.ProfilePicture,
-                        Balance = user.Balance.ToDecimal(),
-                        Platform = request.Platform,
-                        AccessToken = accessToken,
-                        RefreshToken = newToken,
-                        AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
-                    });
+                    HttpStatusCode.Unauthorized,
+                    "Session is no longer valid.");
             }
-            catch (Exception ex)
+
+            var roles = await _identityService.GetRolesAsync(user.Id);
+
+            var accessToken = _jwtTokenGenerator.GenerateToken(
+                user.Id,
+                user.PublicId,
+                user.FirstName,
+                user.OtherNames,
+                user.LastName,
+                user.Email,
+                user.PhoneNumber,
+                user.Balance.ToDecimal(),
+                user.FullName,
+                request.Platform,
+                roles);
+
+            var (newToken, newRefreshTokenEntity) =
+                await _refreshTokenService.CreateAsync(
+                    user.PublicId,
+                    cancellationToken);
+
+            await _unitOfWork.AddAsync(newRefreshTokenEntity, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success($"Token refreshed for user {refreshToken.UserPublicId}.");
+
+            return new BaseResult<RefreshTokenResponseDto>(
+                HttpStatusCode.OK,
+                "Token refreshed successfully.",
+                new RefreshTokenResponseDto
+                {
+                    UserPublicId = user.PublicId,
+                    Email = user.Email ?? string.Empty,
+                    Phone = user.PhoneNumber ?? string.Empty,
+                    FullName = user.FullName,
+                    ProfilePicture = user.ProfilePicture,
+                    Balance = user.Balance.ToDecimal(),
+                    Platform = request.Platform,
+                    AccessToken = accessToken,
+                    RefreshToken = newToken,
+                    AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
+                });
+        }
+
+        private static string RedactToken(string token)
+        {
+            if (string.IsNullOrEmpty(token))
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Refresh token failed for user {refreshToken.UserPublicId}", ex);
-                throw;
+                return "(empty)";
             }
+
+            return token.Length <= 8
+                ? "(short)"
+                : token[..8] + "…";
         }
     }
 }

@@ -1,5 +1,6 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
+using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
@@ -9,17 +10,16 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-using System.Text.Json.Serialization;
 
 namespace Mova.Application.BBL.MovaAPIs;
 
 public sealed class SubmitFeedbackCommand
 {
-    public sealed class Command
-        : IRequest<BaseResult<SubmitFeedbackResponseDto>>
+    public sealed class Command : IRequest<BaseResult<SubmitFeedbackResponseDto>>
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+
         [JsonIgnore]
         public string Email { get; set; } = string.Empty;
 
@@ -59,18 +59,15 @@ public sealed class SubmitFeedbackCommand
             "Thank you for your feedback. We read every message.";
 
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
             _logger = logger;
         }
@@ -86,7 +83,7 @@ public sealed class SubmitFeedbackCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<SubmitFeedbackResponseDto>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -99,18 +96,17 @@ public sealed class SubmitFeedbackCommand
 
             if (!hasRating && !hasExperience && !hasImprovements && !hasMessage)
             {
-                op.Fail("Empty feedback received.");
+                op.Warning("Empty feedback received.");
                 return new BaseResult<SubmitFeedbackResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Please provide at least one piece of feedback " +
                     "(a rating, experience, improvement, or message).");
             }
 
-
             var experience = Normalize(request.Experience);
             if (experience is not null && !AllowedExperiences.Contains(experience))
             {
-                op.Fail($"Invalid experience value: {experience}");
+                op.Warning($"Invalid experience value: {experience}.");
                 return new BaseResult<SubmitFeedbackResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid experience value.");
@@ -127,7 +123,7 @@ public sealed class SubmitFeedbackCommand
 
             if (invalidImprovement is not null)
             {
-                op.Fail($"Invalid improvement value: {invalidImprovement}");
+                op.Warning($"Invalid improvement value: {invalidImprovement}.");
                 return new BaseResult<SubmitFeedbackResponseDto>(
                     HttpStatusCode.BadRequest,
                     $"Invalid improvement value: {invalidImprovement}.");
@@ -139,11 +135,13 @@ public sealed class SubmitFeedbackCommand
 
             if (message is { Length: > 600 })
             {
-                op.Fail("Message exceeds 600 characters.");
+                op.Warning("Message exceeds 600 characters.");
                 return new BaseResult<SubmitFeedbackResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Message cannot exceed 600 characters.");
             }
+
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             var feedback = new Feedback
             {
@@ -157,31 +155,16 @@ public sealed class SubmitFeedbackCommand
                 IsDone = false,
             };
 
-            try
-            {
-                await _unitOfWork.AddAsync(feedback, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.AddAsync(feedback, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                op.Success(
-                    $"Feedback recorded for {request.UserPublicId}.");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Failed to save feedback for {request.UserPublicId}.",
-                    ex);
+            op.Success($"Feedback recorded for {request.UserPublicId}.");
 
-                return new BaseResult<SubmitFeedbackResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "Failed to save your feedback. Please try again.");
-            }
-
-            var notificationSent = await SendFeedbackNotificationsAsync(
+            SendFeedbackNotifications(
                 request.UserPublicId,
-                request.Email ?? string.Empty,
-                request.FirstName ?? string.Empty,
-                request.Rating,
-                cancellationToken);
+                request.Email,
+                request.FirstName);
 
             return new BaseResult<SubmitFeedbackResponseDto>(
                 HttpStatusCode.Created,
@@ -189,74 +172,36 @@ public sealed class SubmitFeedbackCommand
                 new SubmitFeedbackResponseDto
                 {
                     AcknowledgmentMessage = AcknowledgmentMessage,
-                    Notification = notificationSent,
+                    Notification = true,
                 });
         }
 
-        private async Task<bool> SendFeedbackNotificationsAsync(
+        private void SendFeedbackNotifications(
             string userPublicId,
             string email,
-            string firstName,
-            int rating,
-            CancellationToken cancellationToken)
+            string firstName)
         {
-            var title = "Thank you for your feedback";
-
             var inAppMessage = string.IsNullOrWhiteSpace(firstName)
                 ? AcknowledgmentMessage
                 : $"Thank you, {firstName}. {AcknowledgmentMessage}";
 
-            var emailSubject = "We received your feedback";
-
-            var emailMessage =
-                $"{inAppMessage} " +
-                "Your input helps us improve MOVA for everyone.";
-
-            var anySent = false;
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.System,
-                    title,
-                    inAppMessage,
-                    "/feedback",
-                    null,
-                    CancellationToken.None);
-
-                anySent = true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for feedback from {UserPublicId}.",
-                    userPublicId);
-            }
+            _notificationQueue.InAppNotificationAsync(
+                userPublicId,
+                NotificationType.System,
+                "Thank you for your feedback",
+                inAppMessage,
+                "/feedback",
+                null,
+                CancellationToken.None);
 
             if (!string.IsNullOrWhiteSpace(email))
             {
-                try
-                {
-                    _notificationQueue.QueueNotificationEmail(
-                        firstName,
-                        email,
-                        emailMessage,
-                        emailSubject);
-
-                    anySent = true;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "Email queue failed for feedback from {UserPublicId}.",
-                        userPublicId);
-                }
+                _notificationQueue.QueueNotificationEmail(
+                    firstName,
+                    email,
+                    $"{inAppMessage} Your input helps us improve MOVA for everyone.",
+                    "We received your feedback");
             }
-
-            return anySent;
         }
 
         private static string? Normalize(string? value)

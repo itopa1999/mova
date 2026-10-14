@@ -758,3 +758,9 @@ Added `verify-connectivity` job:
 - Verifies Postgres (`SELECT 1`) and Redis (`PING`) against production credentials using `tools/Mova.HealthCheck`.
 - `promote-to-production` now `needs: [test, verify-connectivity]` — no deploy if either fails.
 - Two new repo secrets: `POSTGRES_CONNECTION_STRING`, `REDIS_CONNECTION_STRING`.
+
+
+
+MUST TEST login endpopint 
+_identityService.CreditBalanceAsync( check all the code base please for the transaction and also
+the BeginAtomicSerializableAsync 

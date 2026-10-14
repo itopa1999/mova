@@ -3,12 +3,10 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
-using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Queries.AccountWallet;
 
@@ -41,7 +39,6 @@ public sealed class GetRenewalPolicyQuery
 
         public bool RefillUntilMainBalanceExhausted { get; set; }
 
-
         public decimal MinMainBalance { get; init; }
 
         public int? MaxRenewals { get; init; }
@@ -56,26 +53,16 @@ public sealed class GetRenewalPolicyQuery
         : IRequestHandler<Query, BaseResult<GetRenewalPolicyResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ILogger<Handler> _logger;
 
-        public Handler(
-            IUnitOfWork unitOfWork,
-            ILogger<Handler> logger)
+        public Handler(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _logger = logger;
         }
 
         public async Task<BaseResult<GetRenewalPolicyResponseDto>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
-            using var op = OperationLogger.Start(
-                _logger,
-                "GetRenewalPolicy",
-                ("UserId", request.UserPublicId),
-                ("WalletId", request.WalletId));
-
             var wallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
@@ -85,7 +72,6 @@ public sealed class GetRenewalPolicyQuery
 
             if (wallet is null)
             {
-                op.Fail("Wallet not found.");
                 return new BaseResult<GetRenewalPolicyResponseDto>(
                     HttpStatusCode.NotFound,
                     "Wallet not found.");
@@ -99,7 +85,6 @@ public sealed class GetRenewalPolicyQuery
 
             if (policy is null)
             {
-                op.Success("No automation policy for this wallet.");
                 return new BaseResult<GetRenewalPolicyResponseDto>(
                     HttpStatusCode.NotFound,
                     "This wallet has no automation policy.");
@@ -134,8 +119,6 @@ public sealed class GetRenewalPolicyQuery
                 CreatedAt = policy.CreatedAt,
                 ModifiedAt = policy.ModifiedAt,
             };
-
-            op.Success($"Renewal policy returned. PolicyId: {policy.Id}");
 
             return new BaseResult<GetRenewalPolicyResponseDto>(
                 HttpStatusCode.OK,

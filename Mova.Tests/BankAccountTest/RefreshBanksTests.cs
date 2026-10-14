@@ -13,7 +13,7 @@ public sealed class RefreshBanksTests : BaseTest
 
     private RefreshBanks.Handler CreateHandler()
     {
-        return new RefreshBanks.Handler(_bankService.Object);
+        return new RefreshBanks.Handler(_bankService.Object, Mock.Of<ILogger<RefreshBanks.Handler>>());
     }
 
     private RefreshBanks.Command CreateCommand()

@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -41,19 +41,12 @@ public sealed class AddBankAccount
     public sealed class AddBankAccountDto
     {
         public long Id { get; set; }
-
         public string AccountNumber { get; set; } = string.Empty;
-
         public string AccountName { get; set; } = string.Empty;
-
         public string BankCode { get; set; } = string.Empty;
-
         public string BankInstitution { get; set; } = string.Empty;
-
         public bool IsDefault { get; set; }
-
         public string Status { get; set; } = string.Empty;
-
         public bool Notification { get; set; }
     }
 
@@ -95,7 +88,7 @@ public sealed class AddBankAccount
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
@@ -107,7 +100,7 @@ public sealed class AddBankAccount
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -115,10 +108,9 @@ public sealed class AddBankAccount
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked AddBankAccount for user {request.UserPublicId}. " +
-                    $"Status: {permissions.StatusLabel}, " +
-                    $"Reason: {permissions.RestrictionReason}");
+                    $"Status: {permissions.StatusLabel}, Reason: {permissions.RestrictionReason}");
 
                 var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
                     ? "Your account is currently restricted from performing this operation. Please contact support."
@@ -129,7 +121,6 @@ public sealed class AddBankAccount
                     userMessage);
             }
 
-            // ─── PIN challenge validation ───
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
                 PinChallengeType.AddBankAccount,
@@ -137,7 +128,7 @@ public sealed class AddBankAccount
 
             if (!challengeValid)
             {
-                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
@@ -148,16 +139,15 @@ public sealed class AddBankAccount
 
             if (string.IsNullOrWhiteSpace(accountNumber))
             {
-                op.Fail("Account number is required.");
+                op.Warning("Account number is required.");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Account number is required.");
             }
 
-            if (accountNumber.Length != 10 ||
-                !accountNumber.All(char.IsDigit))
+            if (accountNumber.Length != 10 || !accountNumber.All(char.IsDigit))
             {
-                op.Fail("Invalid account number format.");
+                op.Warning("Invalid account number format.");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid account number.");
@@ -165,7 +155,7 @@ public sealed class AddBankAccount
 
             if (string.IsNullOrWhiteSpace(bankCode))
             {
-                op.Fail("Bank code is required.");
+                op.Warning("Bank code is required.");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Bank code is required.");
@@ -173,7 +163,7 @@ public sealed class AddBankAccount
 
             if (!request.Consent)
             {
-                op.Fail("Consent not given.");
+                op.Warning("Consent not given.");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Consent is required to add this bank account.");
@@ -187,7 +177,7 @@ public sealed class AddBankAccount
 
             if (bank is null)
             {
-                op.Fail($"Invalid bank code: {bankCode}");
+                op.Warning($"Invalid bank code: {bankCode}");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid bank.");
@@ -195,28 +185,26 @@ public sealed class AddBankAccount
 
             var existingAccount = await _unitOfWork.Query<BankAccount>()
                 .FirstOrDefaultAsync(
-                    x =>
-                        x.UserPublicId == request.UserPublicId &&
-                        x.AccountNumber == accountNumber,
+                    x => x.UserPublicId == request.UserPublicId
+                         && x.AccountNumber == accountNumber,
                     cancellationToken);
 
             if (existingAccount is not null)
             {
-                op.Fail($"Bank account already exists: {accountNumber}");
+                op.Warning($"Bank account already exists: {accountNumber}");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.Conflict,
                     "This bank account has already been added.");
             }
 
-            var verifiedAccount =
-                await _paystackService.ResolveBankAccountAsync(
-                    accountNumber,
-                    bankCode,
-                    cancellationToken);
+            var verifiedAccount = await _paystackService.ResolveBankAccountAsync(
+                accountNumber,
+                bankCode,
+                cancellationToken);
 
             if (verifiedAccount is null)
             {
-                op.Fail($"Unable to verify account: {accountNumber}, bank: {bankCode}");
+                op.Warning($"Unable to verify account: {accountNumber}, bank: {bankCode}");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Unable to verify bank account.");
@@ -224,76 +212,52 @@ public sealed class AddBankAccount
 
             var hasDefaultAccount = await _unitOfWork.Query<BankAccount>()
                 .AnyAsync(
-                    x =>
-                        x.UserPublicId == request.UserPublicId &&
-                        x.IsDefault &&
-                        x.Status == BankAccountStatus.Active,
+                    x => x.UserPublicId == request.UserPublicId
+                         && x.IsDefault
+                         && x.Status == BankAccountStatus.Active,
                     cancellationToken);
 
-            long bankAccountId = 0;
-            string accountName = string.Empty;
-            string bankName = string.Empty;
-            bool isDefault = false;
-            string status = string.Empty;
-
-            try
+            var bankAccount = new BankAccount
             {
-                var bankAccount = new BankAccount
-                {
-                    UserPublicId = request.UserPublicId,
-                    AccountNumber = verifiedAccount.AccountNumber,
-                    AccountName = verifiedAccount.AccountName,
-                    BankCode = bank.Code,
-                    BankName = bank.Name,
-                    BankImageUrl = bank.Logo,
-                    Status = BankAccountStatus.Active,
-                    IsDefault = !hasDefaultAccount,
-                    VerifiedAt = DateTimeOffset.UtcNow,
-                    VerificationMessage = "Account verified successfully.",
-                    ConsentGiven = true,
-                    ConsentGivenAt = DateTimeOffset.UtcNow,
-                    ConsentVersion = "v1",
-                    Currency = "NGN",
-                };
+                UserPublicId = request.UserPublicId,
+                AccountNumber = verifiedAccount.AccountNumber,
+                AccountName = verifiedAccount.AccountName,
+                BankCode = bank.Code,
+                BankName = bank.Name,
+                BankImageUrl = bank.Logo,
+                Status = BankAccountStatus.Active,
+                IsDefault = !hasDefaultAccount,
+                VerifiedAt = DateTimeOffset.UtcNow,
+                VerificationMessage = "Account verified successfully.",
+                ConsentGiven = true,
+                ConsentGivenAt = DateTimeOffset.UtcNow,
+                ConsentVersion = "v1",
+                Currency = "NGN",
+            };
 
-                await _unitOfWork.AddAsync(bankAccount, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.AddAsync(bankAccount, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                bankAccountId = bankAccount.Id;
-                accountName = bankAccount.AccountName;
-                bankName = bankAccount.BankName;
-                isDefault = bankAccount.IsDefault;
-                status = bankAccount.Status.ToString();
+            op.Success(
+                $"Bank account added. Id: {bankAccount.Id}, Bank: {bankAccount.BankName}.");
 
-                op.Success(
-                    $"Bank account added successfully. " +
-                    $"Id: {bankAccountId}, Bank: {bankName}");
-            }
-            catch (Exception ex)
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.System,
+                "Bank account added",
+                $"{bankAccount.AccountName} ({bankAccount.BankName}) has been linked to your MOVA account.",
+                "/bank",
+                null,
+                CancellationToken.None);
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
             {
-                op.Fail(
-                    $"Error adding bank account. AccountNumber: {accountNumber}",
-                    ex);
-
-                throw;
-            }
-
-            try
-            {
-                await SendBankAccountAddedNotificationsAsync(
-                    request.UserPublicId,
-                    request.Email,
+                _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
-                    bankAccountId,
-                    accountName,
-                    bankName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for added bank account {BankAccountId}.",
-                    bankAccountId);
+                    request.Email,
+                    $"{bankAccount.AccountName} ({bankAccount.BankName}) has been linked to your MOVA account. " +
+                    "You can now use this account to receive releases.",
+                    "Your bank account has been linked");
             }
 
             return new BaseResult<AddBankAccountDto>(
@@ -301,70 +265,15 @@ public sealed class AddBankAccount
                 "Bank account added successfully.",
                 new AddBankAccountDto
                 {
-                    Id = bankAccountId,
+                    Id = bankAccount.Id,
                     AccountNumber = verifiedAccount.AccountNumber,
-                    AccountName = accountName,
+                    AccountName = bankAccount.AccountName,
                     BankCode = bank.Code,
-                    BankInstitution = bankName,
-                    IsDefault = isDefault,
-                    Status = status,
+                    BankInstitution = bankAccount.BankName,
+                    IsDefault = bankAccount.IsDefault,
+                    Status = bankAccount.Status.ToString(),
                     Notification = true,
                 });
-        }
-
-        private async Task SendBankAccountAddedNotificationsAsync(
-            string userPublicId,
-            string email,
-            string firstName,
-            long bankAccountId,
-            string accountName,
-            string bankName)
-        {
-            var title = "Bank account added";
-
-            var inAppMessage =
-                $"{accountName} ({bankName}) has been linked to your MOVA account.";
-
-            var emailSubject = "Your bank account has been linked";
-
-            var emailMessage =
-                $"{accountName} ({bankName}) has been linked to your MOVA account. " +
-                $"You can now use this account to receive releases.";
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.System,
-                    title,
-                    inAppMessage,
-                    "/bank",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for added bank account {BankAccountId}.",
-                    bankAccountId);
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for added bank account {BankAccountId}.",
-                    bankAccountId);
-            }
         }
     }
 }

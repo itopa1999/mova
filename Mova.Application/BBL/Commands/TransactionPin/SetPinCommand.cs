@@ -53,7 +53,7 @@ public sealed class SetPinCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -61,7 +61,7 @@ public sealed class SetPinCommand
 
             if (string.IsNullOrWhiteSpace(request.Pin))
             {
-                op.Fail("PIN is required.");
+                op.Warning("PIN is required.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "PIN is required.");
@@ -69,7 +69,7 @@ public sealed class SetPinCommand
 
             if (request.Pin.Length != 6)
             {
-                op.Fail($"Invalid PIN length: {request.Pin.Length}");
+                op.Warning($"Invalid PIN length: {request.Pin.Length}.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "PIN must be exactly 6 digits.");
@@ -77,7 +77,7 @@ public sealed class SetPinCommand
 
             if (!request.Pin.All(char.IsDigit))
             {
-                op.Fail("PIN contains non-digit characters.");
+                op.Warning("PIN contains non-digit characters.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "PIN must contain only digits.");
@@ -87,88 +87,47 @@ public sealed class SetPinCommand
                 request.UserPublicId,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}.");
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "User not found.");
             }
 
-            try
+            var hasPin = await _transactionPinService.HasPinAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            if (hasPin)
             {
-                var hasPin = await _transactionPinService.HasPinAsync(
-                    request.UserPublicId,
-                    cancellationToken);
-
-                if (hasPin)
-                {
-                    op.Fail($"PIN already set for user {request.UserPublicId}");
-                    return new BaseResult<object>(
-                        HttpStatusCode.Conflict,
-                        "Transaction PIN has already been set.");
-                }
-
-                await _transactionPinService.SetPinAsync(
-                    request.UserPublicId,
-                    request.Pin,
-                    cancellationToken);
-
-                op.Success(
-                    $"Transaction PIN created successfully for user {request.UserPublicId}");
-            }
-            catch (ArgumentException argEx)
-            {
-                op.Fail($"Invalid PIN format: {argEx.Message}", argEx);
+                op.Warning($"PIN already set for user {request.UserPublicId}.");
                 return new BaseResult<object>(
-                    HttpStatusCode.BadRequest,
-                    "The PIN format is invalid.");
-            }
-            catch (InvalidOperationException invEx)
-            {
-                op.Fail($"PIN operation error: {invEx.Message}", invEx);
-                return new BaseResult<object>(
-                    HttpStatusCode.BadRequest,
-                    "The PIN operation could not be completed.");
-            }
-            catch (Exception ex)
-            {
-                op.Fail(
-                    $"Error setting PIN for user {request.UserPublicId}: {ex.Message}",
-                    ex);
-
-                return new BaseResult<object>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while setting your transaction PIN. Please try again later.");
+                    HttpStatusCode.Conflict,
+                    "Transaction PIN has already been set.");
             }
 
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    request.UserPublicId,
-                    NotificationType.Security,
-                    "Transaction PIN created",
-                    "Your transaction PIN was created successfully. " +
-                    "You'll need it to confirm sensitive actions.",
-                    "/settings",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for set PIN. UserPublicId: {UserPublicId}",
-                    request.UserPublicId);
-            }
+            await _transactionPinService.SetPinAsync(
+                request.UserPublicId,
+                request.Pin,
+                cancellationToken);
+
+            op.Success($"Transaction PIN created for user {request.UserPublicId}.");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Security,
+                "Transaction PIN created",
+                "Your transaction PIN was created successfully. " +
+                "You'll need it to confirm sensitive actions.",
+                "/settings",
+                null,
+                CancellationToken.None);
 
             return new BaseResult<object>(
                 HttpStatusCode.OK,
                 "Transaction PIN created successfully.",
-                new
-                {
-                    notification = true,
-                });
+                new { notification = true });
         }
     }
 }

@@ -38,7 +38,9 @@ public sealed class ResetPasswordCommand
             _logger = logger;
         }
 
-        public async Task<BaseResult> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
                 _logger,
@@ -47,7 +49,7 @@ public sealed class ResetPasswordCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -55,7 +57,7 @@ public sealed class ResetPasswordCommand
 
             if (string.IsNullOrWhiteSpace(request.NewPassword))
             {
-                op.Fail("New password is required.");
+                op.Warning("New password is required.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "New password is required.");
@@ -63,7 +65,7 @@ public sealed class ResetPasswordCommand
 
             if (request.NewPassword.Length < 8)
             {
-                op.Fail("Password must be at least 8 characters.");
+                op.Warning("Password is shorter than 8 characters.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "Password must be at least 8 characters.");
@@ -73,9 +75,9 @@ public sealed class ResetPasswordCommand
                 request.UserPublicId,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "User not found.");
@@ -87,55 +89,35 @@ public sealed class ResetPasswordCommand
 
             if (!success)
             {
-                op.Fail($"Password reset failed for user {request.UserPublicId}: {errorMessage}");
+                op.Warning($"Password reset failed for user {request.UserPublicId}: {errorMessage}");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     errorMessage);
             }
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
+            var refreshTokens = await _unitOfWork.Query<RefreshToken>()
+                .Where(rt => rt.UserPublicId == user.PublicId && rt.RevokedAt == null)
+                .ToListAsync(cancellationToken);
+
+            foreach (var token in refreshTokens)
             {
-                var refreshTokens = await _unitOfWork.Query<RefreshToken>()
-                    .Where(rt => rt.UserPublicId == user.PublicId && rt.RevokedAt == null)
-                    .ToListAsync(cancellationToken);
-
-                foreach (var token in refreshTokens)
-                {
-                    token.RevokedAt = DateTimeOffset.UtcNow;
-                    token.RevocationReason = "Password reset";
-                    _unitOfWork.Update(token);
-                }
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                op.Success($"Password reset successfully for user {request.UserPublicId}");
-
-                return new BaseResult(
-                    HttpStatusCode.OK,
-                    "Password reset successfully.");
+                token.RevokedAt = DateTimeOffset.UtcNow;
+                token.RevocationReason = "Password reset";
+                _unitOfWork.Update(token);
             }
-            catch (DbUpdateException dbEx)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error while revoking tokens for user {request.UserPublicId}: {dbEx.Message}", dbEx);
 
-                return new BaseResult(
-                    HttpStatusCode.Conflict,
-                    "An error occurred. Please try again.");
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Password reset failed with exception for user {request.UserPublicId}: {ex.Message}", ex);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                return new BaseResult(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while resetting your password. Please try again later.");
-            }
+            op.Success(
+                $"Password reset for user {request.UserPublicId}. " +
+                $"Revoked {refreshTokens.Count} refresh token(s).");
+
+            return new BaseResult(
+                HttpStatusCode.OK,
+                "Password reset successfully.");
         }
     }
 }

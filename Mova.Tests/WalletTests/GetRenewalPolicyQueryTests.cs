@@ -17,8 +17,7 @@ public sealed class GetRenewalPolicyQueryTests : BaseTest
     private GetRenewalPolicyQuery.Handler CreateHandler()
     {
         return new GetRenewalPolicyQuery.Handler(
-            UnitOfWork,
-            NullLogger<GetRenewalPolicyQuery.Handler>.Instance);
+            UnitOfWork);
     }
 
     private GetRenewalPolicyQuery.Query CreateQuery(

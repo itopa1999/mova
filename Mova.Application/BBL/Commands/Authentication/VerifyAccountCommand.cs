@@ -43,7 +43,6 @@ public sealed class VerifyAccountCommand
         public string? RefreshToken { get; set; }
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
         public string NextStep { get; set; } = string.Empty;
-
         public VirtualAccountDto? VirtualAccount { get; set; }
     }
 
@@ -70,7 +69,7 @@ public sealed class VerifyAccountCommand
             {
                 Platforms.Web,
                 Platforms.Mobile,
-                Platforms.Swagger
+                Platforms.Swagger,
             };
 
         public Handler(
@@ -89,19 +88,23 @@ public sealed class VerifyAccountCommand
             _refreshTokenService = refreshTokenService;
         }
 
-        public async Task<BaseResult<VerifyAccountResponseDto>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult<VerifyAccountResponseDto>> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
-            var identifier = !string.IsNullOrWhiteSpace(request.Email) ? request.Email : string.Empty;
+            var identifier = !string.IsNullOrWhiteSpace(request.Email)
+                ? request.Email
+                : "unknown";
 
             using var op = OperationLogger.Start(
                 _logger,
                 "VerifyAccount",
-                ("Identifier", identifier ?? "unknown"),
+                ("Identifier", identifier),
                 ("Platform", request.Platform));
 
             if (!ValidPlatforms.Contains(request.Platform))
             {
-                op.Fail($"Invalid platform: {request.Platform}");
+                op.Warning($"Invalid platform: {request.Platform}");
                 return new BaseResult<VerifyAccountResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid platform specified.");
@@ -109,7 +112,7 @@ public sealed class VerifyAccountCommand
 
             if (string.IsNullOrWhiteSpace(request.Email))
             {
-                op.Fail("No email provided.");
+                op.Warning("No email provided.");
                 return new BaseResult<VerifyAccountResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Email must be provided.");
@@ -119,9 +122,9 @@ public sealed class VerifyAccountCommand
                 request.Email,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail($"User not found for email: {request.Email}");
+                op.Warning($"User not found for email: {request.Email}");
                 return new BaseResult<VerifyAccountResponseDto>(
                     HttpStatusCode.BadRequest,
                     "User not found.");
@@ -129,162 +132,104 @@ public sealed class VerifyAccountCommand
 
             var userPublicId = user.PublicId;
             var userEmail = user.Email ?? string.Empty;
-            var userFirstName = user.FirstName ?? "Customer";
-            var accessToken = string.Empty;
-            var refreshToken = string.Empty;
-            VirtualAccount? createdVirtualAccount = null;
+            var userFirstName = string.IsNullOrWhiteSpace(user.FirstName)
+                ? "Customer"
+                : user.FirstName;
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
+            var otpVerification = await _unitOfWork.Query<OtpVerification>()
+                .Where(x => x.UserPublicId == user.PublicId
+                            && x.Purpose == OtpPurpose.AccountVerification
+                            && !x.IsUsed)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (otpVerification is null)
             {
-                var otpVerification = await _unitOfWork.Query<OtpVerification>()
-                    .Where(x => x.UserPublicId == user.PublicId
-                                && x.Purpose == OtpPurpose.AccountVerification
-                                && !x.IsUsed)
-                    .OrderByDescending(x => x.CreatedAt)
-                    .FirstOrDefaultAsync(cancellationToken);
+                op.Warning($"No valid OTP found for user {user.PublicId}.");
+                return new BaseResult<VerifyAccountResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Invalid OTP. Please request a new one.");
+            }
 
-                if (otpVerification is null)
-                {
-                    op.Fail($"No valid OTP found for user {user.PublicId}");
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    return new BaseResult<VerifyAccountResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "Invalid OTP. Please request a new one.");
-                }
+            if (otpVerification.OtpCode != request.OtpCode)
+            {
+                op.Warning($"Invalid OTP code for user {user.PublicId}.");
+                return new BaseResult<VerifyAccountResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Invalid OTP code.");
+            }
 
-                if (otpVerification.OtpCode != request.OtpCode)
-                {
-                    op.Fail($"Invalid OTP code provided for user {user.PublicId}");
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    return new BaseResult<VerifyAccountResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "Invalid OTP code.");
-                }
+            if (otpVerification.ExpiresAt < DateTimeOffset.UtcNow)
+            {
+                op.Warning($"OTP expired for user {user.PublicId}.");
+                return new BaseResult<VerifyAccountResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "OTP has expired. Please request a new one.");
+            }
 
-                if (otpVerification.ExpiresAt < DateTimeOffset.UtcNow)
-                {
-                    op.Fail($"OTP expired for user {user.PublicId}");
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    return new BaseResult<VerifyAccountResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "OTP has expired. Please request a new one.");
-                }
+            var (markSuccess, markError) = await _identityService
+                .MarkEmailAndPhoneAsVerifiedAsync(user.Id);
 
-                var (markSuccess, markError) = await _identityService.MarkEmailAndPhoneAsVerifiedAsync(user.Id);
-                if (!markSuccess)
-                {
-                    op.Fail($"Failed to mark account as verified for user {user.PublicId}: {markError}");
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    return new BaseResult<VerifyAccountResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        markError);
-                }
+            if (!markSuccess)
+            {
+                op.Warning(
+                    $"Failed to mark account verified for user {user.PublicId}: {markError}");
+                return new BaseResult<VerifyAccountResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    markError);
+            }
 
-                otpVerification.IsUsed = true;
-                otpVerification.UsedAt = DateTimeOffset.UtcNow;
-                _unitOfWork.Update(otpVerification);
+            otpVerification.IsUsed = true;
+            otpVerification.UsedAt = DateTimeOffset.UtcNow;
+            _unitOfWork.Update(otpVerification);
 
-                // ─── Create virtual account (random, synchronous) ───
-                var existingVirtualAccount = await _unitOfWork.Query<VirtualAccount>()
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        x => x.UserPublicId == userPublicId,
-                        cancellationToken);
-
-                if (existingVirtualAccount is null)
-                {
-                    createdVirtualAccount = BuildRandomVirtualAccount(
-                        userPublicId,
-                        user.FullName ?? $"{userFirstName} Customer");
-
-                    await _unitOfWork.AddAsync(createdVirtualAccount, cancellationToken);
-
-                    op.Success(
-                        $"Virtual account generated: {createdVirtualAccount.AccountNumber} " +
-                        $"({createdVirtualAccount.BankName})");
-                }
-                else
-                {
-                    createdVirtualAccount = existingVirtualAccount;
-                    op.Success(
-                        $"Reusing existing virtual account: {existingVirtualAccount.AccountNumber}");
-                }
-
-                var roles = await _identityService.GetRolesAsync(user.Id);
-
-                accessToken = _jwtTokenGenerator.GenerateToken(
-                    user.Id,
-                    user.PublicId,
-                    user.FirstName,
-                    user.OtherNames,
-                    user.LastName,
-                    user.Email,
-                    user.PhoneNumber,
-                    user.Balance.ToDecimal(),
-                    user.FullName ?? string.Empty,
-                    request.Platform,
-                    roles);
-
-                var (newRefreshToken, refreshTokenEntity) = await _refreshTokenService.CreateAsync(
-                    user.PublicId,
+            var existingVirtualAccount = await _unitOfWork.Query<VirtualAccount>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.UserPublicId == userPublicId,
                     cancellationToken);
 
-                await _unitOfWork.AddAsync(refreshTokenEntity, cancellationToken);
+            VirtualAccount virtualAccount;
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                refreshToken = newRefreshToken;
-
-                op.Success($"Account verified successfully for user {userPublicId}. Tokens issued, virtual account ready.");
-            }
-            catch (DbUpdateException dbEx)
+            if (existingVirtualAccount is null)
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error during account verification for user {userPublicId}: {dbEx.Message}", dbEx);
-
-                return new BaseResult<VerifyAccountResponseDto>(
-                    HttpStatusCode.Conflict,
-                    "An error occurred. Please try again.");
+                virtualAccount = BuildRandomVirtualAccount(userPublicId, user.FullName);
+                await _unitOfWork.AddAsync(virtualAccount, cancellationToken);
             }
-            catch (Exception ex)
+            else
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Account verification failed for user {userPublicId}: {ex.Message}", ex);
-
-                return new BaseResult<VerifyAccountResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while verifying your account. Please try again later.");
+                virtualAccount = existingVirtualAccount;
             }
 
-            // ─── Post-commit notifications ───
-            try
-            {
-                _notificationQueue.QueueWelcomeEmail(
-                    userFirstName,
-                    userEmail);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to queue welcome email for {UserPublicId}.",
-                    userPublicId);
-            }
+            var roles = await _identityService.GetRolesAsync(user.Id);
 
-            var virtualAccountDto = createdVirtualAccount is null
-                ? null
-                : new VirtualAccountDto
-                {
-                    AccountNumber = createdVirtualAccount.AccountNumber,
-                    AccountName = createdVirtualAccount.AccountName,
-                    BankName = createdVirtualAccount.BankName,
-                    Currency = createdVirtualAccount.Currency,
-                    Provider = createdVirtualAccount.Provider.ToString(),
-                };
+            var accessToken = _jwtTokenGenerator.GenerateToken(
+                user.Id,
+                user.PublicId,
+                user.FirstName,
+                user.OtherNames,
+                user.LastName,
+                user.Email,
+                user.PhoneNumber,
+                user.Balance.ToDecimal(),
+                user.FullName,
+                request.Platform,
+                roles);
+
+            var (refreshTokenValue, refreshTokenEntity) =
+                await _refreshTokenService.CreateAsync(user.PublicId, cancellationToken);
+
+            await _unitOfWork.AddAsync(refreshTokenEntity, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success(
+                $"Account verified for user {userPublicId}. " +
+                $"Virtual account: {virtualAccount.AccountNumber} ({virtualAccount.BankName}).");
+
+            _notificationQueue.QueueWelcomeEmail(userFirstName, userEmail);
 
             return new BaseResult<VerifyAccountResponseDto>(
                 HttpStatusCode.OK,
@@ -295,26 +240,31 @@ public sealed class VerifyAccountCommand
                     IsAccountVerified = true,
                     Email = userEmail,
                     Phone = user.PhoneNumber ?? string.Empty,
-                    FullName = user.FullName ?? string.Empty,
+                    FullName = user.FullName,
                     ProfilePicture = user.ProfilePicture,
                     Balance = user.Balance.ToDecimal(),
                     Platform = request.Platform,
                     AccessToken = accessToken,
-                    RefreshToken = refreshToken,
+                    RefreshToken = refreshTokenValue,
                     AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
                     NextStep = NextSteps.CreateTransactionPin,
-                    VirtualAccount = virtualAccountDto,
+                    VirtualAccount = new VirtualAccountDto
+                    {
+                        AccountNumber = virtualAccount.AccountNumber,
+                        AccountName = virtualAccount.AccountName,
+                        BankName = virtualAccount.BankName,
+                        Currency = virtualAccount.Currency,
+                        Provider = virtualAccount.Provider.ToString(),
+                    },
                 });
         }
 
-        // ─── Random virtual account generator ─────────────────
         private static VirtualAccount BuildRandomVirtualAccount(
             string userPublicId,
             string fullName)
         {
             var rng = Random.Shared;
 
-            // A small set of "partner banks" so the account looks plausible
             var partnerBanks = new[]
             {
                 "Wema Bank",
@@ -325,8 +275,6 @@ public sealed class VerifyAccountCommand
             };
 
             var bankName = partnerBanks[rng.Next(partnerBanks.Length)];
-
-            // Paystack-style 10-digit NUBAN starting with "9"
             var accountNumber = "9" + rng.Next(100_000_000, 999_999_999).ToString();
 
             return new VirtualAccount

@@ -51,7 +51,7 @@ public sealed class RenewalService : IRenewalService
 
         if (wallet is null)
         {
-            op.Fail("Wallet not found.");
+            op.Error("Wallet not found.");
             return new RenewalOutcome { Skipped = true, SkipReason = "Wallet not found." };
         }
 
@@ -106,7 +106,7 @@ public sealed class RenewalService : IRenewalService
 
         if (nominalRefill <= 0)
         {
-            op.Fail("Refill amount resolved to zero or less.");
+            op.Error("Refill amount resolved to zero or less.");
             await LogFailedAsync(
                 wallet, policy, firedBy,
                 Money.FromNaira(0),
@@ -120,7 +120,7 @@ public sealed class RenewalService : IRenewalService
 
         if (user is null)
         {
-            op.Fail("User not found.");
+            op.Error("User not found.");
             await LogFailedAsync(
                 wallet, policy, firedBy,
                 Money.FromNaira(nominalRefill),
@@ -143,7 +143,7 @@ public sealed class RenewalService : IRenewalService
         var releaseAmount = wallet.Rule?.Amount.ToDecimal() ?? 0m;
         if (releaseAmount <= 0)
         {
-            op.Fail("Wallet rule has invalid release amount.");
+            op.Error("Wallet rule has invalid release amount.");
             await LogFailedAsync(
                 wallet, policy, firedBy,
                 Money.FromNaira(nominalRefill),
@@ -314,7 +314,7 @@ public sealed class RenewalService : IRenewalService
                 }
 
                 failureReason = "Insufficient main account balance.";
-                op.Fail(failureReason);
+                op.Warning(failureReason);
 
                 try
                 {
@@ -497,7 +497,7 @@ public sealed class RenewalService : IRenewalService
                 await _context.Database.RollbackTransactionAsync(cancellationToken);
             }
 
-            op.Fail(
+            op.Error(
                 $"Error during renewal for wallet {wallet.Id}.",
                 ex);
 

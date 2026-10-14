@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -106,8 +106,16 @@ public sealed class FundAccount
             Command request,
             CancellationToken cancellationToken)
         {
+            using var op = OperationLogger.Start(
+                _logger,
+                "FundAccount",
+                ("UserPublicId", request.UserPublicId),
+                ("Amount", request.Amount),
+                ("Provider", request.Provider));
+
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
+                op.Warning("User ID is required.");
                 return new BaseResult<FundAccountDto>(
                     HttpStatusCode.BadRequest,
                     "User ID is required.");
@@ -117,6 +125,7 @@ public sealed class FundAccount
                 request.Amount > MaximumFundingAmount ||
                 Math.Round(request.Amount, 2) != request.Amount)
             {
+                op.Warning($"Invalid amount: {request.Amount}.");
                 return new BaseResult<FundAccountDto>(
                     HttpStatusCode.BadRequest,
                     $"Funding amount must be at least ₦{MinimumFundingAmount:N0}, " +
@@ -126,37 +135,30 @@ public sealed class FundAccount
 
             if (!ProviderParser.TryParse(request.Provider, out var provider))
             {
+                op.Warning($"Unsupported provider: {request.Provider}.");
                 return new BaseResult<FundAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Unsupported payment provider. " +
-                    "Use 'paystack', 'flutterwave', or 'monnify' " +
-                    "(or 1, 2, 3).");
+                    "Use 'paystack', 'flutterwave', or 'monnify' (or 1, 2, 3).");
             }
-
-            using var op = OperationLogger.Start(
-                _logger,
-                "FundAccount",
-                ("UserPublicId", request.UserPublicId),
-                ("Amount", request.Amount),
-                ("Provider", provider.ToString()));
 
             if (!await _featureFlagService.IsEnabledAsync(
                 FeatureFlagName.AllowDepositFunds,
                 cancellationToken))
             {
-                op.Success("Deposit are disabled");
+                op.Warning("Deposits are disabled globally.");
                 return new BaseResult<FundAccountDto>(
                     HttpStatusCode.BadRequest,
-                    "Payment cannot be completed at this time");
+                    "Payment cannot be completed at this time.");
             }
 
             var user = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail("User not found.");
+                op.Warning($"User not found: {request.UserPublicId}.");
                 return new BaseResult<FundAccountDto>(
                     HttpStatusCode.NotFound,
                     "User not found.");
@@ -164,148 +166,85 @@ public sealed class FundAccount
 
             var reference = $"MOVA-{Guid.NewGuid():N}".ToUpperInvariant();
 
-            string authorizationUrl;
-
-            switch (provider)
+            var (providerEnabled, providerName) = provider switch
             {
-                case PaymentProvider.Paystack:
-                    {
-                        if (!await _featureFlagService.IsEnabledAsync(
-                            FeatureFlagName.DepositViaPaystack,
-                            cancellationToken))
-                        {
-                            op.Success("Paystack is disabled");
-                            return new BaseResult<FundAccountDto>(
-                                HttpStatusCode.BadRequest,
-                                "Payment cannot be completed at this time, please choose another gataway method");
-                        }
+                PaymentProvider.Paystack => (
+                    await _featureFlagService.IsEnabledAsync(
+                        FeatureFlagName.DepositViaPaystack, cancellationToken),
+                    "Paystack"),
+                PaymentProvider.Flutterwave => (
+                    await _featureFlagService.IsEnabledAsync(
+                        FeatureFlagName.DepositViaFlutterwave, cancellationToken),
+                    "Flutterwave"),
+                PaymentProvider.Monnify => (
+                    await _featureFlagService.IsEnabledAsync(
+                        FeatureFlagName.DepositViaMonnify, cancellationToken),
+                    "Monnify"),
+                _ => (false, "Unknown"),
+            };
 
-                        var response = await _paystackService.InitializePaymentAsync(
-                            user.Email,
-                            request.Amount,
-                            reference,
-                            cancellationToken);
-
-                        if (!response.Success)
-                        {
-                            op.Fail($"Paystack init failed: {response.Message}");
-                            return new BaseResult<FundAccountDto>(
-                                HttpStatusCode.BadRequest,
-                                response.Message ?? "Unable to initialize Paystack payment.");
-                        }
-
-                        authorizationUrl = response.AuthorizationUrl!;
-                        break;
-                    }
-
-                case PaymentProvider.Flutterwave:
-                    {
-                        if (!await _featureFlagService.IsEnabledAsync(
-                            FeatureFlagName.DepositViaFlutterwave,
-                            cancellationToken))
-                        {
-                            op.Success("FlutterWave is disabled");
-                            return new BaseResult<FundAccountDto>(
-                                HttpStatusCode.BadRequest,
-                                "Payment cannot be completed at this time, please choose another gataway method");
-                        }
-                        var response = await _flutterwaveService.InitializePaymentAsync(
-                            user.Email,
-                            request.Amount,
-                            reference,
-                            cancellationToken);
-
-                        if (!response.Success)
-                        {
-                            op.Fail($"Flutterwave init failed: {response.Message}");
-                            return new BaseResult<FundAccountDto>(
-                                HttpStatusCode.BadRequest,
-                                response.Message ?? "Unable to initialize Flutterwave payment.");
-                        }
-
-                        authorizationUrl = response.AuthorizationUrl!;
-                        break;
-                    }
-
-                case PaymentProvider.Monnify:
-                    {
-                        if (!await _featureFlagService.IsEnabledAsync(
-                            FeatureFlagName.DepositViaMonnify,
-                            cancellationToken))
-                        {
-                            op.Success("Monnify is disabled");
-                            return new BaseResult<FundAccountDto>(
-                                HttpStatusCode.BadRequest,
-                                "Payment cannot be completed at this time, please choose another gataway method");
-                        }
-                        var response = await _monnifyService.InitializePaymentAsync(
-                            user.Email,
-                            request.Amount,
-                            reference,
-                            cancellationToken);
-
-                        if (!response.Success)
-                        {
-                            op.Fail($"Monnify init failed: {response.Message}");
-                            return new BaseResult<FundAccountDto>(
-                                HttpStatusCode.BadRequest,
-                                response.Message ?? "Unable to initialize Monnify payment.");
-                        }
-
-                        authorizationUrl = response.AuthorizationUrl!;
-                        break;
-                    }
-
-                default:
-                    op.Fail("Unsupported payment provider.");
-                    return new BaseResult<FundAccountDto>(
-                        HttpStatusCode.BadRequest,
-                        "Unsupported payment provider.");
+            if (!providerEnabled)
+            {
+                op.Warning($"{providerName} is disabled.");
+                return new BaseResult<FundAccountDto>(
+                    HttpStatusCode.BadRequest,
+                    "Payment cannot be completed at this time, please choose another gateway method.");
             }
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-            try
+            PaymentInitializationResultDto response = provider switch
             {
-                var amount = Money.FromNaira(request.Amount);
+                PaymentProvider.Paystack => await _paystackService.InitializePaymentAsync(
+                    user.Email, request.Amount, reference, cancellationToken),
 
-                var transaction = new Transaction
+                PaymentProvider.Flutterwave => await _flutterwaveService.InitializePaymentAsync(
+                    user.Email, request.Amount, reference, cancellationToken),
+
+                PaymentProvider.Monnify => await _monnifyService.InitializePaymentAsync(
+                    user.Email, request.Amount, reference, cancellationToken),
+
+                _ => new PaymentInitializationResultDto
                 {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = null,
-                    Title = $"Fund account via {provider}",
-                    Provider = provider,
-                    Amount = amount,
-                    Type = TransactionType.Deposit,
-                    Status = TransactionStatus.Processing,
-                    Reference = reference,
-                    CompletedAt = null,
-                };
+                    Success = false,
+                    Message = "Unsupported payment provider.",
+                },
+            };
 
-                await _unitOfWork.AddAsync(transaction, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                op.Success($"Payment initialized. TransactionId: {transaction.Id}");
-
-                return new BaseResult<FundAccountDto>(
-                    HttpStatusCode.OK,
-                    "Proceed to gateway",
-                    new FundAccountDto
-                    {
-                        AuthorizationUrl = authorizationUrl,
-                    });
-            }
-            catch (Exception exception)
+            if (!response.Success || string.IsNullOrWhiteSpace(response.AuthorizationUrl))
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-
-                op.Fail("Unable to initialize funding transaction.", exception);
-
+                op.Warning($"{providerName} init failed: {response.Message}");
                 return new BaseResult<FundAccountDto>(
-                    HttpStatusCode.InternalServerError,
-                    "Unable to initialize funding. Please try again.");
+                    HttpStatusCode.BadRequest,
+                    response.Message ?? $"Unable to initialize {providerName} payment.");
             }
+
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
+
+            var transaction = new Transaction
+            {
+                UserPublicId = request.UserPublicId,
+                WalletId = null,
+                Title = $"Fund account via {provider}",
+                Provider = provider,
+                Amount = Money.FromNaira(request.Amount),
+                Type = TransactionType.Deposit,
+                Status = TransactionStatus.Processing,
+                Reference = reference,
+                CompletedAt = null,
+            };
+
+            await _unitOfWork.AddAsync(transaction, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success($"Payment initialized. TransactionId: {transaction.Id}.");
+
+            return new BaseResult<FundAccountDto>(
+                HttpStatusCode.OK,
+                "Proceed to gateway",
+                new FundAccountDto
+                {
+                    AuthorizationUrl = response.AuthorizationUrl,
+                });
         }
     }
 }

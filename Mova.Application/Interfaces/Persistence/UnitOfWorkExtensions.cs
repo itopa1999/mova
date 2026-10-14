@@ -1,3 +1,5 @@
+using System.Data;
+
 namespace Mova.Application.Interfaces.Persistence;
 
 public static class UnitOfWorkExtensions
@@ -13,11 +15,23 @@ public static class UnitOfWorkExtensions
     /// await tx.CommitAsync(cancellationToken);
     /// </code>
     /// </summary>
+    ///     
     public static async Task<AtomicTransaction> BeginAtomicAsync(
         this IUnitOfWork unitOfWork,
         CancellationToken cancellationToken = default)
     {
         await unitOfWork.BeginTransactionAsync(cancellationToken);
+        return new AtomicTransaction(unitOfWork);
+    }
+
+    public static async Task<AtomicTransaction> BeginAtomicSerializableAsync(
+        this IUnitOfWork unitOfWork,
+        CancellationToken cancellationToken = default)
+    {
+        await unitOfWork.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         return new AtomicTransaction(unitOfWork);
     }
 }

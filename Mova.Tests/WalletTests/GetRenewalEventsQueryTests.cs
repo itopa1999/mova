@@ -18,8 +18,7 @@ public sealed class GetRenewalEventsQueryTests : BaseTest
     private GetRenewalEventsQuery.Handler CreateHandler()
     {
         return new GetRenewalEventsQuery.Handler(
-            UnitOfWork,
-            NullLogger<GetRenewalEventsQuery.Handler>.Instance);
+            UnitOfWork);
     }
 
     private GetRenewalEventsQuery.Query CreateQuery(
