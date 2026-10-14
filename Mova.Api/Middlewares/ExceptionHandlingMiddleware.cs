@@ -1,8 +1,8 @@
 using System.Data.Common;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
-using Mova.Shared.Logging;
 using Mova.Shared.Common;
+using Mova.Shared.Logging;
 
 namespace Mova.Api.Middlewares;
 
@@ -46,18 +46,35 @@ public class ExceptionHandlingMiddleware
             ("Path", context.Request.Path.ToString()),
             ("Method", context.Request.Method));
 
-        if (context.Response.HasStarted)
+        // Real client disconnect only. TaskCanceledException from HttpClient
+        // timeouts inherits from OperationCanceledException but does NOT
+        // cancel RequestAborted — those fall through and are handled below.
+        if (exception is OperationCanceledException
+            && context.RequestAborted.IsCancellationRequested)
         {
-            op.Fail("Response already started", exception);
+            op.Warning("Request was cancelled by the client.");
             return;
         }
 
-        op.Fail("Unhandled exception", exception);
+        if (context.Response.HasStarted)
+        {
+            op.Warning("Response already started — cannot write error response.");
+            return;
+        }
+
+        var (statusCode, message) = GetExceptionDetails(exception);
+
+        if ((int)statusCode >= 500)
+        {
+            op.Error("Unhandled system exception.", exception);
+        }
+        else
+        {
+            op.Warning($"Handled {statusCode}: {exception.GetType().Name}");
+        }
 
         context.Response.Clear();
         context.Response.ContentType = "application/json";
-
-        var (statusCode, message) = GetExceptionDetails(exception);
 
         context.Response.StatusCode = (int)statusCode;
         context.Response.Headers["X-Request-Id"] = requestId;
@@ -110,17 +127,23 @@ public class ExceptionHandlingMiddleware
 
         if (exception is UnauthorizedAccessException)
         {
-            return (HttpStatusCode.Unauthorized, "You are not authorized to perform this action.");
+            return (
+                HttpStatusCode.Unauthorized,
+                "You are not authorized to perform this action.");
         }
 
         if (exception is KeyNotFoundException)
         {
-            return (HttpStatusCode.NotFound, "The requested resource was not found.");
+            return (
+                HttpStatusCode.NotFound,
+                "The requested resource was not found.");
         }
 
-        if (exception is TimeoutException)
+        if (exception is TimeoutException or TaskCanceledException)
         {
-            return (HttpStatusCode.RequestTimeout, "The request timed out. Please try again.");
+            return (
+                HttpStatusCode.GatewayTimeout,
+                "The upstream service took too long to respond. Please try again.");
         }
 
         if (exception is NotImplementedException)

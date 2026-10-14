@@ -32,6 +32,13 @@ if (builder.Environment.IsProduction())
         options.Debug = false;
         options.EnableLogs = true;
     });
+    builder.Logging.AddSentry(options =>
+    {
+        options.Dsn = builder.Configuration["Sentry:Dsn"];
+        options.MinimumEventLevel = LogLevel.Error;
+        options.MinimumBreadcrumbLevel = LogLevel.Information;
+        options.AttachStacktrace = true;
+    });
 }
 
 var startup = new Startup(builder.Configuration);
