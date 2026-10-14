@@ -374,39 +374,51 @@ public class AuthenticationController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    
     private void SetAuthenticationCookies(
         string accessToken,
         string refreshToken)
     {
+        var isProduction = !HttpContext.RequestServices
+            .GetRequiredService<IWebHostEnvironment>()
+            .IsDevelopment();
+
+        var sameSite = isProduction
+            ? SameSiteMode.None
+            : SameSiteMode.Strict;
+
+        var secure = isProduction || HttpContext.Request.IsHttps;
 
         var accessTokenOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = HttpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Strict,
+            Secure = secure,
+            SameSite = sameSite,
             Path = "/",
             Expires = DateTimeOffset.UtcNow.AddMinutes(
                 _jwt.AccessTokenExpiryMinutes),
-            MaxAge = TimeSpan.FromMinutes(_jwt.AccessTokenExpiryMinutes)
+            MaxAge = TimeSpan.FromMinutes(
+                _jwt.AccessTokenExpiryMinutes)
         };
-
-        Response.Cookies.Append("access_token", accessToken, accessTokenOptions);
 
         var refreshTokenOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = HttpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Strict,
+            Secure = secure,
+            SameSite = sameSite,
             Path = "/",
             Expires = DateTimeOffset.UtcNow.AddDays(
                 _jwt.RefreshTokenExpiryDays),
-            MaxAge = TimeSpan.FromDays(_jwt.RefreshTokenExpiryDays)
+            MaxAge = TimeSpan.FromDays(
+                _jwt.RefreshTokenExpiryDays)
         };
 
-        Response.Cookies.Append("refresh_token", refreshToken, refreshTokenOptions);
+        Response.Cookies.Append(
+            "access_token", accessToken, accessTokenOptions);
 
+        Response.Cookies.Append(
+            "refresh_token", refreshToken, refreshTokenOptions);
     }
-
     private void RemoveAuthenticationTokensFromResponse(
         string? accessToken,
         string? refreshToken,
