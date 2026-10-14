@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -176,7 +177,6 @@ public abstract class BaseTest : IAsyncLifetime
             PublicId  = publicId,
             Email     = email ?? $"{publicId}@mova.test",
             IsDeleted = isDeleted,
-            // TODO: add remaining required columns for your User entity.
         };
 
         await UnitOfWork.AddAsync(user);
@@ -199,6 +199,15 @@ public abstract class BaseTest : IAsyncLifetime
                 value => value.HasValue
                     ? new DateTimeOffset(DateTime.SpecifyKind(value.Value, DateTimeKind.Utc))
                     : null);
+        private static readonly ValueConverter<string[], string>
+            SqliteStringArrayConverter = new(
+                value => JsonSerializer.Serialize(value, (JsonSerializerOptions?)null),
+                value => string.IsNullOrEmpty(value)
+                    ? Array.Empty<string>()
+                    : JsonSerializer.Deserialize<string[]>(
+                          value,
+                          (JsonSerializerOptions?)null)
+                      ?? Array.Empty<string>());
 
         public SqliteTestApplicationDbContext(
             DbContextOptions<ApplicationDbContext> options,
@@ -222,6 +231,11 @@ public abstract class BaseTest : IAsyncLifetime
                     else if (property.ClrType == typeof(DateTimeOffset?))
                     {
                         property.SetValueConverter(SqliteNullableDateTimeOffsetConverter);
+                    }
+                    else if (property.ClrType == typeof(string[]))
+                    {
+                        property.SetColumnType("TEXT");
+                        property.SetValueConverter(SqliteStringArrayConverter);
                     }
                 }
             }

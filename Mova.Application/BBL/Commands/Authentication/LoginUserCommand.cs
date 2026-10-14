@@ -221,7 +221,7 @@ public sealed class LoginUserCommand
                     op.Fail($"Account locked after failed attempt for user {user.PublicId}");
 
                     return new BaseResult<LoginResultDto>(
-                        HttpStatusCode.Locked,
+                        HttpStatusCode.BadRequest,
                         $"Too many failed login attempts. Your account has been locked " +
                         $"for {minutesLeft} minute(s).",
                         new LoginResultDto

@@ -1134,7 +1134,7 @@ public sealed class LoginUserCommandTests : BaseTest
         var result = await handler.Handle(CreateCommand(), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.Locked, result.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
     [Fact]

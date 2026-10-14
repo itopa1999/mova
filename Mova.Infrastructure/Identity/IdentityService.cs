@@ -62,6 +62,9 @@ public sealed class IdentityService : IIdentityService
             PhoneNumber = phoneNumber,
             PublicId = string.Empty,
             ProfilePicture = DefaultProfilePictures.PickRandom(),
+            Balance = Money.FromNaira(0),
+            AccountStatus = UserAccountStatus.Active,
+            
         };
 
         user.BvnHash = _passwordHasher.HashPassword(user, BVN);
