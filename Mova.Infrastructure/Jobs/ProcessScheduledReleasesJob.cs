@@ -79,114 +79,111 @@ public sealed class ProcessScheduledReleasesJob
             "ProcessScheduledRelease",
             ("ScheduledReleaseId", releaseId));
 
-        string creditedUserPublicId = string.Empty;
-        string walletName = string.Empty;
-        long walletId = 0;
-        decimal releasedAmount = 0m;
-        bool wasProcessed = false;
-        PayoutDestination? releasedDestination = null;
-
         await using var transaction = await _context.Database
             .BeginTransactionAsync(cancellationToken);
 
-        try
+        var scheduledRelease = await _context.ScheduledReleases
+            .FirstOrDefaultAsync(x => x.Id == releaseId, cancellationToken);
+
+        if (scheduledRelease is null
+            || scheduledRelease.Status != ReleaseStatus.Scheduled
+        // || scheduledRelease.ScheduledFor > DateTimeOffset.UtcNow)
+        )
         {
-            var scheduledRelease = await _context.ScheduledReleases
-                .FirstOrDefaultAsync(x => x.Id == releaseId, cancellationToken);
+            op.Success("Release not eligible — skipping.");
+            return;
+        }
 
-            if (scheduledRelease is null
-                || scheduledRelease.Status != ReleaseStatus.Scheduled
-            // || scheduledRelease.ScheduledFor > DateTimeOffset.UtcNow)
-            )
+        var wallet = await _context.Wallets
+            .FirstOrDefaultAsync(x => x.Id == scheduledRelease.WalletId, cancellationToken);
+
+        if (wallet is null)
+        {
+            MarkFailure(scheduledRelease);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            op.Warning("Wallet not found — release marked for retry.");
+            return;
+        }
+
+        if (wallet.Status is WalletStatus.Closed or WalletStatus.Paused)
+        {
+            scheduledRelease.Status = ReleaseStatus.Paused;
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            op.Success($"Wallet {wallet.Status} — release paused.");
+            return;
+        }
+
+        if (wallet.Status == WalletStatus.Broken)
+        {
+            MarkFailure(scheduledRelease);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            op.Warning("Wallet broken — release marked for retry.");
+            return;
+        }
+
+        if (wallet.Status == WalletStatus.Completed)
+        {
+            scheduledRelease.Status = ReleaseStatus.Cancelled;
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            op.Success("Wallet completed — release cancelled.");
+            return;
+        }
+
+        if (wallet.LockedAmount.MinorUnits <= 0)
+        {
+            MarkFailure(scheduledRelease);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            op.Warning("Wallet has no locked amount — release marked for retry.");
+            return;
+        }
+
+        if (wallet.LockedAmount.MinorUnits < scheduledRelease.Amount.MinorUnits)
+        {
+            scheduledRelease.Amount = wallet.LockedAmount;
+        }
+
+        var reference = $"scheduled-release:{scheduledRelease.Id}";
+        var alreadyProcessed = await _context.Transactions
+            .AnyAsync(x => x.Reference == reference, cancellationToken);
+
+        if (alreadyProcessed)
+        {
+            scheduledRelease.Status = ReleaseStatus.Released;
+            scheduledRelease.ReleasedAt ??= DateTimeOffset.UtcNow;
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            op.Success("Release already processed — idempotent skip.");
+            return;
+        }
+
+        scheduledRelease.Status = ReleaseStatus.Processing;
+
+        wallet.LockedAmount -= scheduledRelease.Amount;
+        wallet.TotalReleasedAmount += scheduledRelease.Amount;
+        wallet.ResetAmount += scheduledRelease.Amount;
+
+        if (wallet.PayoutDestination == PayoutDestination.Wallet)
+        {
+            wallet.AvailableAmount += scheduledRelease.Amount;
+        }
+        else if (wallet.PayoutDestination is PayoutDestination.Bank
+                 or PayoutDestination.Main
+                 or PayoutDestination.Utilities)
+        {
+            var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";
+
+            var payoutAlreadyExists = await _context.Set<Payout>()
+                .AnyAsync(x => x.Reference == payoutReference, cancellationToken);
+
+            if (!payoutAlreadyExists)
             {
-                await transaction.RollbackAsync(cancellationToken);
-                return;
-            }
-
-            var wallet = await _context.Wallets
-                .FirstOrDefaultAsync(x => x.Id == scheduledRelease.WalletId, cancellationToken);
-
-            if (wallet is null)
-            {
-                MarkFailure(scheduledRelease);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            if (wallet.Status is WalletStatus.Closed or WalletStatus.Paused)
-            {
-                scheduledRelease.Status = ReleaseStatus.Paused;
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            if (wallet.Status == WalletStatus.Broken)
-            {
-                MarkFailure(scheduledRelease);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            if (wallet.Status == WalletStatus.Completed)
-            {
-                scheduledRelease.Status = ReleaseStatus.Cancelled;
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            if (wallet.LockedAmount.MinorUnits <= 0)
-            {
-                MarkFailure(scheduledRelease);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            if (wallet.LockedAmount.MinorUnits < scheduledRelease.Amount.MinorUnits)
-            {
-                scheduledRelease.Amount = wallet.LockedAmount;
-            }
-
-            var reference = $"scheduled-release:{scheduledRelease.Id}";
-            var alreadyProcessed = await _context.Transactions
-                .AnyAsync(x => x.Reference == reference, cancellationToken);
-
-            if (alreadyProcessed)
-            {
-                scheduledRelease.Status = ReleaseStatus.Released;
-                scheduledRelease.ReleasedAt ??= DateTimeOffset.UtcNow;
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return;
-            }
-
-            scheduledRelease.Status = ReleaseStatus.Processing;
-
-            wallet.LockedAmount -= scheduledRelease.Amount;
-            wallet.TotalReleasedAmount += scheduledRelease.Amount;
-            wallet.ResetAmount += scheduledRelease.Amount;
-
-            if (wallet.PayoutDestination == PayoutDestination.Wallet)
-            {
-                wallet.AvailableAmount += scheduledRelease.Amount;
-                op.Success("Release kept in wallet available balance.");
-            }
-            else if (wallet.PayoutDestination == PayoutDestination.Bank
-                     || wallet.PayoutDestination == PayoutDestination.Main
-                     || wallet.PayoutDestination == PayoutDestination.Utilities)
-            {
-                var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";
-
-                var payoutAlreadyExists = await _context.Set<Payout>()
-                    .AnyAsync(x => x.Reference == payoutReference, cancellationToken);
-
-                if (!payoutAlreadyExists)
-                {
-                    var payout = new Payout
+                await _context.Set<Payout>().AddAsync(
+                    new Payout
                     {
                         UserPublicId = wallet.UserPublicId,
                         WalletId = wallet.Id,
@@ -203,139 +200,112 @@ public sealed class ProcessScheduledReleasesJob
                         FailedAttempts = 0,
                         Status = PayoutStatus.Pending,
                         InitiatedAt = DateTimeOffset.UtcNow,
-                    };
-
-                    await _context.Set<Payout>().AddAsync(payout, cancellationToken);
-                }
-
-                op.Success($"Release queued as {wallet.PayoutDestination} payout.");
+                    },
+                    cancellationToken);
             }
-            else
-            {
-                throw new InvalidOperationException(
-                    $"Unsupported payout destination: {wallet.PayoutDestination}");
-            }
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"Unsupported payout destination: {wallet.PayoutDestination}");
+        }
 
-            var releaseTransaction = new Transaction
-            {
-                UserPublicId = wallet.UserPublicId,
-                WalletId = wallet.Id,
-                Title = "Schedule Released",
-                Amount = scheduledRelease.Amount,
-                Type = TransactionType.Release,
-                Status = TransactionStatus.Completed,
-                Reference = reference,
-                CompletedAt = DateTimeOffset.UtcNow
-            };
+        var releaseTransaction = new Transaction
+        {
+            UserPublicId = wallet.UserPublicId,
+            WalletId = wallet.Id,
+            Title = "Schedule Released",
+            Amount = scheduledRelease.Amount,
+            Type = TransactionType.Release,
+            Status = TransactionStatus.Completed,
+            Reference = reference,
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
 
-            await _context.Transactions.AddAsync(releaseTransaction, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
+        await _context.Transactions.AddAsync(releaseTransaction, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
 
-            var ledgerEntry = new LedgerEntry
+        await _context.LedgerEntries.AddAsync(
+            new LedgerEntry
             {
                 WalletId = wallet.Id,
                 TransactionId = releaseTransaction.Id,
                 Amount = scheduledRelease.Amount,
-                IsCredit = false
-            };
+                IsCredit = false,
+            },
+            cancellationToken);
 
-            await _context.LedgerEntries.AddAsync(ledgerEntry, cancellationToken);
+        var inAppDestination = wallet.PayoutDestination switch
+        {
+            PayoutDestination.Bank =>
+                "and is on its way to your linked bank account.",
+            PayoutDestination.Wallet =>
+                "and is now available in your wallet balance.",
+            PayoutDestination.Main =>
+                "and has been added to your main MOVA balance.",
+            PayoutDestination.Utilities =>
+                "and has been used to top up your utility.",
+            _ => "and has been released."
+        };
 
-            var inAppDestination = wallet.PayoutDestination switch
-            {
-                PayoutDestination.Bank =>
-                    "and is on its way to your linked bank account.",
-                PayoutDestination.Wallet =>
-                    "and is now available in your wallet balance.",
-                PayoutDestination.Main =>
-                    "and has been added to your main MOVA balance.",
-                PayoutDestination.Utilities =>
-                    "and has been used to top up your utility.",
-                _ => "and has been released."
-            };
-
-            var notification = new AppNotification
+        await _context.Set<AppNotification>().AddAsync(
+            new AppNotification
             {
                 UserPublicId = wallet.UserPublicId,
                 Type = NotificationType.Release,
                 Title = $"{wallet.Name} schedule released",
-                Message = $"₦{scheduledRelease.Amount.ToDecimal():N0} has been released from your {wallet.Name} wallet {inAppDestination}",
+                Message = $"₦{scheduledRelease.Amount.ToDecimal():N0} has been released " +
+                          $"from your {wallet.Name} wallet {inAppDestination}",
                 IsRead = false,
                 ActionUrl = $"/wallet/{wallet.Id}",
                 Metadata = null,
-            };
+            },
+            cancellationToken);
 
-            await _context.Set<AppNotification>().AddAsync(notification, cancellationToken);
+        scheduledRelease.Status = ReleaseStatus.Released;
+        scheduledRelease.ReleasedAt = DateTimeOffset.UtcNow;
 
-            scheduledRelease.Status = ReleaseStatus.Released;
-            scheduledRelease.ReleasedAt = DateTimeOffset.UtcNow;
+        await TryThresholdRenewalAsync(wallet, cancellationToken);
+        await EnsureNextScheduledReleaseAsync(wallet, scheduledRelease, cancellationToken);
 
-            await TryThresholdRenewalAsync(
-                wallet,
-                cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
-            await EnsureNextScheduledReleaseAsync(
-                wallet,
-                scheduledRelease,
-                cancellationToken);
+        op.Success(
+            $"Release processed. WalletId: {wallet.Id}, " +
+            $"Amount: ₦{scheduledRelease.Amount.ToDecimal():N2}, " +
+            $"Destination: {wallet.PayoutDestination}.");
 
-            await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+        await RunPostCommitSideEffectsAsync(wallet, scheduledRelease, releaseId);
+    }
 
-            creditedUserPublicId = wallet.UserPublicId;
-            walletName = wallet.Name;
-            walletId = wallet.Id;
-            releasedAmount = scheduledRelease.Amount.ToDecimal();
-            releasedDestination = wallet.PayoutDestination;
-            wasProcessed = true;
-
-            try
-            {
-                await _cache.DeletePrefixAsync(
-                    CacheKeys.NotificationsPrefix(wallet.UserPublicId));
-            }
-            catch (Exception cacheEx)
-            {
-                _logger.LogWarning(
-                    cacheEx,
-                    "Failed to invalidate notification cache for user {UserPublicId}.",
-                    wallet.UserPublicId);
-            }
-
-            op.Success("Scheduled release processed.");
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-
-            op.Fail(
-                $"Error processing scheduled release. ScheduledReleaseId: {releaseId}",
-                ex);
-
-            throw;
-        }
-
-        if (!wasProcessed || releasedDestination is null)
-        {
-            return;
-        }
-
+    private async Task RunPostCommitSideEffectsAsync(
+        Wallet wallet,
+        ScheduledRelease scheduledRelease,
+        long releaseId)
+    {
+        // The release is committed. Any failure here must NOT bubble —
+        // Hangfire would retry the whole job and the release would be a
+        // no-op on the second run, so the notification would be lost
+        // either way. Log and move on.
         try
         {
+            await _cache.DeletePrefixAsync(
+                CacheKeys.NotificationsPrefix(wallet.UserPublicId));
+
             await SendReleaseNotificationsAsync(
-                creditedUserPublicId,
-                walletName,
-                walletId,
-                releasedAmount,
+                wallet.UserPublicId,
+                wallet.Name,
+                wallet.Id,
+                scheduledRelease.Amount.ToDecimal(),
                 releaseId,
-                releasedDestination.Value,
-                cancellationToken);
+                wallet.PayoutDestination);
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
-                "Notification block failed for scheduled release {ScheduledReleaseId}.",
+                "Post-commit side effects failed for scheduled release {ScheduledReleaseId}.",
                 releaseId);
         }
     }
@@ -346,27 +316,25 @@ public sealed class ProcessScheduledReleasesJob
         long walletId,
         decimal amount,
         long scheduledReleaseId,
-        PayoutDestination payoutDestination,
-        CancellationToken cancellationToken)
+        PayoutDestination payoutDestination)
     {
         // ─── Load user via identity service (cache-backed) ───
         var user = await _identityService.GetByIdentifierAsync(
             userPublicId,
-            cancellationToken);
+            CancellationToken.None);
 
         if (user is null)
         {
             _logger.LogWarning(
-                "Skipped email for scheduled release {ScheduledReleaseId} — user {UserPublicId} not found.",
-                scheduledReleaseId,
-                userPublicId);
+                "Skipped email for scheduled release {ScheduledReleaseId} — user not found.",
+                scheduledReleaseId);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(user.Email))
         {
             _logger.LogWarning(
-                "Skipped email for scheduled release {ScheduledReleaseId} — no user email on record.",
+                "Skipped email for scheduled release {ScheduledReleaseId} — no email on record.",
                 scheduledReleaseId);
             return;
         }
@@ -374,9 +342,8 @@ public sealed class ProcessScheduledReleasesJob
         if (!user.NotifyReleaseAlerts)
         {
             _logger.LogInformation(
-                "Skipped email for scheduled release {ScheduledReleaseId} — user {UserPublicId} has release alerts disabled.",
-                scheduledReleaseId,
-                userPublicId);
+                "Skipped email for scheduled release {ScheduledReleaseId} — release alerts disabled.",
+                scheduledReleaseId);
             return;
         }
 
@@ -390,51 +357,41 @@ public sealed class ProcessScheduledReleasesJob
                 $"Your {walletName} release has been added to your main balance",
             PayoutDestination.Utilities =>
                 $"Your {walletName} release has been used for your utility",
-            _ => $"Your {walletName} release"
+            _ => $"Your {walletName} release",
         };
 
         var emailMessage = payoutDestination switch
         {
             PayoutDestination.Bank =>
                 $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                $"The money is on its way to your linked bank account and should " +
-                $"arrive within a few minutes. MOVA will handle the next release on schedule.",
+                "The money is on its way to your linked bank account and should " +
+                "arrive within a few minutes. MOVA will handle the next release on schedule.",
 
             PayoutDestination.Wallet =>
                 $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                $"The money is now available in your wallet balance and you can " +
-                $"withdraw it whenever you like. MOVA will handle the next release on schedule.",
+                "The money is now available in your wallet balance and you can " +
+                "withdraw it whenever you like. MOVA will handle the next release on schedule.",
 
             PayoutDestination.Main =>
                 $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                $"The money is being added to your main MOVA balance. You can spend " +
-                $"it inside MOVA — please note it cannot be withdrawn to a bank account. " +
-                $"MOVA will handle the next release on schedule.",
+                "The money is being added to your main MOVA balance. You can spend " +
+                "it inside MOVA — please note it cannot be withdrawn to a bank account. " +
+                "MOVA will handle the next release on schedule.",
 
             PayoutDestination.Utilities =>
                 $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                $"The money has been used to top up your utility. " +
-                $"MOVA will handle the next release on schedule.",
+                "The money has been used to top up your utility. " +
+                "MOVA will handle the next release on schedule.",
 
             _ =>
-                $"₦{amount:N0} has been released from your {walletName} wallet."
+                $"₦{amount:N0} has been released from your {walletName} wallet.",
         };
 
-        try
-        {
-            _notificationQueue.QueueNotificationEmail(
-                user.FirstName,
-                user.Email,
-                emailMessage,
-                emailSubject);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Email queue failed for scheduled release {ScheduledReleaseId}.",
-                scheduledReleaseId);
-        }
+        _notificationQueue.QueueNotificationEmail(
+            user.FirstName,
+            user.Email,
+            emailMessage,
+            emailSubject);
     }
 
     private async Task EnsureNextScheduledReleaseAsync(
@@ -474,10 +431,14 @@ public sealed class ProcessScheduledReleasesJob
         }
 
         var walletRule = await _context.Set<WalletRule>()
-            .FirstOrDefaultAsync(x => x.Id == processedRelease.WalletRuleId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.Id == processedRelease.WalletRuleId,
+                cancellationToken);
 
         if (walletRule is null)
+        {
             return;
+        }
 
         var nextRelease = await _walletRuleService.GetNextReleaseAsync(
             walletRule,
@@ -485,7 +446,9 @@ public sealed class ProcessScheduledReleasesJob
             cancellationToken);
 
         if (nextRelease is null)
+        {
             return;
+        }
 
         var nextScheduledForUtc = nextRelease.ScheduledFor.ToUniversalTime();
 
@@ -497,7 +460,9 @@ public sealed class ProcessScheduledReleasesJob
                 cancellationToken);
 
         if (alreadyScheduled)
+        {
             return;
+        }
 
         var nextAmount = nextRelease.Amount.MinorUnits > wallet.LockedAmount.MinorUnits
             ? wallet.LockedAmount
@@ -511,7 +476,7 @@ public sealed class ProcessScheduledReleasesJob
                 Amount = nextAmount,
                 ScheduledFor = nextRelease.ScheduledFor,
                 Status = ReleaseStatus.Scheduled,
-                ReleasedAt = null
+                ReleasedAt = null,
             },
             cancellationToken);
     }
@@ -530,15 +495,21 @@ public sealed class ProcessScheduledReleasesJob
                 cancellationToken);
 
         if (policy is null)
+        {
             return;
+        }
 
         var thresholdMinorUnits = policy.TriggerAmount.MinorUnits;
 
         if (thresholdMinorUnits <= 0)
+        {
             return;
+        }
 
         if (wallet.LockedAmount.MinorUnits > thresholdMinorUnits)
+        {
             return;
+        }
 
         using var op = OperationLogger.Start(
             _logger,

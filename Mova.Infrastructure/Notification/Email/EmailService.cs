@@ -235,7 +235,7 @@ public sealed class EmailService : IEmailService
         }
         catch (Exception ex)
         {
-            op.Fail($"Failed to send email to {email.To}", ex);
+            op.Error($"Failed to send email to {email.To}", ex);
 
             throw;
         }

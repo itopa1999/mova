@@ -56,7 +56,7 @@ public sealed class BackgroundNotificationJob
         {
             failures.Add(exception);
             using var op = OperationLogger.Start(_logger, "BackgroundOtpEmail", ("Email", email));
-            op.Fail("Background OTP email failed.", exception);
+            op.Error("Background OTP email failed.", exception);
         }
 
         if (failures.Count > 0)
@@ -134,7 +134,7 @@ public sealed class BackgroundNotificationJob
         {
             failures.Add(exception);
             using var op = OperationLogger.Start(_logger, "BackgroundPasswordResetEmail", ("Email", email));
-            op.Fail("Background password-reset email failed.", exception);
+            op.Error("Background password-reset email failed.", exception);
         }
 
         if (failures.Count > 0)
@@ -190,7 +190,7 @@ public sealed class BackgroundNotificationJob
         }
         catch (Exception exception)
         {
-            op.Fail("Background in-app notification failed.", exception);
+            op.Error("Background in-app notification failed.", exception);
             throw;
         }
     }

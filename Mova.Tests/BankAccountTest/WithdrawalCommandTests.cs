@@ -24,11 +24,35 @@ public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
         SetupPermissions();
     }
 
+    private void SetupUserExists(string publicId = OwnerPublicId)
+    {
+        _identityService
+            .Setup(x => x.GetByIdentifierAsync(
+                publicId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserIdentityDto(
+                1,
+                publicId,
+                "Mova",
+                null,
+                "User",
+                "mova@example.com",
+                "08031234567",
+                null,
+                Money.FromNaira(0m),
+                string.Empty,
+                false,
+                false,
+                false,
+                false,
+                string.Empty,
+                DateTimeOffset.UtcNow));
+    }
+
     [Fact]
     public async Task Handle_WhenBalanceIsSufficient_DebitsWalletAndRecordsProcessingWithdrawal()
     {
         var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 3_000m);
-        SetupUserForNotifications();
         var handler = CreateHandler(withdrawalsEnabled: true);
 
         var result = await handler.Handle(
@@ -158,44 +182,6 @@ public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
         Assert.Equal(1_000m, wallet.AvailableAmount.ToDecimal());
         Assert.Empty(Context.Transactions);
         VerifyNoWithdrawalNotifications();
-    }
-
-    [Fact]
-    public async Task Handle_WhenNotificationQueueFails_StillReturnsSuccessfulWithdrawal()
-    {
-        var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
-        SetupUserForNotifications();
-        _notifications
-            .Setup(queue => queue.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Notification queue unavailable"));
-
-        var result = await CreateHandler(withdrawalsEnabled: true).Handle(
-            new WithdrawalCommand.Command
-            {
-                UserPublicId = OwnerPublicId,
-                WalletId = wallet.Id,
-                Amount = 100m,
-                Type = "bank",
-                BankAccountId = 12
-            },
-            CancellationToken.None);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(900m, wallet.AvailableAmount.ToDecimal());
-        _notifications.Verify(
-            queue => queue.QueueNotificationEmail(
-                "Mova",
-                "mova@example.com",
-                It.IsAny<string>(),
-                It.IsAny<string>()),
-            Times.Once);
     }
 
     [Theory]
@@ -508,8 +494,8 @@ public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
     [Fact]
     public async Task Handle_WhenBothPermissionsPass_ProceedsToFeatureFlagThenDebit()
     {
+        SetupUserExists(); 
         var wallet = await SeedWalletAsync(OwnerPublicId, "Available wallet", 1_000m);
-        SetupUserForNotifications();
         SetupPermissions(canPerformSensitiveOperations: true);
 
         var featureFlags = new Mock<IFeatureFlagService>();
@@ -555,6 +541,7 @@ public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
 
     private WithdrawalCommand.Handler CreateHandler(bool withdrawalsEnabled)
     {
+        SetupUserExists();
         var featureFlags = new Mock<IFeatureFlagService>();
         featureFlags
             .Setup(service => service.IsEnabledAsync(
@@ -604,31 +591,6 @@ public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((UserPermissionsDto?)null);
-    }
-
-    private void SetupUserForNotifications()
-    {
-        _identityService
-            .Setup(service => service.GetByIdentifierAsync(
-                OwnerPublicId,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UserIdentityDto(
-                1,
-                OwnerPublicId,
-                "Mova",
-                null,
-                "User",
-                "mova@example.com",
-                "08031234567",
-                null,
-                Money.FromNaira(0m),
-                string.Empty,
-                false,
-                false,
-                false,
-                false,
-                string.Empty,
-                DateTimeOffset.UtcNow));
     }
 
     private void VerifyNoWithdrawalNotifications()

@@ -3,11 +3,9 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common;
-using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Queries.AccountWallet;
 
@@ -49,26 +47,16 @@ public sealed class GetRenewalEventsQuery
         : IRequestHandler<Query, BaseResult<GetRenewalEventsResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ILogger<Handler> _logger;
 
-        public Handler(
-            IUnitOfWork unitOfWork,
-            ILogger<Handler> logger)
+        public Handler(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _logger = logger;
         }
 
         public async Task<BaseResult<GetRenewalEventsResponseDto>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
-            using var op = OperationLogger.Start(
-                _logger,
-                "GetRenewalEvents",
-                ("UserId", request.UserPublicId),
-                ("WalletId", request.WalletId));
-
             var wallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
@@ -78,7 +66,6 @@ public sealed class GetRenewalEventsQuery
 
             if (wallet is null)
             {
-                op.Fail("Wallet not found.");
                 return new BaseResult<GetRenewalEventsResponseDto>(
                     HttpStatusCode.NotFound,
                     "Wallet not found.");
@@ -124,10 +111,6 @@ public sealed class GetRenewalEventsQuery
                 TotalPages = totalPages,
                 Items = events,
             };
-
-            op.Success(
-                $"Renewal events returned. WalletId: {wallet.Id}, " +
-                $"Total: {totalCount}, Returned: {events.Count}");
 
             return new BaseResult<GetRenewalEventsResponseDto>(
                 HttpStatusCode.OK,

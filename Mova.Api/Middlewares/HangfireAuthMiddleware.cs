@@ -92,7 +92,7 @@ public class HangfireAuthMiddleware
             if (!SecureEquals(username, _settings.Username) ||
                 !SecureEquals(password, _settings.Password))
             {
-                op.Fail("Failed Hangfire login attempt.");
+                op.Warning("Failed Hangfire login attempt.");
 
                 await Challenge(context);
                 return;
@@ -106,7 +106,8 @@ public class HangfireAuthMiddleware
         }
         catch (Exception ex)
         {
-            op.Fail("Invalid Hangfire Authorization header.", ex);
+            _logger.LogWarning(ex, "Invalid Hangfire Authorization header.");
+            op.Warning("Invalid Hangfire Authorization header.");
 
             await Challenge(context);
         }

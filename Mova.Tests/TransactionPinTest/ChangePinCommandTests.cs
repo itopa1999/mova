@@ -414,11 +414,11 @@ public sealed class ChangePinCommandTests : BaseTest
     }
 
     // ---------------------------------------------------------
-    // 5. ChangePin exceptions
+    // 5. ChangePin exceptions bubble to the middleware
     // ---------------------------------------------------------
 
     [Fact]
-    public async Task Handle_WhenChangePinThrowsArgumentException_ReturnsBadRequest()
+    public async Task Handle_WhenChangePinThrowsArgumentException_ExceptionBubbles()
     {
         SetupUserExists();
         SetupHasPin();
@@ -426,15 +426,13 @@ public sealed class ChangePinCommandTests : BaseTest
         SetupChangePinThrows(new ArgumentException("Invalid PIN format"));
 
         var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal("The PIN format is invalid.", result.Message);
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => handler.Handle(CreateCommand(), default));
     }
 
     [Fact]
-    public async Task Handle_WhenChangePinThrowsInvalidOperationException_ReturnsBadRequest()
+    public async Task Handle_WhenChangePinThrowsInvalidOperationException_ExceptionBubbles()
     {
         SetupUserExists();
         SetupHasPin();
@@ -442,15 +440,13 @@ public sealed class ChangePinCommandTests : BaseTest
         SetupChangePinThrows(new InvalidOperationException("Operation not allowed"));
 
         var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal("The PIN operation could not be completed.", result.Message);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.Handle(CreateCommand(), default));
     }
 
     [Fact]
-    public async Task Handle_WhenChangePinThrowsGenericException_ReturnsInternalServerError()
+    public async Task Handle_WhenChangePinThrowsGenericException_ExceptionBubbles()
     {
         SetupUserExists();
         SetupHasPin();
@@ -458,11 +454,42 @@ public sealed class ChangePinCommandTests : BaseTest
         SetupChangePinThrows(new Exception("Unexpected"));
 
         var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-        Assert.Contains("An error occurred", result.Message);
+        await Assert.ThrowsAsync<Exception>(
+            () => handler.Handle(CreateCommand(), default));
+    }
+
+    [Fact]
+    public async Task Handle_WhenChangePinFails_DoesNotSendNotification()
+    {
+        SetupUserExists();
+        SetupHasPin();
+        SetupVerifyPin();
+        SetupChangePinThrows(new Exception("Boom"));
+
+        var handler = CreateHandler();
+
+        await Assert.ThrowsAsync<Exception>(
+            () => handler.Handle(CreateCommand(), default));
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        _notifications.Verify(
+            x => x.QueueNotificationEmail(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()),
+            Times.Never);
     }
 
     // ---------------------------------------------------------
@@ -513,29 +540,6 @@ public sealed class ChangePinCommandTests : BaseTest
     }
 
     [Fact]
-    public async Task Handle_WhenChangePinFails_DoesNotSendNotification()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPin();
-        SetupChangePinThrows(new Exception("Boom"));
-
-        var handler = CreateHandler();
-        await handler.Handle(CreateCommand(), default);
-
-        _notifications.Verify(
-            x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    [Fact]
     public async Task Handle_WhenCurrentPinIsWrong_DoesNotSendNotification()
     {
         SetupUserExists();
@@ -558,124 +562,7 @@ public sealed class ChangePinCommandTests : BaseTest
     }
 
     // ---------------------------------------------------------
-    // 7. Regression: notification failures must not fail the request
-    // ---------------------------------------------------------
-
-    [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPin();
-        SetupChangePinSucceeds();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-    }
-
-    [Fact]
-    public async Task Handle_WhenEmailQueueThrows_StillReturnsSuccess()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPin();
-        SetupChangePinSucceeds();
-
-        _notifications
-            .Setup(x => x.QueueNotificationEmail(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>()))
-            .Throws(new InvalidOperationException("Hangfire unavailable"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-    }
-
-    [Fact]
-    public async Task Handle_WhenBothNotificationsThrow_StillReturnsSuccess()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPin();
-        SetupChangePinSucceeds();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new Exception("boom"));
-
-        _notifications
-            .Setup(x => x.QueueNotificationEmail(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>()))
-            .Throws(new Exception("boom"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.True(result.IsSuccess);
-    }
-
-    [Fact]
-    public async Task Handle_WhenInAppThrows_EmailIsStillAttempted()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPin();
-        SetupChangePinSucceeds();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new Exception("boom"));
-
-        var handler = CreateHandler();
-        await handler.Handle(CreateCommand(), default);
-
-        _notifications.Verify(
-            x => x.QueueNotificationEmail(
-                UserFirstName,
-                UserEmail,
-                It.IsAny<string>(),
-                It.IsAny<string>()),
-            Times.Once);
-    }
-
-    // ---------------------------------------------------------
-    // 8. Permissions gating
+    // 7. Permissions gating
     // ---------------------------------------------------------
 
     [Fact]

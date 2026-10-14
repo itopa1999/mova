@@ -73,7 +73,7 @@ public sealed class CheckRegistrationAvailability
 
             if (!emailProvided && !phoneProvided)
             {
-                op.Fail("Neither email nor phone number provided.");
+                op.Warning("Neither email nor phone number provided.");
                 return new BaseResult<CheckRegistrationAvailabilityResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Provide an email or phone number to check.");
@@ -89,11 +89,6 @@ public sealed class CheckRegistrationAvailability
                 emailAvailable = !await _identityService.EmailExistsAsync(
                     normalizedEmail,
                     cancellationToken: cancellationToken);
-
-                if (!emailAvailable)
-                {
-                    op.Success($"Email already in use: {normalizedEmail}");
-                }
             }
 
             if (phoneProvided)
@@ -102,7 +97,7 @@ public sealed class CheckRegistrationAvailability
 
                 if (normalizedPhone is null)
                 {
-                    op.Fail("Invalid phone number format.");
+                    op.Warning("Invalid phone number format.");
                     return new BaseResult<CheckRegistrationAvailabilityResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Please provide a valid Nigerian phone number.");
@@ -111,11 +106,6 @@ public sealed class CheckRegistrationAvailability
                 phoneAvailable = !await _identityService.PhoneExistsAsync(
                     normalizedPhone,
                     cancellationToken: cancellationToken);
-
-                if (!phoneAvailable)
-                {
-                    op.Success($"Phone already in use: {normalizedPhone}");
-                }
             }
 
             var canProceed = emailAvailable && phoneAvailable;

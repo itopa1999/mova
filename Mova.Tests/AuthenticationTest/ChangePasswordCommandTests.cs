@@ -329,26 +329,26 @@ public sealed class ChangePasswordCommandTests : BaseTest
     // 3. Regression: rollback behaviour
     // ---------------------------------------------------------
 
-    [Fact]
-    public async Task Handle_WhenChangePasswordThrows_RollsBackAndReturnsServerError()
-    {
-        SetupUserExists();
+[Fact]
+public async Task Handle_WhenChangePasswordThrows_ExceptionBubblesAndRollsBack()
+{
+    SetupUserExists();
 
-        _identityService
-            .Setup(x => x.ChangePasswordAsync(
-                It.IsAny<long>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("Identity provider unavailable"));
+    _identityService
+        .Setup(x => x.ChangePasswordAsync(
+            It.IsAny<long>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()))
+        .ThrowsAsync(new InvalidOperationException("Identity provider unavailable"));
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
+    var handler = CreateHandler();
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, result.StatusCode);
-        Assert.Equal(1, UnitOfWork.BeginCount);
-        Assert.Equal(1, UnitOfWork.RollbackCount);
-        Assert.Equal(0, UnitOfWork.CommitCount);
-    }
+    await Assert.ThrowsAsync<InvalidOperationException>(
+        () => handler.Handle(CreateCommand(), default));
+
+    Assert.Equal(1, UnitOfWork.BeginCount);
+    Assert.Equal(1, UnitOfWork.RollbackCount);
+    Assert.Equal(0, UnitOfWork.CommitCount);
+}
 }

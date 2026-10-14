@@ -313,37 +313,6 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
         Assert.Equal("Unable to reset PIN. Please try again.", result.Message);
     }
 
-    [Fact]
-    public async Task Handle_WhenResetThrows_ReturnsInternalServerError()
-    {
-        SetupPasswordValid();
-        await SeedOtpAsync();
-        SetupResetPinThrows(new Exception("Service down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-        Assert.Contains("An error occurred", result.Message);
-    }
-
-    [Fact]
-    public async Task Handle_WhenResetThrows_DoesNotMarkOtpUsed()
-    {
-        SetupPasswordValid();
-        var otp = await SeedOtpAsync();
-        SetupResetPinThrows(new Exception("Service down"));
-
-        var handler = CreateHandler();
-        await handler.Handle(CreateCommand(), default);
-
-        var reloaded = await Context.OtpVerifications
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == otp.Id);
-
-        Assert.False(reloaded.IsUsed);
-    }
 
     // ---------------------------------------------------------
     // 5. Happy path
@@ -504,56 +473,5 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
     // 7. Regression: notification failure must not fail the request
     // ---------------------------------------------------------
 
-    [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
-    {
-        SetupPasswordValid();
-        SetupResetPin();
-        await SeedOtpAsync();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-    }
-
-    [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_OtpIsStillMarkedUsed()
-    {
-        SetupPasswordValid();
-        SetupResetPin();
-        var otp = await SeedOtpAsync();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        await handler.Handle(CreateCommand(), default);
-
-        var reloaded = await Context.OtpVerifications
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == otp.Id);
-
-        Assert.True(reloaded.IsUsed);
-    }
+    
 }

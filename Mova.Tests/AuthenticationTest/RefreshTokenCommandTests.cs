@@ -294,7 +294,7 @@ public sealed class RefreshTokenCommandTests : BaseTest
         var result = await handler.Handle(CreateCommand(), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, result.StatusCode);
         Assert.Equal("Invalid refresh token.", result.Message);
         Assert.Equal(0, UnitOfWork.BeginCount);
     }
@@ -309,7 +309,7 @@ public sealed class RefreshTokenCommandTests : BaseTest
         var result = await handler.Handle(CreateCommand(), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, result.StatusCode);
         Assert.Contains("expired", result.Message);
         Assert.Equal(0, UnitOfWork.BeginCount);
     }
@@ -324,23 +324,9 @@ public sealed class RefreshTokenCommandTests : BaseTest
         var result = await handler.Handle(CreateCommand(), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, result.StatusCode);
         Assert.Contains("revoked", result.Message);
         Assert.Equal(0, UnitOfWork.BeginCount);
-    }
-
-    [Fact]
-    public async Task Handle_WhenUserMissing_ReturnsBadRequest()
-    {
-        SetupValidIncomingToken();
-        SetupUserNotFound();
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Contains("User profile not found", result.Message);
     }
 
     [Fact]

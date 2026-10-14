@@ -74,9 +74,21 @@ public sealed class ProcessPayoutsJob
 
         foreach (var payoutId in payoutIds)
         {
-            await ProcessPayoutAsync(
-                payoutId,
-                cancellationToken);
+            // Isolate each payout: one failure must not abort the whole batch.
+            // The failed payout stays in Pending/Processing state and will be
+            // retried on the next job tick. Log to Sentry and move on.
+            try
+            {
+                await ProcessPayoutAsync(
+                    payoutId,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                op.Error(
+                    $"Unhandled error processing payout {payoutId}.",
+                    ex);
+            }
         }
     }
 
@@ -164,7 +176,7 @@ public sealed class ProcessPayoutsJob
 
     private async Task ProcessBankPayoutAsync(
         Payout payout,
-        IDisposable op,
+        OperationLogger op,
         CancellationToken cancellationToken)
     {
         if (payout.BankAccount is null)
@@ -328,7 +340,7 @@ public sealed class ProcessPayoutsJob
         {
             await tx.RollbackAsync(cancellationToken);
 
-            op.Fail(
+            op.Error(
                 $"Error processing main payout {payout.Id}.",
                 ex);
 
@@ -388,7 +400,7 @@ public sealed class ProcessPayoutsJob
         {
             await tx.RollbackAsync(cancellationToken);
 
-            op.Fail(
+            op.Error(
                 $"Error processing utility payout {payout.Id}.",
                 ex);
 

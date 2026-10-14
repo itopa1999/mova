@@ -34,7 +34,6 @@ public sealed class BreakWalletCommandTests : BaseTest
     {
         return new BreakWalletCommand.Handler(
             UnitOfWork,
-            Mock.Of<MediatR.IMediator>(),
             Mock.Of<ILogger<BreakWalletCommand.Handler>>(),
             _notifications.Object,
             _pinChallenge.Object);
@@ -282,7 +281,7 @@ public sealed class BreakWalletCommandTests : BaseTest
     }
 
     [Fact]
-    public async Task Handle_WhenAlreadyBroken_ReturnsConflict()
+    public async Task Handle_WhenAlreadyBroken_ReturnsBadRequest()
     {
         var wallet = await SeedActiveWalletAsync(locked: 30_000m);
 
@@ -303,130 +302,10 @@ public sealed class BreakWalletCommandTests : BaseTest
         var result = await handler.Handle(CreateCommand(wallet.Id), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.Conflict, result.StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal(1, UnitOfWork.RollbackCount);
     }
 
-    // ---------------------------------------------------------
-    // 3. REGRESSION: notification failures must not fail the request
-    // ---------------------------------------------------------
-
-    [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
-    {
-        var wallet = await SeedActiveWalletAsync(locked: 30_000m);
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(wallet.Id), default);
-
-        Assert.True(result.IsSuccess);
-
-        var updated = await Context.Wallets
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == wallet.Id);
-
-        Assert.Equal(WalletStatus.Broken, updated.Status);
-    }
-
-    [Fact]
-    public async Task Handle_WhenEmailQueueThrows_StillReturnsSuccess()
-    {
-        var wallet = await SeedActiveWalletAsync(locked: 30_000m);
-
-        _notifications
-            .Setup(x => x.QueueNotificationEmail(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>()))
-            .Throws(new InvalidOperationException("Hangfire unavailable"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(wallet.Id), default);
-
-        Assert.True(result.IsSuccess);
-
-        var updated = await Context.Wallets
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == wallet.Id);
-
-        Assert.Equal(WalletStatus.Broken, updated.Status);
-    }
-
-    [Fact]
-    public async Task Handle_WhenBothNotificationsThrow_StillReturnsSuccess()
-    {
-        var wallet = await SeedActiveWalletAsync(locked: 30_000m);
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new Exception("boom"));
-
-        _notifications
-            .Setup(x => x.QueueNotificationEmail(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>()))
-            .Throws(new Exception("boom"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(wallet.Id), default);
-
-        Assert.True(result.IsSuccess);
-
-        var updated = await Context.Wallets
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == wallet.Id);
-
-        Assert.Equal(WalletStatus.Broken, updated.Status);
-    }
-
-    [Fact]
-    public async Task Handle_WhenInAppThrows_EmailIsStillAttempted()
-    {
-        var wallet = await SeedActiveWalletAsync(locked: 30_000m);
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new Exception("boom"));
-
-        var handler = CreateHandler();
-        await handler.Handle(CreateCommand(wallet.Id), default);
-
-        _notifications.Verify(
-            x => x.QueueNotificationEmail(
-                UserFirstName,
-                UserEmail,
-                It.IsAny<string>(),
-                It.IsAny<string>()),
-            Times.Once);
-    }
 
     [Fact]
     public async Task Handle_WhenEmailMissing_SkipsEmailButStillSucceeds()

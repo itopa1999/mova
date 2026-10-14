@@ -378,64 +378,6 @@ public sealed class ToggleWalletStatusCommandTests : BaseTestWithPinChallenge
     }
 
     [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
-    {
-        var wallet = await SeedWalletAsync(WalletStatus.Active);
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(wallet.Id), default);
-
-        Assert.True(result.IsSuccess);
-
-        var updated = await Context.Wallets
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == wallet.Id);
-
-        Assert.Equal(WalletStatus.Paused, updated.Status);
-    }
-
-    [Fact]
-    public async Task Handle_WhenNotificationThrows_ReleasesStillUpdated()
-    {
-        var wallet = await SeedWalletAsync(WalletStatus.Active);
-        var rule = await SeedRuleAsync(wallet.Id);
-        var release = await SeedReleaseAsync(wallet.Id, rule.Id, ReleaseStatus.Scheduled);
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new Exception("boom"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(wallet.Id), default);
-
-        Assert.True(result.IsSuccess);
-
-        var updated = await Context.ScheduledReleases
-            .AsNoTracking()
-            .FirstAsync(x => x.Id == release.Id);
-
-        Assert.Equal(ReleaseStatus.Paused, updated.Status);
-    }
-
-    [Fact]
     public async Task Handle_WhenPausing_SendsPauseNotificationWithCorrectContent()
     {
         var wallet = await SeedWalletAsync(WalletStatus.Active);

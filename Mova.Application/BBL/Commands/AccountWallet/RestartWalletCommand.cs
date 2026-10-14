@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -37,11 +37,8 @@ public sealed class RestartWalletCommand
     public sealed class RestartWalletResponseDto
     {
         public long WalletId { get; init; }
-
         public DateTimeOffset FirstReleaseDate { get; init; }
-
         public decimal NewMainBalance { get; init; }
-
         public bool Notification { get; init; }
     }
 
@@ -90,17 +87,16 @@ public sealed class RestartWalletCommand
 
             if (wallet is null)
             {
-                op.Fail("Wallet not found.");
+                op.Warning("Wallet not found.");
                 return new BaseResult<RestartWalletResponseDto>(
                     HttpStatusCode.NotFound,
                     "Wallet not found.");
             }
 
-            var status = wallet.Status;
-
-            if (status != WalletStatus.Broken && status != WalletStatus.Completed)
+            if (wallet.Status != WalletStatus.Broken
+                && wallet.Status != WalletStatus.Completed)
             {
-                op.Fail($"Wallet status is not restartable: {status}.");
+                op.Warning($"Wallet status is not restartable: {wallet.Status}.");
                 return new BaseResult<RestartWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Only broken or completed wallets can be restarted.");
@@ -108,13 +104,12 @@ public sealed class RestartWalletCommand
 
             if (wallet.Rule is null)
             {
-                op.Fail("Wallet has no rule to re-schedule from.");
+                op.Warning("Wallet has no rule to re-schedule from.");
                 return new BaseResult<RestartWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This wallet has no schedule to restart.");
             }
 
-            // ─── PIN challenge validation ───
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
                 PinChallengeType.RestartWallet,
@@ -122,19 +117,18 @@ public sealed class RestartWalletCommand
 
             if (!challengeValid)
             {
-                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
                 return new BaseResult<RestartWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
             }
 
-            // ─── Compute the fee for restarting this wallet ─────
             var targetAmount = wallet.TargetAmount.ToDecimal();
             var releaseAmount = wallet.Rule.Amount.ToDecimal();
 
             if (targetAmount <= 0 || releaseAmount <= 0)
             {
-                op.Fail("Wallet has an invalid target or release amount.");
+                op.Warning("Wallet has an invalid target or release amount.");
                 return new BaseResult<RestartWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This wallet's target or release amount is invalid.");
@@ -144,7 +138,7 @@ public sealed class RestartWalletCommand
 
             if (releases <= 0)
             {
-                op.Fail("Could not determine release count for this wallet.");
+                op.Warning("Could not determine release count for this wallet.");
                 return new BaseResult<RestartWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Unable to determine the wallet's release schedule.");
@@ -166,217 +160,186 @@ public sealed class RestartWalletCommand
 
             var totalUpfrontCharge = fees.TotalUpfrontCharge;
 
-            op.Success(
-                $"Restart fee computed — releases: {releases}, " +
-                $"creation: {fees.CreationFee}, payout: {fees.TotalPayoutFee}, " +
-                $"total charge: {totalUpfrontCharge}");
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            long walletId = wallet.Id;
-            DateTimeOffset firstReleaseDate = default;
-            decimal newMainBalance = 0m;
+            var balanceDebited = await _identityService.DebitBalanceAsync(
+                request.UserPublicId,
+                totalUpfrontCharge,
+                cancellationToken);
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-            try
+            if (!balanceDebited)
             {
-                var balanceDebited = await _identityService.DebitBalanceAsync(
-                    request.UserPublicId,
-                    totalUpfrontCharge,
+                op.Warning("Insufficient account balance or user account not found.");
+                return new BaseResult<RestartWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Insufficient account balance.");
+            }
+
+            var targetMoney = Money.FromNaira(targetAmount);
+            var releaseMoney = Money.FromNaira(releaseAmount);
+
+            wallet.Status = WalletStatus.Active;
+            wallet.TargetAmount = targetMoney;
+            wallet.FundedAmount += targetMoney;
+            wallet.LockedAmount += targetMoney;
+            wallet.ResetAmount = Money.FromNaira(0);
+            wallet.CompletedAt = null;
+            wallet.RestartCount += 1;
+
+            var ruleForEndDate = new WalletRule
+            {
+                Amount = releaseMoney,
+                Frequency = wallet.Rule.Frequency,
+                FrequencyConfig = wallet.Rule.FrequencyConfig,
+                StartDate = DateTimeOffset.UtcNow,
+            };
+
+            var cursor = DateTimeOffset.UtcNow.AddTicks(-1);
+            DateTimeOffset? finalEndDate = null;
+
+            for (var i = 0; i < releases; i++)
+            {
+                var next = await _walletRuleService.GetNextReleaseAsync(
+                    ruleForEndDate,
+                    cursor,
                     cancellationToken);
 
-                if (!balanceDebited)
+                if (next is null)
                 {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail("Insufficient account balance or user account not found.");
-
-                    return new BaseResult<RestartWalletResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "Insufficient account balance.");
+                    break;
                 }
 
-                var targetMoney = Money.FromNaira(targetAmount);
-                var releaseMoney = Money.FromNaira(releaseAmount);
+                finalEndDate = next.ScheduledFor;
+                cursor = next.ScheduledFor;
+            }
 
-                wallet.Status = WalletStatus.Active;
-                wallet.TargetAmount = targetMoney;
-                wallet.FundedAmount += targetMoney;
-                wallet.LockedAmount += targetMoney;
-                wallet.ResetAmount = Money.FromNaira(0);
-                wallet.CompletedAt = null;
-                wallet.RestartCount += 1;
+            if (finalEndDate is null)
+            {
+                op.Warning("Unable to compute the restart schedule.");
+                return new BaseResult<RestartWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Unable to compute the restart schedule.");
+            }
 
-                var ruleForEndDate = new WalletRule
-                {
-                    Amount = releaseMoney,
-                    Frequency = wallet.Rule.Frequency,
-                    FrequencyConfig = wallet.Rule.FrequencyConfig,
-                    StartDate = DateTimeOffset.UtcNow,
-                };
+            wallet.Rule.StartDate = DateTimeOffset.UtcNow;
+            wallet.Rule.EndDate = finalEndDate.Value;
 
-                var cursor = DateTimeOffset.UtcNow.AddTicks(-1);
-                DateTimeOffset? finalEndDate = null;
+            var pendingReleases = await _unitOfWork.Query<ScheduledRelease>()
+                .Where(sr => sr.WalletId == wallet.Id
+                             && sr.Status == ReleaseStatus.Scheduled)
+                .ToListAsync(cancellationToken);
 
-                for (var i = 0; i < releases; i++)
-                {
-                    var next = await _walletRuleService.GetNextReleaseAsync(
-                        ruleForEndDate,
-                        cursor,
-                        cancellationToken);
+            foreach (var pr in pendingReleases)
+            {
+                pr.Status = ReleaseStatus.Processing;
+            }
 
-                    if (next is null) break;
-
-                    finalEndDate = next.ScheduledFor;
-                    cursor = next.ScheduledFor;
-                }
-
-                if (finalEndDate is null)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail("Unable to compute the restart schedule.");
-                    return new BaseResult<RestartWalletResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "Unable to compute the restart schedule.");
-                }
-
-                wallet.Rule.StartDate = DateTimeOffset.UtcNow;
-                wallet.Rule.EndDate = finalEndDate.Value;
-
-                var pendingReleases = await _unitOfWork.Query<ScheduledRelease>()
-                    .Where(sr => sr.WalletId == wallet.Id
-                                 && sr.Status == ReleaseStatus.Scheduled)
-                    .ToListAsync(cancellationToken);
-
-                if (pendingReleases.Count > 0)
-                {
-                    foreach (var pr in pendingReleases)
-                    {
-                        pr.Status = ReleaseStatus.Processing;
-                    }
-
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                    op.Success(
-                        $"Marked {pendingReleases.Count} pending release(s) as Processing.");
-                }
-
-                var restartTx = new Transaction
-                {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = wallet.Id,
-                    Title = "Wallet Restarted",
-                    Amount = targetMoney,
-                    Type = TransactionType.Deposit,
-                    Status = TransactionStatus.Completed,
-                    Reference = $"wallet-restart:{wallet.Id}:{Guid.NewGuid():N}",
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
-
-                await _unitOfWork.AddAsync(restartTx, cancellationToken);
+            if (pendingReleases.Count > 0)
+            {
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
 
-                var ledger = new LedgerEntry
+            var restartTx = new Transaction
+            {
+                UserPublicId = request.UserPublicId,
+                WalletId = wallet.Id,
+                Title = "Wallet Restarted",
+                Amount = targetMoney,
+                Type = TransactionType.Deposit,
+                Status = TransactionStatus.Completed,
+                Reference = $"wallet-restart:{wallet.Id}:{Guid.NewGuid():N}",
+                CompletedAt = DateTimeOffset.UtcNow,
+            };
+
+            await _unitOfWork.AddAsync(restartTx, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _unitOfWork.AddAsync(
+                new LedgerEntry
                 {
                     WalletId = wallet.Id,
                     TransactionId = restartTx.Id,
                     Amount = targetMoney,
                     IsCredit = true,
-                };
+                },
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                await _unitOfWork.AddAsync(ledger, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var feeTx = new Transaction
-                {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = wallet.Id,
-                    Title = "Wallet Restart Fee",
-                    Amount = Money.FromNaira(fees.TotalMovaCharges),
-                    Type = TransactionType.Fee,
-                    Status = TransactionStatus.Completed,
-                    Reference = $"wallet-restart-fee:{wallet.Id}:{Guid.NewGuid():N}",
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
-
-                await _unitOfWork.AddAsync(feeTx, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var firstRelease = await _walletRuleService.GetNextReleaseAsync(
-                    wallet.Rule,
-                    wallet.Rule.StartDate.AddTicks(-1),
-                    cancellationToken);
-
-                if (firstRelease is null)
-                {
-                    throw new InvalidOperationException(
-                        "Unable to generate the first release after restart.");
-                }
-
-                var firstReleaseAmount = Math.Min(
-                    firstRelease.Amount.ToDecimal(),
-                    targetAmount);
-
-                var scheduledRelease = new ScheduledRelease
-                {
-                    WalletId = wallet.Id,
-                    WalletRuleId = wallet.Rule.Id,
-                    Amount = Money.FromNaira(firstReleaseAmount),
-                    ScheduledFor = firstRelease.ScheduledFor,
-                    Status = ReleaseStatus.Scheduled,
-                    ReleasedAt = null,
-                };
-
-                await _unitOfWork.AddAsync(scheduledRelease, cancellationToken);
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                firstReleaseDate = firstRelease.ScheduledFor;
-
-                var userAfterDebit = await _identityService.GetByIdentifierAsync(
-                    request.UserPublicId,
-                    cancellationToken);
-
-                newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
-
-                op.Success(
-                    $"Wallet restarted. WalletId: {wallet.Id}, " +
-                    $"FirstRelease: {firstRelease.ScheduledFor:u}, " +
-                    $"NewBalance: {newMainBalance}");
-            }
-            catch (Exception ex)
+            var feeTx = new Transaction
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                UserPublicId = request.UserPublicId,
+                WalletId = wallet.Id,
+                Title = "Wallet Restart Fee",
+                Amount = Money.FromNaira(fees.TotalMovaCharges),
+                Type = TransactionType.Fee,
+                Status = TransactionStatus.Completed,
+                Reference = $"wallet-restart-fee:{wallet.Id}:{Guid.NewGuid():N}",
+                CompletedAt = DateTimeOffset.UtcNow,
+            };
 
-                _logger.LogError(
-                    ex,
-                    "Error restarting wallet {WalletId} for user {UserPublicId}.",
-                    request.WalletId,
-                    request.UserPublicId);
+            await _unitOfWork.AddAsync(feeTx, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                op.Fail($"Error restarting wallet: {ex.Message}");
+            var firstRelease = await _walletRuleService.GetNextReleaseAsync(
+                wallet.Rule,
+                wallet.Rule.StartDate.AddTicks(-1),
+                cancellationToken)
+                ?? throw new InfrastructureException(
+                    "Unable to generate the first release after restart.");
 
-                return new BaseResult<RestartWalletResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while restarting the wallet.");
-            }
+            var firstReleaseAmount = Math.Min(
+                firstRelease.Amount.ToDecimal(),
+                targetAmount);
 
-            try
+            var scheduledRelease = new ScheduledRelease
             {
-                await SendWalletRestartedNotificationsAsync(
-                    request.UserPublicId,
-                    request.Email,
+                WalletId = wallet.Id,
+                WalletRuleId = wallet.Rule.Id,
+                Amount = Money.FromNaira(firstReleaseAmount),
+                ScheduledFor = firstRelease.ScheduledFor,
+                Status = ReleaseStatus.Scheduled,
+                ReleasedAt = null,
+            };
+
+            await _unitOfWork.AddAsync(scheduledRelease, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            var firstReleaseDate = firstRelease.ScheduledFor;
+
+            var userAfterDebit = await _identityService.GetByIdentifierAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
+
+            op.Success(
+                $"Wallet restarted. WalletId: {wallet.Id}, " +
+                $"FirstRelease: {firstReleaseDate:u}, " +
+                $"NewBalance: {newMainBalance}");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Wallet,
+                $"{wallet.Name} wallet restarted",
+                $"Your {wallet.Name} wallet has been restarted. " +
+                $"First release of the new cycle is scheduled for " +
+                $"{firstReleaseDate:MMM d, yyyy}. " +
+                BuildDestinationClause(wallet.PayoutDestination),
+                $"/wallet/{wallet.Id}",
+                null,
+                CancellationToken.None);
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
-                    walletId,
-                    wallet.Name,
-                    firstReleaseDate,
-                    wallet.PayoutDestination);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for restarted wallet {WalletId}.",
-                    walletId);
+                    request.Email,
+                    $"Your {wallet.Name} wallet has been restarted successfully. " +
+                    $"A fresh cycle has begun and the first release is scheduled " +
+                    $"for {firstReleaseDate:MMM d, yyyy}. " +
+                    BuildDestinationClause(wallet.PayoutDestination),
+                    $"{wallet.Name} wallet restarted");
             }
 
             return new BaseResult<RestartWalletResponseDto>(
@@ -384,25 +347,15 @@ public sealed class RestartWalletCommand
                 "Wallet restarted successfully.",
                 new RestartWalletResponseDto
                 {
-                    WalletId = walletId,
+                    WalletId = wallet.Id,
                     FirstReleaseDate = firstReleaseDate,
                     NewMainBalance = newMainBalance,
                     Notification = true,
                 });
         }
 
-        private async Task SendWalletRestartedNotificationsAsync(
-            string userPublicId,
-            string email,
-            string firstName,
-            long walletId,
-            string walletName,
-            DateTimeOffset firstReleaseDate,
-            PayoutDestination payoutDestination)
-        {
-            var title = $"{walletName} wallet restarted";
-
-            var destinationClause = payoutDestination switch
+        private static string BuildDestinationClause(PayoutDestination destination)
+            => destination switch
             {
                 PayoutDestination.Bank =>
                     "Releases will continue to be sent to your linked bank account.",
@@ -412,53 +365,5 @@ public sealed class RestartWalletCommand
                     "Releases will continue to be added to your main MOVA balance.",
                 _ => "Releases will continue on schedule."
             };
-
-            var inAppMessage =
-                $"Your {walletName} wallet has been restarted. " +
-                $"First release of the new cycle is scheduled for " +
-                $"{firstReleaseDate:MMM d, yyyy}. {destinationClause}";
-
-            var emailSubject = $"{walletName} wallet restarted";
-
-            var emailMessage =
-                $"Your {walletName} wallet has been restarted successfully. " +
-                $"A fresh cycle has begun and the first release is scheduled " +
-                $"for {firstReleaseDate:MMM d, yyyy}. {destinationClause}";
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Wallet,
-                    title,
-                    inAppMessage,
-                    $"/wallet/{walletId}",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for restarted wallet {WalletId}.",
-                    walletId);
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for restarted wallet {WalletId}.",
-                    walletId);
-            }
-        }
     }
 }

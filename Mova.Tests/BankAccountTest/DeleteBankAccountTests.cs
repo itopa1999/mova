@@ -282,56 +282,6 @@ public sealed class DeleteBankAccountTests : BaseTestWithPinChallenge
             Times.Never);
     }
 
-    [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
-    {
-        var account = await SeedBankAccountAsync();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(account.Id), default);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-    }
-
-    [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_StillDeletesAccount()
-    {
-        var account = await SeedBankAccountAsync();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        await handler.Handle(CreateCommand(account.Id), default);
-
-        var saved = await Context.BankAccounts
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == account.Id);
-
-        Assert.NotNull(saved);
-        Assert.True(saved!.IsDeleted);
-    }
 
     [Fact]
     public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
@@ -7,10 +8,8 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
-using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using System.ComponentModel.DataAnnotations;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
@@ -66,7 +65,6 @@ public sealed class CreateRenewalPolicyCommand
         private readonly ILogger<Handler> _logger;
         private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
-        private readonly ISchedulePreviewService _schedulePreviewService;
         private readonly IPinChallenge _pinChallenge;
 
         public Handler(
@@ -74,14 +72,12 @@ public sealed class CreateRenewalPolicyCommand
             ILogger<Handler> logger,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
-            ISchedulePreviewService schedulePreviewService,
             IPinChallenge pinChallenge)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
-            _schedulePreviewService = schedulePreviewService;
             _pinChallenge = pinChallenge;
         }
 
@@ -97,7 +93,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
@@ -109,7 +105,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -117,7 +113,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked CreateRenewalPolicy for user {request.UserPublicId}. " +
                     $"Status: {permissions.StatusLabel}, " +
                     $"Reason: {permissions.RestrictionReason}");
@@ -142,7 +138,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (triggerType is null)
             {
-                op.Fail($"Invalid trigger type: {request.TriggerType}");
+                op.Warning($"Invalid trigger type: {request.TriggerType}");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid trigger type. Must be one of: oncompletion, onthreshold.");
@@ -159,7 +155,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (refillAmountType is null)
             {
-                op.Fail($"Invalid refill amount type: {request.RefillAmountType}");
+                op.Warning($"Invalid refill amount type: {request.RefillAmountType}");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid refill amount type. Must be one of: fixed, custom.");
@@ -173,7 +169,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (wallet is null)
             {
-                op.Fail("Wallet not found.");
+                op.Warning("Wallet not found.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.NotFound,
                     "Wallet not found.");
@@ -183,7 +179,7 @@ public sealed class CreateRenewalPolicyCommand
                 or WalletStatus.Paused
                 or WalletStatus.Broken)
             {
-                op.Fail($"Wallet in invalid status for automation: {wallet.Status}");
+                op.Warning($"Wallet in invalid status for automation: {wallet.Status}");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This wallet cannot have an automation policy in its current state.");
@@ -196,7 +192,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (existingPolicy is not null)
             {
-                op.Fail("Renewal policy already exists for this wallet.");
+                op.Warning("Renewal policy already exists for this wallet.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This wallet already has an automation policy.");
@@ -209,17 +205,17 @@ public sealed class CreateRenewalPolicyCommand
 
             if (walletRule is null)
             {
-                op.Fail("Wallet rule not found.");
+                op.Warning("Wallet rule not found.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This wallet has no release schedule to automate.");
             }
 
-            if (triggerType.Value == RenewalTriggerType.OnThreshold)
+            if (triggerType == RenewalTriggerType.OnThreshold)
             {
                 if (request.TriggerAmount <= 0)
                 {
-                    op.Fail("Trigger amount is required for threshold trigger.");
+                    op.Warning("Trigger amount is required for threshold trigger.");
                     return new BaseResult<CreateRenewalPolicyResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Trigger amount must be greater than zero.");
@@ -227,18 +223,18 @@ public sealed class CreateRenewalPolicyCommand
 
                 if (request.TriggerAmount >= wallet.TargetAmount.ToDecimal())
                 {
-                    op.Fail("Trigger amount cannot be >= wallet target.");
+                    op.Warning("Trigger amount cannot be >= wallet target.");
                     return new BaseResult<CreateRenewalPolicyResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Trigger amount must be less than the wallet's target amount.");
                 }
             }
 
-            if (refillAmountType.Value == RefillAmountType.Custom)
+            if (refillAmountType == RefillAmountType.Custom)
             {
                 if (request.RefillAmount < 2000)
                 {
-                    op.Fail("Custom refill amount must be at least ₦2,000.");
+                    op.Warning("Custom refill amount must be at least ₦2,000.");
                     return new BaseResult<CreateRenewalPolicyResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Refill amount must be at least ₦2,000.");
@@ -246,7 +242,7 @@ public sealed class CreateRenewalPolicyCommand
 
                 if (request.RefillAmount > wallet.TargetAmount.ToDecimal())
                 {
-                    op.Fail("Refill amount cannot exceed the wallet target.");
+                    op.Warning("Refill amount cannot exceed the wallet target.");
                     return new BaseResult<CreateRenewalPolicyResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Refill amount cannot exceed the wallet's target amount.");
@@ -259,7 +255,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (effectiveMinMainBalance < 0)
             {
-                op.Fail("Min main balance cannot be negative.");
+                op.Warning("Min main balance cannot be negative.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Minimum main balance cannot be negative.");
@@ -267,14 +263,14 @@ public sealed class CreateRenewalPolicyCommand
 
             if (request.MaxRenewals is <= 0)
             {
-                op.Fail("Max renewals must be greater than zero if set.");
+                op.Warning("Max renewals must be greater than zero if set.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Max renewals must be greater than zero.");
             }
 
             var refillAmountEffective =
-                refillAmountType.Value == RefillAmountType.Fixed
+                refillAmountType == RefillAmountType.Fixed
                     ? wallet.TargetAmount.ToDecimal()
                     : request.RefillAmount;
 
@@ -282,7 +278,7 @@ public sealed class CreateRenewalPolicyCommand
 
             if (releaseAmountValue <= 0)
             {
-                op.Fail("Wallet rule has an invalid release amount.");
+                op.Warning("Wallet rule has an invalid release amount.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This wallet's release amount is invalid.");
@@ -292,13 +288,12 @@ public sealed class CreateRenewalPolicyCommand
 
             if (releases <= 0)
             {
-                op.Fail("Could not determine release count for this wallet.");
+                op.Warning("Could not determine release count for this wallet.");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Unable to determine the wallet's release schedule.");
             }
 
-            // ─── PIN challenge validation ───
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
                 PinChallengeType.WalletAutomation,
@@ -306,85 +301,59 @@ public sealed class CreateRenewalPolicyCommand
 
             if (!challengeValid)
             {
-                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
                 return new BaseResult<CreateRenewalPolicyResponseDto>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
             }
 
-            long policyId = 0;
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-            try
+            var policy = new RenewalPolicy
             {
-                var policy = new RenewalPolicy
-                {
-                    WalletId = wallet.Id,
-                    UserPublicId = request.UserPublicId,
-                    IsEnabled = true,
-                    TriggerType = triggerType.Value,
-                    TriggerAmount = triggerType.Value == RenewalTriggerType.OnThreshold
-                        ? Money.FromNaira(request.TriggerAmount)
-                        : Money.FromNaira(0),
-                    RefillAmountType = refillAmountType.Value,
-                    RefillAmount = refillAmountType.Value == RefillAmountType.Custom
-                        ? Money.FromNaira(request.RefillAmount)
-                        : Money.FromNaira(0),
-                    MinMainBalance = Money.FromNaira(effectiveMinMainBalance),
-                    MaxRenewals = request.MaxRenewals,
-                    RenewalsCount = 0,
-                    Status = RenewalStatus.Active,
+                WalletId = wallet.Id,
+                UserPublicId = request.UserPublicId,
+                IsEnabled = true,
+                TriggerType = triggerType.Value,
+                TriggerAmount = triggerType == RenewalTriggerType.OnThreshold
+                    ? Money.FromNaira(request.TriggerAmount)
+                    : Money.FromNaira(0),
+                RefillAmountType = refillAmountType.Value,
+                RefillAmount = refillAmountType == RefillAmountType.Custom
+                    ? Money.FromNaira(request.RefillAmount)
+                    : Money.FromNaira(0),
+                MinMainBalance = Money.FromNaira(effectiveMinMainBalance),
+                MaxRenewals = request.MaxRenewals,
+                RenewalsCount = 0,
+                Status = RenewalStatus.Active,
+                RefillUntilMainBalanceExhausted = request.RefillUntilMainBalanceExhausted,
+            };
 
-                    RefillUntilMainBalanceExhausted =
-                        request.RefillUntilMainBalanceExhausted,
-                };
+            await _unitOfWork.AddAsync(policy, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                await _unitOfWork.AddAsync(policy, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            op.Success(
+                $"Renewal policy created. PolicyId: {policy.Id}, " +
+                $"WalletId: {wallet.Id}, " +
+                $"RefillUntilExhausted: {request.RefillUntilMainBalanceExhausted}");
 
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Wallet,
+                $"Automation enabled for {wallet.Name}",
+                BuildInAppMessage(triggerType.Value, request.RefillUntilMainBalanceExhausted),
+                $"/wallet/{wallet.Id}",
+                null,
+                CancellationToken.None);
 
-                policyId = policy.Id;
-
-                op.Success(
-                    $"Renewal policy created. PolicyId: {policyId}, " +
-                    $"WalletId: {wallet.Id}, " +
-                    $"RefillUntilExhausted: {request.RefillUntilMainBalanceExhausted}");
-            }
-            catch (Exception ex)
+            if (!string.IsNullOrWhiteSpace(request.Email))
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-
-                _logger.LogError(
-                    ex,
-                    "Error creating renewal policy for wallet {WalletId}.",
-                    wallet.Id);
-
-                op.Fail($"Error creating renewal policy: {ex.Message}");
-
-                return new BaseResult<CreateRenewalPolicyResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while enabling automation.");
-            }
-
-            try
-            {
-                await SendRenewalPolicyCreatedNotificationsAsync(
-                    request.UserPublicId,
-                    request.Email,
+                _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
-                    wallet.Id,
-                    wallet.Name,
-                    triggerType.Value,
-                    request.RefillUntilMainBalanceExhausted);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for renewal policy {PolicyId}.",
-                    policyId);
+                    request.Email,
+                    BuildEmailMessage(triggerType.Value, request.RefillUntilMainBalanceExhausted),
+                    $"Automation is on for {wallet.Name}");
             }
 
             return new BaseResult<CreateRenewalPolicyResponseDto>(
@@ -396,17 +365,10 @@ public sealed class CreateRenewalPolicyCommand
                 });
         }
 
-        private async Task SendRenewalPolicyCreatedNotificationsAsync(
-            string userPublicId,
-            string email,
-            string firstName,
-            long walletId,
-            string walletName,
+        private static string BuildInAppMessage(
             RenewalTriggerType triggerType,
             bool refillUntilExhausted)
         {
-            var title = $"Automation enabled for {walletName}";
-
             var triggerClause = triggerType switch
             {
                 RenewalTriggerType.OnCompletion =>
@@ -420,49 +382,28 @@ public sealed class CreateRenewalPolicyCommand
                 ? " Refills will use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
                 : string.Empty;
 
-            var inAppMessage =
-                $"{triggerClause}{refillBehaviourClause} You can pause or edit this anytime.";
+            return $"{triggerClause}{refillBehaviourClause} You can pause or edit this anytime.";
+        }
 
-            var emailSubject = $"Automation is on for {walletName}";
+        private static string BuildEmailMessage(
+            RenewalTriggerType triggerType,
+            bool refillUntilExhausted)
+        {
+            var triggerClause = triggerType switch
+            {
+                RenewalTriggerType.OnCompletion =>
+                    "MOVA will refill this wallet automatically when it completes.",
+                RenewalTriggerType.OnThreshold =>
+                    "MOVA will refill this wallet automatically when its balance drops below your threshold.",
+                _ => "MOVA will refill this wallet automatically."
+            };
 
-            var emailMessage =
-                $"{triggerClause}{refillBehaviourClause} " +
-                $"You can pause or edit this automation anytime from your wallet settings.";
+            var refillBehaviourClause = refillUntilExhausted
+                ? " Refills will use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
+                : string.Empty;
 
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Wallet,
-                    title,
-                    inAppMessage,
-                    $"/wallet/{walletId}",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for renewal policy on wallet {WalletId}.",
-                    walletId);
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for renewal policy on wallet {WalletId}.",
-                    walletId);
-            }
+            return $"{triggerClause}{refillBehaviourClause} " +
+                   "You can pause or edit this automation anytime from your wallet settings.";
         }
     }
 }

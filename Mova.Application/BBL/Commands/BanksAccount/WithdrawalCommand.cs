@@ -145,7 +145,6 @@ public sealed class WithdrawalCommand
             new($"{displayName} is required for this utility withdrawal.", [memberName]);
     }
 
-    /// <summary>Identifies the local debit and its current external-payout status.</summary>
     public sealed record WithdrawalResponse(string Reference, string Status, bool Notification);
 
     public sealed class Handler(
@@ -171,7 +170,7 @@ public sealed class WithdrawalCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
@@ -183,7 +182,7 @@ public sealed class WithdrawalCommand
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -191,10 +190,9 @@ public sealed class WithdrawalCommand
 
             if (!permissions.CanPerformSensitiveOperations)
             {
-                op.Fail(
+                op.Warning(
                     $"Sensitive-operation gate blocked withdrawal for user {request.UserPublicId}. " +
-                    $"Status: {permissions.StatusLabel}, " +
-                    $"Reason: {permissions.RestrictionReason}");
+                    $"Status: {permissions.StatusLabel}, Reason: {permissions.RestrictionReason}");
 
                 var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
                     ? "Your account is currently restricted from performing this operation. Please contact support."
@@ -209,13 +207,12 @@ public sealed class WithdrawalCommand
                     FeatureFlagName.AllowWithdrawFunds,
                     cancellationToken))
             {
-                op.Fail("Withdrawals feature flag is disabled.");
+                op.Warning("Withdrawals feature flag is disabled.");
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.BadRequest,
                     "Withdrawals are currently unavailable.");
             }
 
-            // ─── PIN challenge validation ───
             var isBankWithdrawal = string.Equals(
                 request.Type,
                 "bank",
@@ -232,174 +229,110 @@ public sealed class WithdrawalCommand
 
             if (!challengeValid)
             {
-                op.Fail(
-                    $"PIN challenge validation failed for {challengeType}: " +
-                    $"{challengeMessage}");
-
+                op.Warning($"PIN challenge validation failed for {challengeType}: {challengeMessage}");
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
             }
 
-            var amount = Money.FromNaira(request.Amount);
-            await unitOfWork.BeginTransactionAsync(
-                IsolationLevel.Serializable,
+            var user = await identityService.GetByIdentifierAsync(
+                request.UserPublicId,
                 cancellationToken);
 
-            try
+            if (user is null)
             {
-                var wallet = await unitOfWork.Query<Wallet>()
-                    .FirstOrDefaultAsync(
-                        item => item.Id == request.WalletId &&
-                                item.UserPublicId == request.UserPublicId,
-                        cancellationToken);
+                op.Warning($"User not found: {request.UserPublicId}.");
+                return new BaseResult<WithdrawalResponse>(
+                    HttpStatusCode.NotFound,
+                    "User not found.");
+            }
 
-                if (wallet is null)
-                {
-                    await unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail($"Wallet {request.WalletId} not found for user {request.UserPublicId}.");
+            var amount = Money.FromNaira(request.Amount);
 
-                    return new BaseResult<WithdrawalResponse>(
-                        HttpStatusCode.NotFound,
-                        "Wallet not found.");
-                }
+            await using var tx = await unitOfWork.BeginAtomicSerializableAsync(cancellationToken);
 
-                if (wallet.AvailableAmount.MinorUnits < amount.MinorUnits)
-                {
-                    await unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail(
-                        $"Insufficient wallet balance. Available: {wallet.AvailableAmount.MinorUnits}, " +
-                        $"Requested: {amount.MinorUnits}.");
-
-                    return new BaseResult<WithdrawalResponse>(
-                        HttpStatusCode.BadRequest,
-                        "The wallet does not have enough available balance.");
-                }
-
-                var reference = $"WDL-{Guid.NewGuid():N}";
-                wallet.AvailableAmount = Money.FromMinorUnits(
-                    wallet.AvailableAmount.MinorUnits - amount.MinorUnits,
-                    wallet.AvailableAmount.Currency);
-                wallet.TotalWithdrawnAmount = Money.FromMinorUnits(
-                    checked(wallet.TotalWithdrawnAmount.MinorUnits + amount.MinorUnits),
-                    wallet.TotalWithdrawnAmount.Currency);
-
-                var transaction = new Transaction
-                {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = wallet.Id,
-                    Title = "Wallet withdrawal",
-                    Amount = amount,
-                    Type = TransactionType.Withdrawal,
-                    Status = TransactionStatus.Processing,
-                    Reference = reference
-                };
-
-                await unitOfWork.AddAsync(transaction, cancellationToken);
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-
-                await unitOfWork.AddAsync(
-                    new LedgerEntry
-                    {
-                        WalletId = wallet.Id,
-                        TransactionId = transaction.Id,
-                        Amount = amount,
-                        IsCredit = false
-                    },
+            var wallet = await unitOfWork.Query<Wallet>()
+                .FirstOrDefaultAsync(
+                    item => item.Id == request.WalletId
+                            && item.UserPublicId == request.UserPublicId,
                     cancellationToken);
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-                await unitOfWork.CommitTransactionAsync(cancellationToken);
 
-                op.Success(
-                    $"Withdrawal debit recorded. WalletId: {wallet.Id}, " +
-                    $"Reference: {reference}, Amount: {amount.MinorUnits} minor units.");
+            if (wallet is null)
+            {
+                op.Warning($"Wallet {request.WalletId} not found for user {request.UserPublicId}.");
+                return new BaseResult<WithdrawalResponse>(
+                    HttpStatusCode.NotFound,
+                    "Wallet not found.");
+            }
 
-                await QueueWithdrawalNotificationsAsync(
-                    request.UserPublicId,
-                    wallet,
-                    amount,
-                    reference);
+            if (wallet.AvailableAmount.MinorUnits < amount.MinorUnits)
+            {
+                op.Warning(
+                    $"Insufficient wallet balance. " +
+                    $"Available: {wallet.AvailableAmount.MinorUnits}, " +
+                    $"Requested: {amount.MinorUnits}.");
 
                 return new BaseResult<WithdrawalResponse>(
-                    HttpStatusCode.OK,
-                    "Withdrawal debit recorded successfully. External payout processing will be added later.",
-                    new WithdrawalResponse(reference, "processing", true));
+                    HttpStatusCode.BadRequest,
+                    "The wallet does not have enough available balance.");
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                await unitOfWork.RollbackTransactionAsync(CancellationToken.None);
-                op.Fail("Withdrawal cancelled by caller.");
-                throw;
-            }
-            catch (Exception exception)
-            {
-                await unitOfWork.RollbackTransactionAsync(CancellationToken.None);
-                op.Fail(
-                    $"Wallet withdrawal debit failed for wallet {request.WalletId} " +
-                    $"and user {request.UserPublicId}: {exception.Message}",
-                    exception);
 
-                return new BaseResult<WithdrawalResponse>(
-                    HttpStatusCode.InternalServerError,
-                    "Unable to process the withdrawal right now. Please try again.");
-            }
-        }
+            var reference = $"WDL-{Guid.NewGuid():N}";
 
-        private async Task QueueWithdrawalNotificationsAsync(
-            string userPublicId,
-            Wallet wallet,
-            Money amount,
-            string reference)
-        {
+            wallet.AvailableAmount = Money.FromMinorUnits(
+                wallet.AvailableAmount.MinorUnits - amount.MinorUnits,
+                wallet.AvailableAmount.Currency);
+
+            wallet.TotalWithdrawnAmount = Money.FromMinorUnits(
+                checked(wallet.TotalWithdrawnAmount.MinorUnits + amount.MinorUnits),
+                wallet.TotalWithdrawnAmount.Currency);
+
+            var transaction = new Transaction
+            {
+                UserPublicId = request.UserPublicId,
+                WalletId = wallet.Id,
+                Title = "Wallet withdrawal",
+                Amount = amount,
+                Type = TransactionType.Withdrawal,
+                Status = TransactionStatus.Processing,
+                Reference = reference,
+            };
+
+            await unitOfWork.AddAsync(transaction, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await unitOfWork.AddAsync(
+                new LedgerEntry
+                {
+                    WalletId = wallet.Id,
+                    TransactionId = transaction.Id,
+                    Amount = amount,
+                    IsCredit = false,
+                },
+                cancellationToken);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success(
+                $"Withdrawal debit recorded. WalletId: {wallet.Id}, " +
+                $"Reference: {reference}, Amount: {amount.MinorUnits} minor units.");
+
             var formattedAmount = $"{amount.ToDecimal():N2} {amount.Currency}";
             var notificationMessage =
                 $"{formattedAmount} was deducted from your {wallet.Name} wallet. " +
                 $"Withdrawal reference: {reference}. Status: processing.";
 
-            try
-            {
-                notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Wallet,
-                    "Withdrawal initiated",
-                    notificationMessage,
-                    "/transactions",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                logger.LogError(
-                    exception,
-                    "In-app notification failed for withdrawal {Reference}.",
-                    reference);
-            }
+            notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Wallet,
+                "Withdrawal initiated",
+                notificationMessage,
+                "/transactions",
+                null,
+                CancellationToken.None);
 
-            UserIdentityDto? user;
-            try
-            {
-                user = await identityService.GetByIdentifierAsync(
-                    userPublicId,
-                    CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                logger.LogError(
-                    exception,
-                    "Could not load user details for withdrawal email {Reference}.",
-                    reference);
-                return;
-            }
-
-            if (user is null || string.IsNullOrWhiteSpace(user.Email))
-            {
-                logger.LogWarning(
-                    "Skipped withdrawal email {Reference}: user or email was not found.",
-                    reference);
-                return;
-            }
-
-            try
+            if (!string.IsNullOrWhiteSpace(user.Email))
             {
                 notificationQueue.QueueNotificationEmail(
                     user.FirstName,
@@ -407,13 +340,11 @@ public sealed class WithdrawalCommand
                     $"{notificationMessage} Your withdrawal request has been recorded and is currently processing.",
                     "Your MOVA withdrawal has been initiated");
             }
-            catch (Exception exception)
-            {
-                logger.LogError(
-                    exception,
-                    "Email queue failed for withdrawal {Reference}.",
-                    reference);
-            }
+
+            return new BaseResult<WithdrawalResponse>(
+                HttpStatusCode.OK,
+                "Withdrawal debit recorded successfully. External payout processing will be added later.",
+                new WithdrawalResponse(reference, "processing", true));
         }
     }
 }

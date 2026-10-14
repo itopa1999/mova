@@ -1,16 +1,16 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Validation;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Application.Interfaces.Service;
+using Mova.Application.Validation;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -70,11 +70,8 @@ public sealed class CreateWalletCommand
     public sealed class CreateWalletResponseDto
     {
         public long WalletId { get; init; }
-
         public DateTimeOffset FirstReleaseDate { get; init; }
-
         public bool Notification { get; init; }
-
         public decimal NewMainBalance { get; init; }
     }
 
@@ -134,7 +131,7 @@ public sealed class CreateWalletCommand
 
             if (permissions is null)
             {
-                op.Fail($"Permissions unavailable for user {request.UserPublicId}.");
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -142,7 +139,7 @@ public sealed class CreateWalletCommand
 
             if (!permissions.CanCreateWallets)
             {
-                op.Fail(
+                op.Warning(
                     $"Wallet creation blocked for user {request.UserPublicId}. " +
                     $"Status: {permissions.StatusLabel}, " +
                     $"Reason: {permissions.RestrictionReason}");
@@ -156,7 +153,6 @@ public sealed class CreateWalletCommand
                     userMessage);
             }
 
-            // ─── PIN challenge validation ───
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
                 PinChallengeType.CreateWallet,
@@ -164,7 +160,7 @@ public sealed class CreateWalletCommand
 
             if (!challengeValid)
             {
-                op.Fail($"PIN challenge validation failed: {challengeMessage}");
+                op.Warning($"PIN challenge validation failed: {challengeMessage}");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
@@ -172,7 +168,7 @@ public sealed class CreateWalletCommand
 
             if (string.IsNullOrWhiteSpace(request.Name))
             {
-                op.Fail("Wallet name is required.");
+                op.Warning("Wallet name is required.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Wallet name is required.");
@@ -180,7 +176,7 @@ public sealed class CreateWalletCommand
 
             if (request.Name.Length > 150)
             {
-                op.Fail("Wallet name is too long.");
+                op.Warning("Wallet name is too long.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Wallet name cannot exceed 150 characters.");
@@ -190,7 +186,7 @@ public sealed class CreateWalletCommand
 
             if (request.TargetAmount < 2000)
             {
-                op.Fail("Target amount must be at least ₦2,000.");
+                op.Warning("Target amount must be at least ₦2,000.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Target amount must be at least ₦2,000.");
@@ -198,15 +194,15 @@ public sealed class CreateWalletCommand
 
             if (request.AmountToBeReleased < 100)
             {
-                op.Fail("Release amount must be greater than zero.");
+                op.Warning("Release amount must be at least ₦100.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
-                    "Release amount must be at least ₦100");
+                    "Release amount must be at least ₦100.");
             }
 
             if (request.AmountToBeReleased > request.TargetAmount)
             {
-                op.Fail("Release amount cannot exceed target amount.");
+                op.Warning("Release amount cannot exceed target amount.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     $"Release amount (₦{request.AmountToBeReleased:N0}) cannot exceed target amount (₦{request.TargetAmount:N0}).");
@@ -214,7 +210,7 @@ public sealed class CreateWalletCommand
 
             if (string.IsNullOrWhiteSpace(request.FrequencyConfig))
             {
-                op.Fail("Frequency configuration is required.");
+                op.Warning("Frequency configuration is required.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Frequency configuration is required.");
@@ -233,7 +229,7 @@ public sealed class CreateWalletCommand
 
             if (destination is null)
             {
-                op.Fail($"Invalid payout destination: {request.PayoutDestination}");
+                op.Warning($"Invalid payout destination: {request.PayoutDestination}");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid payout destination. Must be one of: bank, wallet, main, utilities.");
@@ -247,11 +243,13 @@ public sealed class CreateWalletCommand
 
             if (goingToUtilities)
             {
-                var validationError = ValidateUtilityConfig(request.UtilityConfig, out parsedUtilityType);
+                var validationError = ValidateUtilityConfig(
+                    request.UtilityConfig,
+                    out parsedUtilityType);
 
                 if (validationError is not null)
                 {
-                    op.Fail($"Utility config invalid: {validationError}");
+                    op.Warning($"Utility config invalid: {validationError}");
                     return new BaseResult<CreateWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         validationError);
@@ -259,11 +257,14 @@ public sealed class CreateWalletCommand
 
                 serializedUtilityConfig = JsonSerializer.Serialize(
                     request.UtilityConfig,
-                    new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+                    new JsonSerializerOptions
+                    {
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                    });
             }
             else if (request.UtilityConfig is not null)
             {
-                op.Fail($"Utility config provided but destination is {destination}.");
+                op.Warning($"Utility config provided but destination is {destination}.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Utility config must not be provided for this payout destination.");
@@ -280,9 +281,9 @@ public sealed class CreateWalletCommand
                     x.Status == WalletStatus.Active,
                     cancellationToken);
 
-            if (existingWallet != null)
+            if (existingWallet is not null)
             {
-                op.Fail("Wallet name already exists.");
+                op.Warning("Wallet name already exists.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "A wallet with this name already exists.");
@@ -290,13 +291,11 @@ public sealed class CreateWalletCommand
 
             var categoryExists = await _unitOfWork.Query<WalletCategory>()
                 .AsNoTracking()
-                .AnyAsync(
-                    x => x.Id == request.CategoryId,
-                    cancellationToken);
+                .AnyAsync(x => x.Id == request.CategoryId, cancellationToken);
 
             if (!categoryExists)
             {
-                op.Fail("Invalid wallet category.");
+                op.Warning("Invalid wallet category.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "The selected wallet category does not exist.");
@@ -306,7 +305,7 @@ public sealed class CreateWalletCommand
             {
                 if (request.BankAccountId <= 0)
                 {
-                    op.Fail("Payout destination is Bank but no bank account was provided.");
+                    op.Warning("Payout destination is Bank but no bank account provided.");
                     return new BaseResult<CreateWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         "Please select a bank account.");
@@ -319,9 +318,9 @@ public sealed class CreateWalletCommand
                              x.UserPublicId == request.UserPublicId,
                         cancellationToken);
 
-                if (bankAccount == null)
+                if (bankAccount is null)
                 {
-                    op.Fail($"Bank account not found for user: {request.BankAccountId}");
+                    op.Warning($"Bank account not found for user: {request.BankAccountId}");
                     return new BaseResult<CreateWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         "The selected bank account does not exist or does not belong to you.");
@@ -329,7 +328,7 @@ public sealed class CreateWalletCommand
 
                 if (!bankAccount.ConsentGiven)
                 {
-                    op.Fail($"Consent not given for bank account: {request.BankAccountId}");
+                    op.Warning($"Consent not given for bank account: {request.BankAccountId}");
                     return new BaseResult<CreateWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         "You have not given consent for this bank account. Please provide consent first.");
@@ -337,7 +336,8 @@ public sealed class CreateWalletCommand
 
                 if (bankAccount.Status != BankAccountStatus.Active)
                 {
-                    op.Fail($"Bank account is not active: {request.BankAccountId} - Status: {bankAccount.Status}");
+                    op.Warning(
+                        $"Bank account is not active: {request.BankAccountId} - Status: {bankAccount.Status}");
                     return new BaseResult<CreateWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         "The selected bank account is not active. Please verify your bank account first.");
@@ -345,7 +345,7 @@ public sealed class CreateWalletCommand
             }
             else if (request.BankAccountId > 0)
             {
-                op.Fail($"Payout destination is {destination} but a bank account was provided.");
+                op.Warning($"Payout destination is {destination} but a bank account was provided.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Bank account must not be provided for this payout destination.");
@@ -362,12 +362,11 @@ public sealed class CreateWalletCommand
 
             if (!previewResult.IsSuccess)
             {
-                op.Fail($"Schedule preview failed: {string.Join(", ", previewResult.Errors)}");
-
                 var errorMessage = previewResult.Errors.Any()
                     ? string.Join(" | ", previewResult.Errors)
                     : "Invalid schedule configuration.";
 
+                op.Warning($"Schedule preview failed: {errorMessage}");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     errorMessage);
@@ -380,6 +379,7 @@ public sealed class CreateWalletCommand
                 FrequencyConfig = normalizedFrequencyConfig,
                 StartDate = request.StartDate,
             };
+
             var cursor = request.StartDate.AddTicks(-1);
             DateTimeOffset? finalEndDate = null;
 
@@ -391,7 +391,9 @@ public sealed class CreateWalletCommand
                     cancellationToken);
 
                 if (nextRelease is null)
+                {
                     break;
+                }
 
                 finalEndDate = nextRelease.ScheduledFor;
                 cursor = nextRelease.ScheduledFor;
@@ -399,7 +401,7 @@ public sealed class CreateWalletCommand
 
             if (finalEndDate is null)
             {
-                op.Fail("Unable to calculate the final release date.");
+                op.Warning("Unable to calculate the final release date.");
                 return new BaseResult<CreateWalletResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Unable to calculate the final release date.");
@@ -407,7 +409,6 @@ public sealed class CreateWalletCommand
 
             var targetMoney = Money.FromNaira(request.TargetAmount);
             var releaseMoney = Money.FromNaira(request.AmountToBeReleased);
-
             var releases = previewResult.TotalReleases;
 
             var fees = WalletFeeHelper.Calculate(
@@ -418,192 +419,152 @@ public sealed class CreateWalletCommand
 
             var totalUpfrontCharge = fees.TotalUpfrontCharge;
 
-            op.Success(
-                $"Fee computed — releases: {releases}, " +
-                $"creation: {fees.CreationFee}, payout: {fees.TotalPayoutFee}, " +
-                $"total charge: {totalUpfrontCharge}");
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            long walletId = 0;
-            DateTimeOffset firstReleaseDate = default;
-            decimal newMainBalance = 0m;
+            var balanceDebited = await _identityService.DebitBalanceAsync(
+                request.UserPublicId,
+                totalUpfrontCharge,
+                cancellationToken);
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
-
-            try
+            if (!balanceDebited)
             {
-                var balanceDebited = await _identityService.DebitBalanceAsync(
-                    request.UserPublicId,
-                    totalUpfrontCharge,
-                    cancellationToken);
+                op.Warning("Insufficient account balance or user account not found.");
+                return new BaseResult<CreateWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "Insufficient account balance.");
+            }
 
-                if (!balanceDebited)
-                {
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    op.Fail("Insufficient account balance or user account not found.");
+            var wallet = new Wallet
+            {
+                UserPublicId = request.UserPublicId,
+                CategoryId = request.CategoryId,
+                BankAccountId = goingToBank ? request.BankAccountId : null,
+                PayoutDestination = destination.Value,
+                Name = walletName,
+                Description = string.IsNullOrWhiteSpace(request.Description)
+                    ? null
+                    : request.Description.Trim(),
+                TargetAmount = targetMoney,
+                FundedAmount = targetMoney,
+                AvailableAmount = Money.FromNaira(0),
+                LockedAmount = targetMoney,
+                ResetAmount = Money.FromNaira(0),
+                Status = WalletStatus.Active,
+                UtilityType = goingToUtilities ? parsedUtilityType : null,
+                UtilityConfigJson = goingToUtilities ? serializedUtilityConfig : null,
+            };
 
-                    return new BaseResult<CreateWalletResponseDto>(
-                        HttpStatusCode.BadRequest,
-                        "Insufficient account balance.");
-                }
+            await _unitOfWork.AddAsync(wallet, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                var wallet = new Wallet
-                {
-                    UserPublicId = request.UserPublicId,
-                    CategoryId = request.CategoryId,
-                    BankAccountId = goingToBank
-                        ? request.BankAccountId
-                        : null,
-                    PayoutDestination = destination.Value,
-                    Name = walletName,
-                    Description = string.IsNullOrWhiteSpace(request.Description)
-                        ? null
-                        : request.Description.Trim(),
-                    TargetAmount = targetMoney,
-                    FundedAmount = targetMoney,
-                    AvailableAmount = Money.FromNaira(0),
-                    LockedAmount = targetMoney,
-                    ResetAmount = Money.FromNaira(0),
-                    Status = WalletStatus.Active,
-                    UtilityType = goingToUtilities ? parsedUtilityType : null,
-                    UtilityConfigJson = goingToUtilities ? serializedUtilityConfig : null,
-                };
+            var walletTransaction = new Transaction
+            {
+                UserPublicId = request.UserPublicId,
+                WalletId = wallet.Id,
+                Title = "Wallet Created",
+                Amount = targetMoney,
+                Type = TransactionType.Deposit,
+                Status = TransactionStatus.Completed,
+                Reference = $"wallet-created:{wallet.Id}",
+                CompletedAt = DateTimeOffset.UtcNow,
+            };
 
-                await _unitOfWork.AddAsync(wallet, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.AddAsync(walletTransaction, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                var walletTransaction = new Transaction
-                {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = wallet.Id,
-                    Title = "Wallet Created",
-                    Amount = targetMoney,
-                    Type = TransactionType.Deposit,
-                    Status = TransactionStatus.Completed,
-                    Reference = $"wallet-created:{wallet.Id}",
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
-
-                await _unitOfWork.AddAsync(walletTransaction, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var ledgerEntry = new LedgerEntry
+            await _unitOfWork.AddAsync(
+                new LedgerEntry
                 {
                     WalletId = wallet.Id,
                     TransactionId = walletTransaction.Id,
                     Amount = targetMoney,
                     IsCredit = true,
-                };
+                },
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                await _unitOfWork.AddAsync(ledgerEntry, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var feeTransaction = new Transaction
-                {
-                    UserPublicId = request.UserPublicId,
-                    WalletId = wallet.Id,
-                    Title = "MOVA Fee",
-                    Amount = Money.FromNaira(fees.TotalMovaCharges),
-                    Type = TransactionType.Fee,
-                    Status = TransactionStatus.Completed,
-                    Reference = $"wallet-fee:{wallet.Id}",
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
-
-                await _unitOfWork.AddAsync(feeTransaction, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var rule = new WalletRule
-                {
-                    WalletId = wallet.Id,
-                    Amount = releaseMoney,
-                    Frequency = request.Frequency,
-                    FrequencyConfig = normalizedFrequencyConfig,
-                    StartDate = request.StartDate,
-                    EndDate = finalEndDate.Value,
-                };
-
-                await _unitOfWork.AddAsync(rule, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                var firstRelease = await _walletRuleService.GetNextReleaseAsync(
-                    rule,
-                    request.StartDate.AddTicks(-1),
-                    cancellationToken);
-
-                if (firstRelease is null)
-                {
-                    throw new InvalidOperationException(
-                        "Unable to generate the first wallet release schedule.");
-                }
-
-                var firstReleaseAmount = Math.Min(
-                    firstRelease.Amount.ToDecimal(),
-                    request.TargetAmount);
-
-                var scheduledRelease = new ScheduledRelease
-                {
-                    WalletId = wallet.Id,
-                    WalletRuleId = rule.Id,
-                    Amount = Money.FromNaira(firstReleaseAmount),
-                    ScheduledFor = firstRelease.ScheduledFor,
-                    Status = ReleaseStatus.Scheduled,
-                    ReleasedAt = null,
-                };
-
-                await _unitOfWork.AddAsync(scheduledRelease, cancellationToken);
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                walletId = wallet.Id;
-                firstReleaseDate = firstRelease.ScheduledFor;
-
-                var userAfterDebit = await _identityService.GetByIdentifierAsync(
-                    request.UserPublicId,
-                    cancellationToken);
-
-                newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
-
-                op.Success(
-                    $"Wallet created. WalletId: {wallet.Id}, " +
-                    $"FirstRelease: {firstRelease.ScheduledFor:u}, " +
-                    $"NewBalance: {newMainBalance}");
-            }
-            catch (Exception ex)
+            var feeTransaction = new Transaction
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                UserPublicId = request.UserPublicId,
+                WalletId = wallet.Id,
+                Title = "MOVA Fee",
+                Amount = Money.FromNaira(fees.TotalMovaCharges),
+                Type = TransactionType.Fee,
+                Status = TransactionStatus.Completed,
+                Reference = $"wallet-fee:{wallet.Id}",
+                CompletedAt = DateTimeOffset.UtcNow,
+            };
 
-                _logger.LogError(
-                    ex,
-                    "Error creating wallet for user {UserPublicId}.",
-                    request.UserPublicId);
+            await _unitOfWork.AddAsync(feeTransaction, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                op.Fail($"Error creating wallet: {ex.Message}");
-
-                return new BaseResult<CreateWalletResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while creating the wallet.");
-            }
-
-            try
+            var rule = new WalletRule
             {
-                await SendWalletCreatedNotificationsAsync(
-                    request.UserPublicId,
-                    request.Email,
+                WalletId = wallet.Id,
+                Amount = releaseMoney,
+                Frequency = request.Frequency,
+                FrequencyConfig = normalizedFrequencyConfig,
+                StartDate = request.StartDate,
+                EndDate = finalEndDate.Value,
+            };
+
+            await _unitOfWork.AddAsync(rule, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var firstRelease = await _walletRuleService.GetNextReleaseAsync(
+                rule,
+                request.StartDate.AddTicks(-1),
+                cancellationToken)
+                ?? throw new InfrastructureException(
+                    "Unable to generate the first wallet release schedule.");
+
+            var firstReleaseAmount = Math.Min(
+                firstRelease.Amount.ToDecimal(),
+                request.TargetAmount);
+
+            var scheduledRelease = new ScheduledRelease
+            {
+                WalletId = wallet.Id,
+                WalletRuleId = rule.Id,
+                Amount = Money.FromNaira(firstReleaseAmount),
+                ScheduledFor = firstRelease.ScheduledFor,
+                Status = ReleaseStatus.Scheduled,
+                ReleasedAt = null,
+            };
+
+            await _unitOfWork.AddAsync(scheduledRelease, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            var firstReleaseDate = firstRelease.ScheduledFor;
+
+            var userAfterDebit = await _identityService.GetByIdentifierAsync(
+                request.UserPublicId,
+                cancellationToken);
+
+            var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
+
+            op.Success(
+                $"Wallet created. WalletId: {wallet.Id}, " +
+                $"FirstRelease: {firstReleaseDate:u}, " +
+                $"NewBalance: {newMainBalance}");
+
+            _notificationQueue.InAppNotificationAsync(
+                request.UserPublicId,
+                NotificationType.Wallet,
+                $"{walletName} wallet created",
+                BuildInAppMessage(walletName, firstReleaseDate, destination.Value, parsedUtilityType, request.UtilityConfig),
+                "/wallets",
+                null,
+                CancellationToken.None);
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
-                    walletId,
-                    walletName,
-                    firstReleaseDate,
-                    destination.Value,
-                    parsedUtilityType,
-                    request.UtilityConfig);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Notification block failed for created wallet {WalletId}.",
-                    walletId);
+                    request.Email,
+                    BuildEmailMessage(walletName, firstReleaseDate, destination.Value, parsedUtilityType, request.UtilityConfig),
+                    $"Your {walletName} wallet is ready");
             }
 
             return new BaseResult<CreateWalletResponseDto>(
@@ -611,11 +572,74 @@ public sealed class CreateWalletCommand
                 "Wallet created successfully.",
                 new CreateWalletResponseDto
                 {
-                    WalletId = walletId,
+                    WalletId = wallet.Id,
                     FirstReleaseDate = firstReleaseDate,
                     Notification = true,
                     NewMainBalance = newMainBalance,
                 });
+        }
+
+        private static string BuildInAppMessage(
+            string walletName,
+            DateTimeOffset firstReleaseDate,
+            PayoutDestination destination,
+            UtilityType? utilityType,
+            UtilityConfig? utilityConfig)
+            => $"Your {walletName} wallet is now active. " +
+               $"First release scheduled for {firstReleaseDate:MMM d, yyyy}. " +
+               BuildDestinationClause(destination, utilityType, utilityConfig);
+
+        private static string BuildEmailMessage(
+            string walletName,
+            DateTimeOffset firstReleaseDate,
+            PayoutDestination destination,
+            UtilityType? utilityType,
+            UtilityConfig? utilityConfig)
+            => $"Your {walletName} wallet has been created and is now active. " +
+               $"Your first release is scheduled for {firstReleaseDate:MMM d, yyyy}. " +
+               BuildDestinationClause(destination, utilityType, utilityConfig) + " " +
+               "MOVA will handle the schedule from here.";
+
+        private static string BuildDestinationClause(
+            PayoutDestination destination,
+            UtilityType? utilityType,
+            UtilityConfig? utilityConfig)
+            => destination switch
+            {
+                PayoutDestination.Bank =>
+                    "Releases will be sent to your linked bank account.",
+                PayoutDestination.Wallet =>
+                    "Releases will stay in your wallet available balance — pay bills or withdraw anytime.",
+                PayoutDestination.Main =>
+                    "Releases will be added to your main MOVA balance.",
+                PayoutDestination.Utilities =>
+                    BuildUtilityNotificationClause(utilityType, utilityConfig),
+                _ => "Releases will be handled on schedule."
+            };
+
+        private static string BuildUtilityNotificationClause(
+            UtilityType? utilityType,
+            UtilityConfig? config)
+        {
+            if (utilityType is null || config is null)
+                return "Releases will be used to pay your selected utility.";
+
+            return utilityType switch
+            {
+                UtilityType.Airtime =>
+                    $"Releases will top up {config.Network?.ToUpperInvariant()} airtime on {config.PhoneNumber}.",
+
+                UtilityType.Data =>
+                    $"Releases will buy {config.Network?.ToUpperInvariant()} data on {config.PhoneNumber}.",
+
+                UtilityType.Cable =>
+                    $"Releases will renew your {config.CableProvider} package.",
+
+                UtilityType.Electricity =>
+                    $"Releases will top up your {config.Disco} {config.MeterType} meter.",
+
+                _ => "Releases will be used to pay your selected utility."
+            };
         }
 
         private static string? ValidateUtilityConfig(
@@ -702,106 +726,6 @@ public sealed class CreateWalletCommand
         {
             var digits = new string(phone.Where(char.IsDigit).ToArray());
             return digits.Length == 11;
-        }
-
-        private async Task SendWalletCreatedNotificationsAsync(
-            string userPublicId,
-            string email,
-            string firstName,
-            long walletId,
-            string walletName,
-            DateTimeOffset firstReleaseDate,
-            PayoutDestination payoutDestination,
-            UtilityType? utilityType,
-            UtilityConfig? utilityConfig)
-        {
-            var title = $"{walletName} wallet created";
-
-            var destinationClause = payoutDestination switch
-            {
-                PayoutDestination.Bank =>
-                    "Releases will be sent to your linked bank account.",
-                PayoutDestination.Wallet =>
-                    "Releases will stay in your wallet available balance — pay bills or withdraw anytime.",
-                PayoutDestination.Main =>
-                    "Releases will be added to your main MOVA balance.",
-                PayoutDestination.Utilities =>
-                    BuildUtilityNotificationClause(utilityType, utilityConfig),
-                _ => "Releases will be handled on schedule."
-            };
-
-            var inAppMessage =
-                $"Your {walletName} wallet is now active. " +
-                $"First release scheduled for {firstReleaseDate:MMM d, yyyy}. " +
-                destinationClause;
-
-            var emailSubject = $"Your {walletName} wallet is ready";
-
-            var emailMessage =
-                $"Your {walletName} wallet has been created and is now active. " +
-                $"Your first release is scheduled for {firstReleaseDate:MMM d, yyyy}. " +
-                destinationClause + " " +
-                $"MOVA will handle the schedule from here.";
-
-            try
-            {
-                _notificationQueue.InAppNotificationAsync(
-                    userPublicId,
-                    NotificationType.Wallet,
-                    title,
-                    inAppMessage,
-                    "/wallets",
-                    null,
-                    CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "In-app notification failed for created wallet {WalletId}.",
-                    walletId);
-            }
-
-            try
-            {
-                _notificationQueue.QueueNotificationEmail(
-                    firstName,
-                    email,
-                    emailMessage,
-                    emailSubject);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Email queue failed for created wallet {WalletId}.",
-                    walletId);
-            }
-        }
-
-        private static string BuildUtilityNotificationClause(
-            UtilityType? utilityType,
-            UtilityConfig? config)
-        {
-            if (utilityType is null || config is null)
-                return "Releases will be used to pay your selected utility.";
-
-            return utilityType switch
-            {
-                UtilityType.Airtime =>
-                    $"Releases will top up {config.Network?.ToUpperInvariant()} airtime on {config.PhoneNumber}.",
-
-                UtilityType.Data =>
-                    $"Releases will buy {config.Network?.ToUpperInvariant()} data on {config.PhoneNumber}.",
-
-                UtilityType.Cable =>
-                    $"Releases will renew your {config.CableProvider} package.",
-
-                UtilityType.Electricity =>
-                    $"Releases will top up your {config.Disco} {config.MeterType} meter.",
-
-                _ => "Releases will be used to pay your selected utility."
-            };
         }
     }
 }

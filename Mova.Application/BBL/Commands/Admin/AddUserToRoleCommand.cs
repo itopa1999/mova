@@ -15,6 +15,7 @@ public sealed class AddUserToRoleCommand
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
+
         public string Role { get; set; } = string.Empty;
     }
 
@@ -26,13 +27,14 @@ public sealed class AddUserToRoleCommand
 
     public sealed class Handler : IRequestHandler<Command, BaseResult<AssignRoleResponseDto>>
     {
-        private static readonly HashSet<string> AssignableRoles = new(StringComparer.OrdinalIgnoreCase)
-        {
-            Roles.Admin,
-            Roles.SuperAdmin,
-            Roles.SupportAgent,
-            Roles.Customer,
-        };
+        private static readonly HashSet<string> AssignableRoles =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                Roles.Admin,
+                Roles.SuperAdmin,
+                Roles.SupportAgent,
+                Roles.Customer,
+            };
 
         private readonly IIdentityService _identityService;
         private readonly ILogger<Handler> _logger;
@@ -57,7 +59,7 @@ public sealed class AddUserToRoleCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -65,7 +67,7 @@ public sealed class AddUserToRoleCommand
 
             if (string.IsNullOrWhiteSpace(request.Role))
             {
-                op.Fail("Role is required.");
+                op.Warning("Role is required.");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Role is required.");
@@ -73,7 +75,7 @@ public sealed class AddUserToRoleCommand
 
             if (!AssignableRoles.Contains(request.Role))
             {
-                op.Fail($"Unknown role: {request.Role}");
+                op.Warning($"Unknown role: {request.Role}");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
                     $"Unknown role. Allowed: {string.Join(", ", AssignableRoles)}.");
@@ -85,15 +87,18 @@ public sealed class AddUserToRoleCommand
 
             if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.NotFound,
                     "User not found.");
             }
 
-            var existingRoles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var existingRoles = await _identityService.GetRolesAsync(
+                user.Id,
+                cancellationToken);
 
-            if (existingRoles.Any(r => string.Equals(r, request.Role, StringComparison.OrdinalIgnoreCase)))
+            if (existingRoles.Any(r =>
+                string.Equals(r, request.Role, StringComparison.OrdinalIgnoreCase)))
             {
                 op.Success($"User already has role {request.Role}.");
                 return new BaseResult<AssignRoleResponseDto>(
@@ -106,17 +111,22 @@ public sealed class AddUserToRoleCommand
                     });
             }
 
-            var (Success, ErrorMessage) = await _identityService.AddToRoleAsync(user.Id, request.Role, cancellationToken);
+            var (success, errorMessage) = await _identityService.AddToRoleAsync(
+                user.Id,
+                request.Role,
+                cancellationToken);
 
-            if (!Success)
+            if (!success)
             {
-                op.Fail($"Failed to add role: {ErrorMessage}");
+                op.Warning($"Failed to add role: {errorMessage}");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
-                    ErrorMessage ?? "Failed to add role.");
+                    errorMessage ?? "Failed to add role.");
             }
 
-            var updatedRoles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var updatedRoles = await _identityService.GetRolesAsync(
+                user.Id,
+                cancellationToken);
 
             op.Success($"Role {request.Role} added to user {request.UserPublicId}.");
 

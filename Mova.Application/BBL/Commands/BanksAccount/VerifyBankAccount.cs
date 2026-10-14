@@ -1,14 +1,17 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common;
+using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.BanksAccount;
+
 public sealed class VerifyBankAccount
 {
     public sealed class Command : IRequest<BaseResult<VerifyBankAccountDto>>
@@ -36,23 +39,33 @@ public sealed class VerifyBankAccount
         private readonly IPaystackService _paystackService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
+        private readonly ILogger<Handler> _logger;
 
         public Handler(
             IPaystackService paystackService,
             IUnitOfWork unitOfWork,
-            IIdentityService identityService)
+            IIdentityService identityService,
+            ILogger<Handler> logger)
         {
             _paystackService = paystackService;
             _unitOfWork = unitOfWork;
             _identityService = identityService;
+            _logger = logger;
         }
 
         public async Task<BaseResult<VerifyBankAccountDto>> Handle(
             Command request,
             CancellationToken cancellationToken)
         {
+            using var op = OperationLogger.Start(
+                _logger,
+                "VerifyBankAccount",
+                ("UserPublicId", request.UserPublicId),
+                ("BankCode", request.BankCode));
+
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
+                op.Warning("User identity is required.");
                 return new BaseResult<VerifyBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "User identity is required.");
@@ -64,6 +77,7 @@ public sealed class VerifyBankAccount
 
             if (permissions is null)
             {
+                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
                 return new BaseResult<VerifyBankAccountDto>(
                     HttpStatusCode.InternalServerError,
                     "We couldn't verify your account permissions right now. Please try again in a moment.");
@@ -71,6 +85,10 @@ public sealed class VerifyBankAccount
 
             if (!permissions.CanPerformSensitiveOperations)
             {
+                op.Warning(
+                    $"Sensitive-operation gate blocked VerifyBankAccount for user {request.UserPublicId}. " +
+                    $"Status: {permissions.StatusLabel}, Reason: {permissions.RestrictionReason}");
+
                 var userMessage = string.IsNullOrWhiteSpace(permissions.StatusDescription)
                     ? "Your account is currently restricted from performing this operation. Please contact support."
                     : permissions.StatusDescription;
@@ -82,6 +100,7 @@ public sealed class VerifyBankAccount
 
             if (string.IsNullOrWhiteSpace(request.AccountNumber))
             {
+                op.Warning("Account number is required.");
                 return new BaseResult<VerifyBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Account number is required.");
@@ -89,6 +108,7 @@ public sealed class VerifyBankAccount
 
             if (string.IsNullOrWhiteSpace(request.BankCode))
             {
+                op.Warning("Bank code is required.");
                 return new BaseResult<VerifyBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Bank code is required.");
@@ -105,6 +125,7 @@ public sealed class VerifyBankAccount
 
             if (bank is null)
             {
+                op.Warning($"Invalid bank code: {bankCode}");
                 return new BaseResult<VerifyBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid bank selected.");
@@ -117,10 +138,14 @@ public sealed class VerifyBankAccount
 
             if (account is null)
             {
+                op.Warning($"Provider could not resolve account: {accountNumber} at {bankCode}.");
                 return new BaseResult<VerifyBankAccountDto>(
                     HttpStatusCode.BadRequest,
                     "Unable to verify bank account.");
             }
+
+            op.Success(
+                $"Bank account verified. Account: {account.AccountNumber}, Bank: {bank.Name}.");
 
             return new BaseResult<VerifyBankAccountDto>(
                 HttpStatusCode.OK,
@@ -130,7 +155,7 @@ public sealed class VerifyBankAccount
                     AccountNumber = account.AccountNumber,
                     AccountName = account.AccountName,
                     BankInstitution = bank.Name,
-                    BankCode = bank.Code
+                    BankCode = bank.Code,
                 });
         }
     }

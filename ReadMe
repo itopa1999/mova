@@ -636,3 +636,131 @@ POST /api/schedule/preview
 
 
 
+
+
+# Summary — Sections 4 through 10
+
+## 4. `OperationLogger` — the log-level contract
+
+**Three methods, three levels:**
+
+| Method | Level | Sentry | Email |
+|---|---|---|---|
+| `Success(msg)` | Information | No | No |
+| `Warning(msg)` | Warning | No | No |
+| `Error(msg, ex)` / `Error(msg)` | Error | **Yes** | **Yes** |
+
+- Removed `Fail` and `Reject` entirely.
+- `Error` is the **only** method that reaches Sentry.
+- Added `_disposed` guard so double-dispose (from `using` + explicit call) is a no-op.
+
+**Sentry config in `Program.cs`:**
+```csharp
+options.MinimumEventLevel = LogLevel.Error;
+options.MinimumBreadcrumbLevel = LogLevel.Information;
+```
+
+Business rejections stay in Serilog only. Real bugs page you.
+
+---
+
+## 5. `ExceptionHandlingMiddleware` — rewritten
+
+- `op.Fail(...)` → `op.Error(...)` for 5xx, `op.Warning(...)` for 4xx.
+- `OperationCanceledException` handled first — **only** when `context.RequestAborted.IsCancellationRequested` (true client disconnect). HttpClient timeouts no longer get swallowed.
+- `TimeoutException` and `TaskCanceledException` → **504 Gateway Timeout** (was 408) so DB/provider timeouts reach Sentry.
+- `Response.HasStarted` uses `Warning` — not a bug.
+
+**Final status map:**
+
+| Exception | Status | Sentry |
+|---|---|---|
+| Client disconnect | — | No |
+| `ArgumentException` / `InvalidOperationException` / `ValidationException` | 400 | No |
+| `UnauthorizedAccessException` | 401 | No |
+| `KeyNotFoundException` | 404 | No |
+| `DbUpdateException` | 409 | No |
+| `DbException` | 503 | Yes |
+| `TimeoutException` / `TaskCanceledException` | 504 | Yes |
+| `NotImplementedException` | 501 | Yes |
+| Everything else | 500 | Yes |
+
+---
+
+## 6. `UnitOfWork` — auto-rollback on scope dispose
+
+- `IUnitOfWork` now extends `IAsyncDisposable`.
+- `DisposeAsync` rolls back any uncommitted transaction when the request scope ends.
+- `_transaction = null` set **before** `CommitAsync` / `RollbackAsync` to prevent double-dispose if commit itself throws.
+
+**New helper:**
+
+```csharp
+await using var tx = await _unitOfWork.BeginAtomicAsync(ct);
+// ... work
+await tx.CommitAsync(ct);   // not called → auto rollback
+```
+
+This is the piece that lets every handler drop its try/catch.
+
+---
+
+## 7. `NotificationQueue` — `TryEnqueue` pattern
+
+**The rule:**
+- Handler: **never** has try/catch.
+- `NotificationQueue.TryEnqueue`: owns the try/catch, logs via `op.Error`, returns normally.
+- Middleware: only sees failures that mean the request itself failed.
+
+**Why:** if enqueue throws after the DB write committed, the middleware returns 500 and the client thinks the whole operation failed — even though the money moved.
+
+**`NotificationQueue.cs` now:**
+- Wraps every `_backgroundJobClient.Enqueue<...>(...)` in `TryEnqueue`.
+- Injects `ILogger<NotificationQueue>`.
+- On failure: `op.Error("Failed to enqueue notification job.", ex)` → Sentry + email, handler keeps going.
+- Worker-side retry already handled by `[AutomaticRetry(Attempts = 3)]` on `BackgroundNotificationJob`.
+
+---
+
+## 8. `BreakWalletCommand` — refactored
+
+- **Zero try/catch.**
+- `await using var tx = await _unitOfWork.BeginAtomicAsync(ct)` replaces manual `BeginTransactionAsync` + rollback.
+- Business rejections **throw** instead of returning 400/404:
+  - `throw new KeyNotFoundException("Wallet not found.")` → 404
+  - `throw new InvalidOperationException("...")` → 400
+- PIN challenge failure → `op.Warning(...)` (business, no Sentry).
+- Notifications called directly — no try/catch, no Hangfire coupling in `Application`.
+
+---
+
+## 9. Tests
+
+**New test files (13):**
+
+`GetAllWalletsQueryTests` (15) · `GetReleasesQueryTests` (16) · `GetRenewalEventsQueryTests` (12) · `GetRenewalPolicyQueryTests` (12) · `GetWalletActivitiesQueryTests` (17) · `GetWalletAnalyticsQueryTests` (22) · `GetWalletBankAccountQueryTests` (8) · `GetWalletCategoriesQueryTests` (9) · `WalletDetailsQueryTests` (25) · `GetWalletSchedulePreviewQueryTests` (18) · `ListWalletTemplatesQueryTests` (19) · `SchedulePreviewQueryTests` (10) · `GetWalletPayoutsQueryTests` (20) · `DatabaseSeederTests` (17)
+
+**Base test infrastructure:**
+- `SqliteStringArrayConverter` added to `BaseTest` — Postgres `text[]` columns now round-trip as JSON on SQLite (fixes `WalletTemplate.Tags`).
+
+**Recurring lessons the tests caught:**
+- Every entity seed must populate every non-nullable column (`Payout.Reference`, `Transaction.Reference`, `RenewalEvent.TransactionId`, …).
+- Moq matches reference types by reference, not value → use `It.Is<T>(x => x.Id == id)` for entities EF materialized.
+- `(string, object)[]` tuple shape needs explicit `+ (object)` casts when passed to `OperationLogger.Start`.
+
+---
+
+## 10. CI — `build-check.yml`
+
+Added `verify-connectivity` job:
+- Runs after `test`.
+- Only on push/dispatch (no PRs — secrets aren't available to forks).
+- Verifies Postgres (`SELECT 1`) and Redis (`PING`) against production credentials using `tools/Mova.HealthCheck`.
+- `promote-to-production` now `needs: [test, verify-connectivity]` — no deploy if either fails.
+- Two new repo secrets: `POSTGRES_CONNECTION_STRING`, `REDIS_CONNECTION_STRING`.
+
+
+
+MUST TEST login endpopint 
+_identityService.CreditBalanceAsync( check all the code base please for the transaction and also
+the BeginAtomicSerializableAsync 

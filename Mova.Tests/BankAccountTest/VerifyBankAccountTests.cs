@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.BanksAccount;
 using Mova.Application.Interfaces.Identity;
@@ -29,7 +30,8 @@ public sealed class VerifyBankAccountTests : BaseTest
         return new VerifyBankAccount.Handler(
             _paystack.Object,
             UnitOfWork,
-            _identityService.Object);
+            _identityService.Object,
+            Mock.Of<ILogger<VerifyBankAccount.Handler>>());
     }
 
     private VerifyBankAccount.Command CreateCommand(

@@ -1,5 +1,5 @@
-using System.Net;
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -61,7 +61,7 @@ public sealed class ToggleRenewalCommand
 
             if (wallet is null)
             {
-                op.Fail("Wallet not found.");
+                op.Warning("Wallet not found.");
                 return new BaseResult<ToggleRenewalResponseDto>(
                     HttpStatusCode.NotFound,
                     "Wallet not found.");
@@ -74,7 +74,7 @@ public sealed class ToggleRenewalCommand
 
             if (policy is null)
             {
-                op.Fail("Renewal policy not found for this wallet.");
+                op.Warning("Renewal policy not found for this wallet.");
                 return new BaseResult<ToggleRenewalResponseDto>(
                     HttpStatusCode.NotFound,
                     "This wallet has no automation policy.");
@@ -82,7 +82,7 @@ public sealed class ToggleRenewalCommand
 
             if (!policy.IsEnabled)
             {
-                op.Fail("Renewal policy is not enabled.");
+                op.Warning("Renewal policy is not enabled.");
                 return new BaseResult<ToggleRenewalResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Automation is not enabled for this wallet.");
@@ -91,7 +91,7 @@ public sealed class ToggleRenewalCommand
             if (policy.Status != RenewalStatus.Active
                 && policy.Status != RenewalStatus.Paused)
             {
-                op.Fail($"Cannot toggle policy in status {policy.Status}.");
+                op.Warning($"Cannot toggle policy in status {policy.Status}.");
                 return new BaseResult<ToggleRenewalResponseDto>(
                     HttpStatusCode.BadRequest,
                     $"Automation cannot be toggled while in {policy.Status} state.");
@@ -101,35 +101,17 @@ public sealed class ToggleRenewalCommand
                 ? RenewalStatus.Paused
                 : RenewalStatus.Active;
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
-            {
-                policy.Status = newStatus;
-                _unitOfWork.Update(policy);
+            policy.Status = newStatus;
+            _unitOfWork.Update(policy);
 
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                op.Success(
-                    $"Renewal policy toggled. PolicyId: {policy.Id}, " +
-                    $"Status: {policy.Status}");
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-
-                _logger.LogError(
-                    ex,
-                    "Error toggling renewal policy {PolicyId}.",
-                    policy.Id);
-
-                op.Fail($"Error toggling renewal policy: {ex.Message}");
-
-                return new BaseResult<ToggleRenewalResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while updating automation.");
-            }
+            op.Success(
+                $"Renewal policy toggled. PolicyId: {policy.Id}, " +
+                $"Status: {policy.Status}");
 
             return new BaseResult<ToggleRenewalResponseDto>(
                 HttpStatusCode.OK,

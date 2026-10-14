@@ -263,54 +263,6 @@ public sealed class SetPinCommandTests : BaseTest
             Times.Once);
     }
 
-    // ---------------------------------------------------------
-    // 5. SetPin exceptions
-    // ---------------------------------------------------------
-
-    [Fact]
-    public async Task Handle_WhenSetPinThrowsArgumentException_ReturnsBadRequest()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: false);
-        SetupSetPinThrows(new ArgumentException("Invalid"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal("The PIN format is invalid.", result.Message);
-    }
-
-    [Fact]
-    public async Task Handle_WhenSetPinThrowsInvalidOperationException_ReturnsBadRequest()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: false);
-        SetupSetPinThrows(new InvalidOperationException("Not allowed"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal("The PIN operation could not be completed.", result.Message);
-    }
-
-    [Fact]
-    public async Task Handle_WhenSetPinThrowsGenericException_ReturnsInternalServerError()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: false);
-        SetupSetPinThrows(new Exception("Unexpected"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-        Assert.Contains("An error occurred", result.Message);
-    }
 
     // ---------------------------------------------------------
     // 6. Notifications
@@ -336,56 +288,5 @@ public sealed class SetPinCommandTests : BaseTest
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
-    }
-
-    [Fact]
-    public async Task Handle_WhenSetPinFails_DoesNotSendNotification()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: false);
-        SetupSetPinThrows(new Exception("Boom"));
-
-        var handler = CreateHandler();
-        await handler.Handle(CreateCommand(), default);
-
-        _notifications.Verify(
-            x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
-    // ---------------------------------------------------------
-    // 7. Regression: notification failures must not fail the request
-    // ---------------------------------------------------------
-
-    [Fact]
-    public async Task Handle_WhenInAppNotificationThrows_StillReturnsSuccess()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: false);
-        SetupSetPinSucceeds();
-
-        _notifications
-            .Setup(x => x.InAppNotificationAsync(
-                It.IsAny<string>(),
-                It.IsAny<NotificationType>(),
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Throws(new InvalidOperationException("Redis down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
     }
 }

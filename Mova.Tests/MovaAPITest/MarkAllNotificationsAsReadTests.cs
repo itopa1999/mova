@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.Interfaces.Caching;
@@ -18,7 +19,8 @@ public sealed class MarkAllNotificationsAsReadTests : BaseTest
     {
         return new MarkAllNotificationsAsRead.Handler(
             UnitOfWork,
-            Mock.Of<ICacheService>());
+            Mock.Of<ICacheService>(),
+            Mock.Of<ILogger<MarkAllNotificationsAsRead.Handler>>());
     }
 
     private MarkAllNotificationsAsRead.Command CreateCommand(
@@ -245,10 +247,8 @@ public sealed class MarkAllNotificationsAsReadTests : BaseTest
     // =========================================================
 
     [Fact]
-    public async Task Handle_WithEmptyUserPublicId_ReturnsOkWithNoUnread()
+    public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
     {
-        // Handler currently has no validation on UserPublicId.
-        // It will match no notifications and return "No unread notifications.".
         await SeedNotificationAsync(userPublicId: UserPublicId, isRead: false);
 
         var handler = CreateHandler();
@@ -256,9 +256,9 @@ public sealed class MarkAllNotificationsAsReadTests : BaseTest
             CreateCommand(userPublicId: ""),
             default);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-        Assert.Equal("No unread notifications.", result.Message);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+        Assert.Equal("UserPublicId is required.", result.Message);
     }
 
     // =========================================================

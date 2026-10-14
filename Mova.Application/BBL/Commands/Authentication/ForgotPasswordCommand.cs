@@ -50,18 +50,22 @@ public sealed class ForgotPasswordCommand
             _logger = logger;
         }
 
-        public async Task<BaseResult<ForgotPasswordResponseDto>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult<ForgotPasswordResponseDto>> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
-            var identifier = !string.IsNullOrWhiteSpace(request.Email) ? request.Email : string.Empty;
+            var identifier = !string.IsNullOrWhiteSpace(request.Email)
+                ? request.Email
+                : "unknown";
 
             using var op = OperationLogger.Start(
                 _logger,
                 "ForgotPassword",
-                ("Identifier", identifier ?? "unknown"));
+                ("Identifier", identifier));
 
             if (string.IsNullOrWhiteSpace(request.Email))
             {
-                op.Fail("No email provided.");
+                op.Warning("No email provided.");
                 return new BaseResult<ForgotPasswordResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Email must be provided.");
@@ -71,88 +75,54 @@ public sealed class ForgotPasswordCommand
                 request.Email,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail("User not found (identifier provided but not in system).");
+                // Generic response — never reveal whether the account exists.
+                op.Success("Account not found — returning generic response.");
                 return new BaseResult<ForgotPasswordResponseDto>(
                     HttpStatusCode.OK,
                     "If an account exists with this email or phone number, a reset OTP will be sent.",
                     new ForgotPasswordResponseDto
                     {
                         UserPublicId = string.Empty,
-                        Data = "If an account exists, OTP has been sent."
+                        Data = "If an account exists, OTP has been sent.",
                     });
             }
 
             if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
             {
-                op.Fail($"User account is not verified. UserId: {user.PublicId}");
+                op.Warning($"Account not verified: {user.PublicId}");
                 return new BaseResult<ForgotPasswordResponseDto>(
                     HttpStatusCode.BadRequest,
                     "User account is not verified. Please verify your account first.");
             }
 
-            var otpCode = string.Empty;
-            string? userEmail = user.Email;
-            string? userPhone = user.PhoneNumber;
-            string userPublicId = user.PublicId;
+            var userPublicId = user.PublicId;
+            var otpCode = _otpService.GenerateOtp();
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
+            var otp = new OtpVerification
             {
-                otpCode = _otpService.GenerateOtp();
+                UserPublicId = userPublicId,
+                OtpCode = otpCode,
+                Purpose = OtpPurpose.PasswordReset,
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
+                CreatedAt = DateTimeOffset.UtcNow,
+                IsUsed = false,
+            };
 
-                var otp = new OtpVerification
-                {
-                    UserPublicId = userPublicId,
-                    OtpCode = otpCode,
-                    Purpose = OtpPurpose.PasswordReset,
-                    ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    IsUsed = false
-                };
+            await _unitOfWork.AddAsync(otp, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
-                await _unitOfWork.AddAsync(otp, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            op.Success($"OTP generated for user {userPublicId} (password reset).");
 
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                op.Success($"OTP sent to user {userPublicId} for password reset.");
-            }
-            catch (DbUpdateException dbEx)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error while saving OTP for user {userPublicId}: {dbEx.Message}", dbEx);
-
-                return new BaseResult<ForgotPasswordResponseDto>(
-                    HttpStatusCode.Conflict,
-                    "An error occurred. Please try again.");
-            }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Forgot password failed for user {userPublicId}: {ex.Message}", ex);
-
-                return new BaseResult<ForgotPasswordResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while processing your request. Please try again later.");
-            }
-
-            try
-            {
-                _notificationQueue.QueueForgotPasswordOtp(
-                    userEmail ?? string.Empty,
-                    userPhone,
-                    otpCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to queue password reset OTP for {UserPublicId}.",
-                    userPublicId);
-            }
+            // Fire-and-forget. NotificationQueue.TryEnqueue owns failure handling.
+            _notificationQueue.QueueForgotPasswordOtp(
+                user.Email ?? string.Empty,
+                user.PhoneNumber,
+                otpCode);
 
             return new BaseResult<ForgotPasswordResponseDto>(
                 HttpStatusCode.OK,
@@ -160,7 +130,7 @@ public sealed class ForgotPasswordCommand
                 new ForgotPasswordResponseDto
                 {
                     UserPublicId = userPublicId,
-                    Data = "OTP sent successfully."
+                    Data = "OTP sent successfully.",
                 });
         }
     }

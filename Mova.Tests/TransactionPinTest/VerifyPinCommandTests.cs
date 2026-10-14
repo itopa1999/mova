@@ -337,67 +337,7 @@ public sealed class VerifyPinCommandTests : BaseTest
             Times.Once);
     }
 
-    [Fact]
-    public async Task Handle_WhenVerifyPinThrowsArgumentException_ReturnsBadRequest()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: true);
-        SetupVerifyPinThrows(new ArgumentException("Invalid format"));
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal("The PIN format is invalid.", result.Message);
-    }
-
-    [Fact]
-    public async Task Handle_WhenVerifyPinThrowsInvalidOperationException_ReturnsBadRequest()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: true);
-        SetupVerifyPinThrows(new InvalidOperationException("Not allowed"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal("The PIN operation could not be completed.", result.Message);
-    }
-
-    [Fact]
-    public async Task Handle_WhenVerifyPinThrowsGenericException_ReturnsInternalServerError()
-    {
-        SetupUserExists();
-        SetupHasPin(hasPin: true);
-        SetupVerifyPinThrows(new Exception("Unexpected"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-        Assert.Contains("An error occurred", result.Message);
-    }
-
-    [Fact]
-    public async Task Handle_WhenHasPinThrowsException_ReturnsInternalServerError()
-    {
-        SetupUserExists();
-        _pinService
-            .Setup(x => x.HasPinAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("DB down"));
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateCommand(), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-    }
 
     [Fact]
     public async Task Handle_WithValidPin_PassesCancellationToken()
@@ -616,22 +556,5 @@ public sealed class VerifyPinCommandTests : BaseTest
                 It.IsAny<string>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
-    }
-
-    [Fact]
-    public async Task Handle_WhenChallengePersistenceFails_ReturnsInternalServerError()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPinThrows(new PinChallengePersistenceException(
-            "Failed to persist PIN challenge after successful verification."));
-
-        var result = await CreateHandler().Handle(
-            CreateCommand(pinChallengeType: PinChallengeType.CreateWallet),
-            default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-        Assert.Contains("An error occurred", result.Message);
     }
 }

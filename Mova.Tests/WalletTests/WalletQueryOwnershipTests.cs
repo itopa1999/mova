@@ -63,8 +63,7 @@ public sealed class WalletQueryOwnershipTests : BaseTest
             },
             CancellationToken.None);
         var renewalEvents = await new GetRenewalEventsQuery.Handler(
-            UnitOfWork,
-            Mock.Of<ILogger<GetRenewalEventsQuery.Handler>>()).Handle(
+            UnitOfWork).Handle(
             new GetRenewalEventsQuery.Query
             {
                 UserPublicId = OtherUserId,
@@ -72,8 +71,7 @@ public sealed class WalletQueryOwnershipTests : BaseTest
             },
             CancellationToken.None);
         var renewalPolicy = await new GetRenewalPolicyQuery.Handler(
-            UnitOfWork,
-            Mock.Of<ILogger<GetRenewalPolicyQuery.Handler>>()).Handle(
+            UnitOfWork).Handle(
             new GetRenewalPolicyQuery.Query
             {
                 UserPublicId = OtherUserId,

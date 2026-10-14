@@ -47,7 +47,7 @@ public sealed class RemoveUserFromRoleCommand
 
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
             {
-                op.Fail("UserPublicId is required.");
+                op.Warning("UserPublicId is required.");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
                     "UserPublicId is required.");
@@ -55,7 +55,7 @@ public sealed class RemoveUserFromRoleCommand
 
             if (string.IsNullOrWhiteSpace(request.Role))
             {
-                op.Fail("Role is required.");
+                op.Warning("Role is required.");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Role is required.");
@@ -67,15 +67,18 @@ public sealed class RemoveUserFromRoleCommand
 
             if (user is null)
             {
-                op.Fail($"User not found: {request.UserPublicId}");
+                op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.NotFound,
                     "User not found.");
             }
 
-            var existingRoles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var existingRoles = await _identityService.GetRolesAsync(
+                user.Id,
+                cancellationToken);
 
-            if (!existingRoles.Any(r => string.Equals(r, request.Role, StringComparison.OrdinalIgnoreCase)))
+            if (!existingRoles.Any(r =>
+                string.Equals(r, request.Role, StringComparison.OrdinalIgnoreCase)))
             {
                 op.Success($"User does not have role {request.Role}.");
                 return new BaseResult<AssignRoleResponseDto>(
@@ -99,23 +102,28 @@ public sealed class RemoveUserFromRoleCommand
 
             if (isRemovingSuperAdmin && superAdminCount <= 1)
             {
-                op.Fail("Cannot remove the last SuperAdmin.");
+                op.Warning("Cannot remove the last SuperAdmin.");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Cannot remove the last SuperAdmin. Assign another SuperAdmin first.");
             }
 
-            var (Success, ErrorMessage) = await _identityService.RemoveFromRoleAsync(user.Id, request.Role, cancellationToken);
+            var (success, errorMessage) = await _identityService.RemoveFromRoleAsync(
+                user.Id,
+                request.Role,
+                cancellationToken);
 
-            if (!Success)
+            if (!success)
             {
-                op.Fail($"Failed to remove role: {ErrorMessage}");
+                op.Warning($"Failed to remove role: {errorMessage}");
                 return new BaseResult<AssignRoleResponseDto>(
                     HttpStatusCode.BadRequest,
-                    ErrorMessage);
+                    errorMessage);
             }
 
-            var updatedRoles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var updatedRoles = await _identityService.GetRolesAsync(
+                user.Id,
+                cancellationToken);
 
             op.Success($"Role {request.Role} removed from user {request.UserPublicId}.");
 

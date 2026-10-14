@@ -45,7 +45,9 @@ public sealed class ChangePasswordCommand
             _logger = logger;
         }
 
-        public async Task<BaseResult> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<BaseResult> Handle(
+            Command request,
+            CancellationToken cancellationToken)
         {
             using var op = OperationLogger.Start(
                 _logger,
@@ -54,7 +56,7 @@ public sealed class ChangePasswordCommand
 
             if (request.NewPassword != request.ConfirmPassword)
             {
-                op.Fail("New password and confirmation password do not match.");
+                op.Warning("New password and confirmation password do not match.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "New password and confirmation password do not match.");
@@ -62,7 +64,7 @@ public sealed class ChangePasswordCommand
 
             if (request.OldPassword == request.NewPassword)
             {
-                op.Fail("New password cannot be the same as old password.");
+                op.Warning("New password cannot be the same as old password.");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "New password cannot be the same as the old password.");
@@ -72,69 +74,48 @@ public sealed class ChangePasswordCommand
                 request.UserPublicId,
                 cancellationToken);
 
-            if (user == null)
+            if (user is null)
             {
-                op.Fail($"User not found (UserId: {request.UserPublicId})");
+                op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult(
                     HttpStatusCode.BadRequest,
                     "User not found.");
             }
 
-            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            try
+            var (success, errorMessage) = await _identityService.ChangePasswordAsync(
+                user.Id,
+                request.OldPassword,
+                request.NewPassword);
+
+            if (!success)
             {
-                var (success, errorMessage) = await _identityService.ChangePasswordAsync(
-                    user.Id,
-                    request.OldPassword,
-                    request.NewPassword);
-
-                if (!success)
-                {
-                    op.Fail($"Password change failed: {errorMessage}");
-                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                    return new BaseResult(HttpStatusCode.BadRequest, errorMessage);
-                }
-
-                var refreshTokens = await _unitOfWork.Query<RefreshToken>()
-                    .Where(rt => rt.UserPublicId == user.PublicId && rt.RevokedAt == null)
-                    .ToListAsync(cancellationToken);
-
-                foreach (var token in refreshTokens)
-                {
-                    token.RevokedAt = DateTimeOffset.UtcNow;
-                    token.RevocationReason = "Password changed by user";
-                    _unitOfWork.Update(token);
-                }
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-
-                op.Success($"Password changed successfully for user {user.PublicId}");
-
-                return new BaseResult(
-                    HttpStatusCode.OK,
-                    "Password changed successfully.");
+                op.Warning($"Password change failed: {errorMessage}");
+                return new BaseResult(HttpStatusCode.BadRequest, errorMessage);
             }
-            catch (DbUpdateException dbEx)
+
+            var refreshTokens = await _unitOfWork.Query<RefreshToken>()
+                .Where(rt => rt.UserPublicId == user.PublicId && rt.RevokedAt == null)
+                .ToListAsync(cancellationToken);
+
+            foreach (var token in refreshTokens)
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Database error while changing password: {dbEx.Message}", dbEx);
-
-                return new BaseResult(
-                    HttpStatusCode.Conflict,
-                    "An error occurred. Please try again.");
+                token.RevokedAt = DateTimeOffset.UtcNow;
+                token.RevocationReason = "Password changed by user";
+                _unitOfWork.Update(token);
             }
-            catch (Exception ex)
-            {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-                op.Fail($"Password change failed with exception: {ex.Message}", ex);
 
-                return new BaseResult(
-                    HttpStatusCode.InternalServerError,
-                    "An error occurred while changing your password. Please try again later.");
-            }
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+
+            op.Success(
+                $"Password changed successfully for user {user.PublicId}. " +
+                $"Revoked {refreshTokens.Count} refresh token(s).");
+
+            return new BaseResult(
+                HttpStatusCode.OK,
+                "Password changed successfully.");
         }
     }
 }
