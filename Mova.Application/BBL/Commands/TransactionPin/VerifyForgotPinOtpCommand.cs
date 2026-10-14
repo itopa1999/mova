@@ -108,7 +108,7 @@ public sealed class VerifyForgotPinOtpCommand
                 .Where(x => x.UserPublicId == request.UserPublicId
                             && x.Purpose == OtpPurpose.TransactionPin
                             && !x.IsUsed)
-                .OrderByDescending(x => x.Id) // TODO change to x.CreatedAt
+                .OrderByDescending(x => x.CreatedAt) // TODO change to x.CreatedAt
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (otpRecord is null)

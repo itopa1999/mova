@@ -142,7 +142,7 @@ public sealed class VerifyAccountCommand
                     .Where(x => x.UserPublicId == user.PublicId
                                 && x.Purpose == OtpPurpose.AccountVerification
                                 && !x.IsUsed)
-                    .OrderByDescending(x => x.Id)
+                    .OrderByDescending(x => x.CreatedAt)
                     .FirstOrDefaultAsync(cancellationToken);
 
                 if (otpVerification is null)
