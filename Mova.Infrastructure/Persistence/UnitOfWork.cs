@@ -106,4 +106,38 @@ public sealed class UnitOfWork : IUnitOfWork
     {
         await RollbackTransactionAsync();
     }
+
+    /// <summary>
+    /// Synchronous disposal path. Required because some DI scope
+    /// disposals happen synchronously — e.g. `using (var scope = ...)`
+    /// at application startup — and the container refuses to call
+    /// DisposeAsync from synchronous code.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_transaction is null)
+        {
+            return;
+        }
+
+        var transaction = _transaction;
+        _transaction = null;
+
+        try
+        {
+            transaction.Rollback();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Underlying transaction was already disposed.
+        }
+        catch (InvalidOperationException)
+        {
+            // Transaction already completed (committed or disposed elsewhere).
+        }
+        finally
+        {
+            transaction.Dispose();
+        }
+    }
 }
