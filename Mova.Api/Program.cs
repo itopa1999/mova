@@ -1,4 +1,3 @@
-
 using DotNetEnv;
 using Mova.Api;
 using Mova.Infrastructure.Identity;
@@ -49,7 +48,7 @@ var app = builder.Build();
 
 await app.Services.SeedIdentityAsync();
 
-using (var scope = app.Services.CreateScope())
+await using (var scope = app.Services.CreateAsyncScope())
 {
     var seeder = scope.ServiceProvider
         .GetRequiredService<DatabaseSeeder>();
