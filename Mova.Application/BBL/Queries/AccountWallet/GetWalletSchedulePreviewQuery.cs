@@ -16,8 +16,6 @@ public sealed class GetWalletSchedulePreviewQuery
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
-
-        [Range(1, long.MaxValue)]
         public long WalletId { get; init; }
     }
 

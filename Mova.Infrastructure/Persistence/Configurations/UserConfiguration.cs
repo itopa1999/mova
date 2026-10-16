@@ -23,11 +23,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
                .HasMaxLength(100);
 
         builder.Property(x => x.OtherNames)
-               .HasMaxLength(100);
+            .HasMaxLength(100);
 
         builder.Property(x => x.LastKnownDeviceId)
-               .HasMaxLength(200)
-               .IsRequired(false);
+            .HasMaxLength(200)
+            .IsRequired(false);
 
         builder.HasIndex(x => x.Email)
                .IsUnique();
@@ -37,6 +37,9 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasIndex(x => x.PublicId)
                .IsUnique();
+
+        builder.HasIndex(x => x.BvnHash)
+               .HasDatabaseName("ix_users_bvn_hash");
 
         // ─── Notification preferences ─────────────────
         builder.Property(x => x.NotifyLoginAlerts)
