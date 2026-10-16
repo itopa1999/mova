@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
+using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -16,7 +17,7 @@ public sealed class VerifyBankAccount
 {
     public sealed class Command : IRequest<BaseResult<VerifyBankAccountDto>>
     {
-        [System.Text.Json.Serialization.JsonIgnore]
+        [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
 
         [Required, RegularExpression(@"^\d{10}$", ErrorMessage = "Account number must be exactly 10 digits.")]

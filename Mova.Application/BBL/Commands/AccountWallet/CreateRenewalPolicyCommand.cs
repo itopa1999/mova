@@ -29,7 +29,6 @@ public sealed class CreateRenewalPolicyCommand
         [JsonIgnore]
         public string FirstName { get; set; } = string.Empty;
 
-        [Range(1, long.MaxValue)]
         public long WalletId { get; set; }
 
         [Required, RegularExpression(@"(?i)^\s*(oncompletion|onthreshold)\s*$", ErrorMessage = "Trigger type must be oncompletion or onthreshold.")]

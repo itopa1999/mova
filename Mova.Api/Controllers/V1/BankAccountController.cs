@@ -61,6 +61,8 @@ public class BankAccountController(
         [FromBody] VerifyBankAccount.Command command,
         CancellationToken cancellationToken)
     {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        
         var result = await _mediator.Send(
             command,
             cancellationToken);
