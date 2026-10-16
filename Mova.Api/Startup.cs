@@ -229,14 +229,7 @@ public class Startup(IConfiguration configuration)
         // ─────────────────────────────────────────────────────────────
         // 3. CORS — must run before endpoints it protects.
         // ─────────────────────────────────────────────────────────────
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseCors("AllowAllDev");
-        }
-        else
-        {
-            app.UseCors("AllowSpecificOrigin");
-        }
+        app.UseCors("AllowSpecificOrigin");
 
         // ─────────────────────────────────────────────────────────────
         // 4. Swagger — gated by basic auth via SwaggerAuthMiddleware.
