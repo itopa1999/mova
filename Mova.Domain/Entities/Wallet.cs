@@ -14,7 +14,7 @@ public class Wallet : BaseEntity
     public long CategoryId { get; set; }
 
     public long? BankAccountId { get; set; }
-
+    public long? WalletTrusteeId { get; set; }
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }

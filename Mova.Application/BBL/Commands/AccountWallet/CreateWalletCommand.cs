@@ -277,7 +277,8 @@ public sealed class CreateWalletCommand
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x =>
                     x.UserPublicId == request.UserPublicId &&
-                    x.Name.ToLower() == walletName.ToLower() &&
+                    x.Name.Equals(walletName, StringComparison.CurrentCultureIgnoreCase) &&
+                    x.Type == WalletType.Scheduled &&
                     x.Status == WalletStatus.Active,
                     cancellationToken);
 
@@ -450,6 +451,7 @@ public sealed class CreateWalletCommand
                 LockedAmount = targetMoney,
                 ResetAmount = Money.FromNaira(0),
                 Status = WalletStatus.Active,
+                Type = WalletType.Scheduled,
                 UtilityType = goingToUtilities ? parsedUtilityType : null,
                 UtilityConfigJson = goingToUtilities ? serializedUtilityConfig : null,
             };

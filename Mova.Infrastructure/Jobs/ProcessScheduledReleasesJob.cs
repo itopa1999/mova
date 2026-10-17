@@ -95,7 +95,7 @@ public sealed class ProcessScheduledReleasesJob
         }
 
         var wallet = await _context.Wallets
-            .FirstOrDefaultAsync(x => x.Id == scheduledRelease.WalletId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == scheduledRelease.WalletId && x.Type == WalletType.Scheduled, cancellationToken);
 
         if (wallet is null)
         {

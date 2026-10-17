@@ -74,7 +74,7 @@ public sealed class GetWalletSchedulePreviewQuery
             var wallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    x => x.Id == request.WalletId && x.UserPublicId == request.UserPublicId,
+                    x => x.Id == request.WalletId && x.UserPublicId == request.UserPublicId && x.Type == WalletType.Scheduled,
                     cancellationToken);
 
             if (wallet is null)
