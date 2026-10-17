@@ -41,6 +41,8 @@ public class ApplicationDbContext
     public DbSet<WalletTemplate> WalletTemplates => Set<WalletTemplate>();
     public DbSet<Feedback> Feedbacks => Set<Feedback>();
     public DbSet<PinChallenge> PinChallenges => Set<PinChallenge>();
+    public DbSet<WalletTrustee> WalletTrustees => Set<WalletTrustee>();
+    public DbSet<ReleaseRequest> ReleaseRequests => Set<ReleaseRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
