@@ -375,50 +375,83 @@ public class AuthenticationController(
     }
 
     
-    private void SetAuthenticationCookies(
-        string accessToken,
-        string refreshToken)
+    
+    private CookieOptions CreateAuthenticationCookieOptions()
     {
         var isProduction = !HttpContext.RequestServices
             .GetRequiredService<IWebHostEnvironment>()
             .IsDevelopment();
 
-        var sameSite = isProduction
-            ? SameSiteMode.None
-            : SameSiteMode.Strict;
-
         var secure = isProduction || HttpContext.Request.IsHttps;
 
-        var accessTokenOptions = new CookieOptions
+        return new CookieOptions
         {
             HttpOnly = true,
             Secure = secure,
-            SameSite = sameSite,
-            Path = "/",
-            Expires = DateTimeOffset.UtcNow.AddMinutes(
-                _jwt.AccessTokenExpiryMinutes),
-            MaxAge = TimeSpan.FromMinutes(
-                _jwt.AccessTokenExpiryMinutes)
+            SameSite = isProduction
+                ? SameSiteMode.None
+                : SameSiteMode.Strict,
+            Path = "/"
         };
-
-        var refreshTokenOptions = new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = secure,
-            SameSite = sameSite,
-            Path = "/",
-            Expires = DateTimeOffset.UtcNow.AddDays(
-                _jwt.RefreshTokenExpiryDays),
-            MaxAge = TimeSpan.FromDays(
-                _jwt.RefreshTokenExpiryDays)
-        };
-
-        Response.Cookies.Append(
-            "access_token", accessToken, accessTokenOptions);
-
-        Response.Cookies.Append(
-            "refresh_token", refreshToken, refreshTokenOptions);
     }
+
+    private void SetAuthenticationCookies(
+        string accessToken,
+        string refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(accessToken))
+            throw new ArgumentException(
+                "Access token cannot be empty.",
+                nameof(accessToken));
+
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            throw new ArgumentException(
+                "Refresh token cannot be empty.",
+                nameof(refreshToken));
+
+        var accessTokenOptions = CreateAuthenticationCookieOptions();
+        accessTokenOptions.Expires = DateTimeOffset.UtcNow.AddMinutes(
+            _jwt.AccessTokenExpiryMinutes);
+        accessTokenOptions.MaxAge = TimeSpan.FromMinutes(
+            _jwt.AccessTokenExpiryMinutes);
+
+        var refreshTokenOptions = CreateAuthenticationCookieOptions();
+        refreshTokenOptions.Expires = DateTimeOffset.UtcNow.AddDays(
+            _jwt.RefreshTokenExpiryDays);
+        refreshTokenOptions.MaxAge = TimeSpan.FromDays(
+            _jwt.RefreshTokenExpiryDays);
+
+        Response.Cookies.Append(
+            "access_token",
+            accessToken,
+            accessTokenOptions);
+
+        Response.Cookies.Append(
+            "refresh_token",
+            refreshToken,
+            refreshTokenOptions);
+    }
+
+    private void ClearAuthenticationCookies()
+    {
+        var accessTokenOptions = CreateAuthenticationCookieOptions();
+        accessTokenOptions.Expires = DateTimeOffset.UnixEpoch;
+        accessTokenOptions.MaxAge = TimeSpan.Zero;
+
+        var refreshTokenOptions = CreateAuthenticationCookieOptions();
+        refreshTokenOptions.Expires = DateTimeOffset.UnixEpoch;
+        refreshTokenOptions.MaxAge = TimeSpan.Zero;
+
+        Response.Cookies.Delete(
+            "access_token",
+            accessTokenOptions);
+
+        Response.Cookies.Delete(
+            "refresh_token",
+            refreshTokenOptions);
+    }
+
+    
     private void RemoveAuthenticationTokensFromResponse(
         string? accessToken,
         string? refreshToken,
@@ -434,21 +467,5 @@ public class AuthenticationController(
 
         setCookies(accessToken, refreshToken);
         removeTokens();
-    }
-
-    private void ClearAuthenticationCookies()
-    {
-        var cookieOptions = new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = HttpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Strict,
-            Path = "/",
-            Expires = DateTimeOffset.UtcNow.AddYears(-1),
-            MaxAge = TimeSpan.Zero
-        };
-
-        Response.Cookies.Append("access_token", string.Empty, cookieOptions);
-        Response.Cookies.Append("refresh_token", string.Empty, cookieOptions);
     }
 }
