@@ -50,6 +50,7 @@ public sealed class GetAllWallets
         public decimal ProgressPercentage { get; set; }
         public decimal ReleaseAmount { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string Type { get; init; } = string.Empty;
         public string Frequency { get; set; } = string.Empty;
         public string ScheduleDescription { get; set; } = string.Empty;
         public string NextRelease { get; set; } = string.Empty;
@@ -230,6 +231,7 @@ public sealed class GetAllWallets
                         ProgressPercentage = progressPercentage,
                         ReleaseAmount = rule?.Amount.ToDecimal() ?? 0m,
                         Status = w.Status.ToString(),
+                        Type = w.Type.ToString(),
                         Frequency = rule != null ? rule.Frequency.ToString() : "NotConfigured",
                         ScheduleDescription = scheduleDescription,
                         NextRelease = GetNextReleaseDisplay(nextReleaseDate),

@@ -285,7 +285,7 @@ public class BankAccountController(
         if (result.Data is null)
         {
             var failedRedirectUrl = QueryHelpers.AddQueryString(
-                $"{frontendUrl}/payment/confirmation",
+                $"{frontendUrl}/dashboard/payment/confirmation",
                 new Dictionary<string, string?>
                 {
                     ["reference"] = paymentReference,
@@ -296,7 +296,7 @@ public class BankAccountController(
         }
 
         var redirectUrl = QueryHelpers.AddQueryString(
-            $"{frontendUrl}/payment/confirmation",
+            $"{frontendUrl}/dashboard/payment/confirmation",
             new Dictionary<string, string?>
             {
                 ["reference"] = result.Data.Reference,

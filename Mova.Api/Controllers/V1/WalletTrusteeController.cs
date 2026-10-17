@@ -14,8 +14,11 @@ using static Mova.Application.BBL.Commands.AccountWalletTrustee.CreateTrusteeWal
 using static Mova.Application.BBL.Commands.AccountWalletTrustee.DeleteTrusteeCommand;
 using static Mova.Application.BBL.Commands.AccountWalletTrustee.InviteTrusteeCommand;
 using static Mova.Application.BBL.Commands.AccountWalletTrustee.ResendTrusteeInvitationCommand;
+using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetReleaseRequestsQuery;
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetTrusteeConsentQuery;
+using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetTrusteeWalletDetailQuery;
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.ListOwnerTrusteesQuery;
+using static Mova.Application.BBL.Queries.AccountWalletTrustee.ListVerifiedTrusteesQuery;
 
 namespace Mova.Api.Controllers.V1;
 
@@ -122,6 +125,7 @@ public class WalletTrusteeController(
     }
 
     [HttpGet("validate/invitation/{token}")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult<TrusteeConsentInfoDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
@@ -140,6 +144,7 @@ public class WalletTrusteeController(
     }
 
     [HttpPost("accept/invitation/{token}")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
@@ -163,6 +168,7 @@ public class WalletTrusteeController(
     }
 
     [HttpPost("decline/invitation/{token}")]
+    [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
@@ -189,5 +195,63 @@ public class WalletTrusteeController(
     {
         [System.ComponentModel.DataAnnotations.MaxLength(500)]
         public string? Reason { get; set; }
+    }
+
+    [HttpGet("list/verified/trustees")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<ListVerifiedTrusteesResponseDto>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ListVerified(CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new ListVerifiedTrusteesQuery.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("{id:long}")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<TrusteeWalletDetailDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> GetDetail(
+        [FromRoute] long id,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetTrusteeWalletDetailQuery.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty,
+                WalletId = id,
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("{id:long}/release-requests")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<ReleaseRequestsPageDto>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ListReleaseRequests(
+        [FromRoute] long id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(
+            new GetReleaseRequestsQuery.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty,
+                WalletId = id,
+                Page = page,
+                PageSize = pageSize,
+                Status = status,
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
     }
 }
