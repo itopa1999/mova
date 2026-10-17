@@ -387,3 +387,5 @@ public sealed class CreateTrusteeWalletCommand
         }
     }
 }
+
+// to do: send an notification email to the trustee when a wallet is created and linked to them, informing them of their responsibilities and the need for approval on releases.
