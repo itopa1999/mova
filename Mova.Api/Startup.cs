@@ -262,6 +262,7 @@ public class Startup(IConfiguration configuration)
             options.DocumentTitle =
                 "Mova API Documentation";
         });
+        
 
         // ─────────────────────────────────────────────────────────────
         // 5. Auth pipeline — MUST run before Hangfire dashboard so the

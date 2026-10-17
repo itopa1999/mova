@@ -137,7 +137,7 @@ public class WalletRuleValidator : IWalletRuleValidator
 
         var wallet = await _unitOfWork.Query<Wallet>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == rule.WalletId, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Id == rule.WalletId && x.Type == WalletType.Scheduled, cancellationToken);
 
         if (wallet == null)
             result.AddError($"Wallet with ID '{rule.WalletId}' does not exist.");

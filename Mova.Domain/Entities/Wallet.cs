@@ -42,6 +42,7 @@ public class Wallet : BaseEntity
 
     public PayoutDestination PayoutDestination { get; set; } = PayoutDestination.Bank;
     public int RestartCount { get; set; } = 0;
+    public WalletType Type { get; set; } = WalletType.Scheduled;
     public WalletStatus Status { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
@@ -64,6 +65,10 @@ public class Wallet : BaseEntity
 
     public IReadOnlyCollection<LedgerEntry> LedgerEntries =>
         _ledgerEntries.AsReadOnly();
+
+    public WalletTrustee? Trustee { get; set; }
+    private readonly List<ReleaseRequest> _releaseRequests = new();
+    public IReadOnlyCollection<ReleaseRequest> ReleaseRequests => _releaseRequests.AsReadOnly();
 
     public WalletCategory Category { get; set; } = null!;
 

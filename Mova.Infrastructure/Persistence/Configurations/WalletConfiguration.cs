@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 
 namespace Mova.Infrastructure.Persistence.Configurations;
 
@@ -33,6 +34,11 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
         builder.Property(x => x.Status)
             .IsRequired()
             .HasConversion<int>();
+
+        builder.Property(x => x.Type)
+        .HasConversion<int>()
+        .HasDefaultValue(WalletType.Scheduled)
+        .IsRequired();
 
         builder.Property(x => x.CompletedAt);
 
@@ -168,5 +174,7 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             x.UserPublicId,
             x.Status
         });
+
+        builder.HasIndex(x => new { x.Type, x.Status });
     }
 }

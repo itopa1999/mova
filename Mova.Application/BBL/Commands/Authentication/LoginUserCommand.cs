@@ -367,7 +367,7 @@ public sealed class LoginUserCommand
                 "New device login",
                 $"Your MOVA account was just accessed from a new device ({platformLabel}). " +
                 $"If this wasn't you, please change your password and review your account.",
-                "/settings/security",
+                null,
                 null,
                 CancellationToken.None);
 

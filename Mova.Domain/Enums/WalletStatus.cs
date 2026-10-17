@@ -16,3 +16,9 @@ public enum PayoutDestination
     Main = 3,
     Utilities = 4
 }
+
+public enum WalletType
+{
+    Scheduled = 1,
+    Trustee = 2,
+}
