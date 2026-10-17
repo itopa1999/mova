@@ -2011,7 +2011,7 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
-                    b.Property<string>("PublicId")
+                    b.Property<string>("OwnerPublicId")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -2033,9 +2033,6 @@ namespace Mova.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
 
                     b.HasIndex("VerificationTokenHash")
                         .IsUnique()

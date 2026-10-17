@@ -277,7 +277,7 @@ public sealed class CreateWalletCommand
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x =>
                     x.UserPublicId == request.UserPublicId &&
-                    x.Name.Equals(walletName, StringComparison.CurrentCultureIgnoreCase) &&
+                    x.Name.ToLower() == walletName.ToLower() &&
                     x.Type == WalletType.Scheduled &&
                     x.Status == WalletStatus.Active,
                     cancellationToken);

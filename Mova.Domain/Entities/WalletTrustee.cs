@@ -8,7 +8,7 @@ namespace Mova.Domain.Entities;
 [Table("wallet_trustees")]
 public class WalletTrustee : BaseEntity
 {
-    public string PublicId { get; set; } = string.Empty;
+    public string OwnerPublicId { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? Name { get; set; }
     public WalletTrusteeStatus Status { get; set; } = WalletTrusteeStatus.Pending;

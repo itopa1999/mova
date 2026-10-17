@@ -11,7 +11,7 @@ public class WalletTrusteeConfiguration : IEntityTypeConfiguration<WalletTrustee
         builder.ToTable("wallet_trustees");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.PublicId).IsRequired().HasMaxLength(50);
+        builder.Property(x => x.OwnerPublicId).IsRequired().HasMaxLength(50);
         builder.Property(x => x.Email).IsRequired().HasMaxLength(320);
         builder.Property(x => x.Name).HasMaxLength(150);
 
@@ -25,8 +25,6 @@ public class WalletTrusteeConfiguration : IEntityTypeConfiguration<WalletTrustee
         builder.Property(x => x.InvitedAt).IsRequired();
         builder.Property(x => x.VerifiedAt).IsRequired(false);
         builder.Property(x => x.ConsentedFromIp).HasMaxLength(45);
-
-        builder.HasIndex(x => x.PublicId).IsUnique();
 
         builder.HasIndex(x => x.Email);
 

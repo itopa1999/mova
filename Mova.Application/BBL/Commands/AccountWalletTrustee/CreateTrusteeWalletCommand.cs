@@ -40,6 +40,9 @@ public sealed class CreateTrusteeWalletCommand
 
         [Range(typeof(decimal), "2000", "100000000")]
         public decimal TargetAmount { get; set; }
+
+        [Range(1, long.MaxValue)]
+        public long? WalletTrusteeId { get; set; }
     }
 
     public sealed class CreateTrusteeWalletResponseDto
@@ -49,6 +52,7 @@ public sealed class CreateTrusteeWalletCommand
         public decimal FundedAmount { get; init; }
         public decimal TotalCharges { get; init; }
         public decimal NewMainBalance { get; init; }
+        public long? WalletTrusteeId { get; init; }
     }
 
     public sealed class Handler
@@ -83,7 +87,6 @@ public sealed class CreateTrusteeWalletCommand
                 "CreateTrusteeWallet",
                 ("UserId", request.UserPublicId));
 
-            // ── 1. Permissions ────────────────────────────────────────
             var permissions = await _identityService.GetPermissionsAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -112,7 +115,6 @@ public sealed class CreateTrusteeWalletCommand
                     userMessage);
             }
 
-            // ── 2. PIN challenge ──────────────────────────────────────
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
                 PinChallengeType.CreateWallet,
@@ -126,7 +128,6 @@ public sealed class CreateTrusteeWalletCommand
                     challengeMessage);
             }
 
-            // ── 3. Validate user-supplied fields ─────────────────────
             var walletName = (request.Name ?? string.Empty).Trim();
 
             if (string.IsNullOrWhiteSpace(walletName))
@@ -153,7 +154,6 @@ public sealed class CreateTrusteeWalletCommand
                     "Target amount must be at least ₦2,000.");
             }
 
-            // ── 4. Duplicate wallet name (active) ────────────────────
             var existingWallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x =>
@@ -171,7 +171,6 @@ public sealed class CreateTrusteeWalletCommand
                     "A wallet with this name already exists.");
             }
 
-            // ── 5. Category exists ───────────────────────────────────
             var categoryExists = await _unitOfWork.Query<WalletCategory>()
                 .AsNoTracking()
                 .AnyAsync(x => x.Id == request.CategoryId, cancellationToken);
@@ -184,7 +183,44 @@ public sealed class CreateTrusteeWalletCommand
                     "The selected wallet category does not exist.");
             }
 
-            // ── 6. Fee calculation ───────────────────────────────────
+            var trusteeAlreadyLinked = request.WalletTrusteeId.HasValue;
+
+            if (trusteeAlreadyLinked)
+            {
+                var trustee = await _unitOfWork.Query<WalletTrustee>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x => x.Id == request.WalletTrusteeId!.Value,
+                        cancellationToken);
+
+                if (trustee is null)
+                {
+                    op.Warning($"Trustee {request.WalletTrusteeId} not found.");
+                    return new BaseResult<CreateTrusteeWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "The selected trustee does not exist.");
+                }
+
+                if (trustee.OwnerPublicId != request.UserPublicId)
+                {
+                    op.Warning(
+                        $"Trustee {trustee.Id} is owned by {trustee.OwnerPublicId}, " +
+                        $"not by {request.UserPublicId}.");
+                    return new BaseResult<CreateTrusteeWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "The selected trustee does not belong to you.");
+                }
+
+                if (trustee.Status != WalletTrusteeStatus.Verified)
+                {
+                    op.Warning(
+                        $"Trustee {trustee.Id} is not verified. Status: {trustee.Status}");
+                    return new BaseResult<CreateTrusteeWalletResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "The selected trustee has not accepted their invitation yet.");
+                }
+            }
+
             var fees = WalletFeeHelper.Calculate(
                 targetAmount: request.TargetAmount,
                 releaseAmount: request.TargetAmount,
@@ -193,7 +229,6 @@ public sealed class CreateTrusteeWalletCommand
 
             var totalUpfrontCharge = request.TargetAmount + fees.TotalMovaCharges;
 
-            // ── 7. Atomic: debit + create wallet + txn + ledger + fee ─
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             var balanceDebited = await _identityService.DebitBalanceAsync(
@@ -217,7 +252,7 @@ public sealed class CreateTrusteeWalletCommand
             {
                 UserPublicId = request.UserPublicId,
                 CategoryId = request.CategoryId,
-                BankAccountId = null,                           
+                BankAccountId = null,
                 PayoutDestination = PayoutDestination.Trustee,
                 Name = walletName,
                 Description = string.IsNullOrWhiteSpace(request.Description)
@@ -230,6 +265,7 @@ public sealed class CreateTrusteeWalletCommand
                 ResetAmount = Money.FromNaira(0),
                 Status = WalletStatus.Active,
                 Type = WalletType.Trustee,
+                WalletTrusteeId = request.WalletTrusteeId,
                 UtilityType = null,
                 UtilityConfigJson = null,
             };
@@ -263,7 +299,6 @@ public sealed class CreateTrusteeWalletCommand
                 cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Fee transaction — only if there are actual charges
             if (fees.TotalMovaCharges > 0)
             {
                 var feeTransaction = new Transaction
@@ -284,7 +319,6 @@ public sealed class CreateTrusteeWalletCommand
 
             await tx.CommitAsync(cancellationToken);
 
-            // ── 8. Post-commit reads and notifications ───────────────
             var userAfterDebit = await _identityService.GetByIdentifierAsync(
                 request.UserPublicId,
                 cancellationToken);
@@ -293,39 +327,54 @@ public sealed class CreateTrusteeWalletCommand
 
             op.Success(
                 $"Trustee wallet created. WalletId: {wallet.Id}, " +
+                $"TrusteeId: {wallet.WalletTrusteeId?.ToString() ?? "none"}, " +
                 $"Target: {request.TargetAmount}, " +
                 $"Fees: {fees.TotalMovaCharges}, " +
                 $"TotalCharged: {totalUpfrontCharge}, " +
                 $"NewBalance: {newMainBalance}");
+
+            var nextStepMessage = trusteeAlreadyLinked
+                ? $"Your trustee is already linked and will need to approve every release " +
+                  $"within a 3-hour window."
+                : $"Next step: add the person you trust — they'll need to approve every " +
+                  $"release within a 3-hour window.";
 
             _notificationQueue.InAppNotificationAsync(
                 request.UserPublicId,
                 NotificationType.Wallet,
                 $"{walletName} trustee wallet created",
                 $"Your {walletName} wallet is now active and funded with " +
-                $"₦{request.TargetAmount:N0}. " +
-                $"Next step: add the person you trust — they'll need to approve " +
-                $"every release within a 3-hour window.",
+                $"₦{request.TargetAmount:N0}. {nextStepMessage}",
                 "/wallets",
                 null,
                 CancellationToken.None);
 
             if (!string.IsNullOrWhiteSpace(request.Email))
             {
+                var emailBody = trusteeAlreadyLinked
+                    ? $"Your {walletName} trustee wallet has been created and funded with " +
+                      $"₦{request.TargetAmount:N0}. Your trustee is already set — every " +
+                      $"release request will need their approval within 3 hours. No money " +
+                      $"moves without their approval."
+                    : $"Your {walletName} trustee wallet has been created and funded with " +
+                      $"₦{request.TargetAmount:N0}. To complete setup, add the person you " +
+                      $"trust as your trustee. Once added, they'll need to approve every " +
+                      $"release request within 3 hours — no money moves without their approval.";
+
                 _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
                     request.Email,
-                    $"Your {walletName} trustee wallet has been created and funded with " +
-                    $"₦{request.TargetAmount:N0}. " +
-                    $"To complete setup, add the person you trust as your trustee. " +
-                    $"Once added, they'll need to approve every release request within " +
-                    $"3 hours — no money moves without their approval.",
+                    emailBody,
                     $"Your {walletName} trustee wallet is ready");
             }
 
+            var successMessage = trusteeAlreadyLinked
+                ? "Trustee wallet created and linked to your trustee."
+                : "Trustee wallet created successfully. Add your trustee next.";
+
             return new BaseResult<CreateTrusteeWalletResponseDto>(
                 HttpStatusCode.Created,
-                "Trustee wallet created successfully. Add your trustee next.",
+                successMessage,
                 new CreateTrusteeWalletResponseDto
                 {
                     WalletId = wallet.Id,
@@ -333,6 +382,7 @@ public sealed class CreateTrusteeWalletCommand
                     FundedAmount = request.TargetAmount,
                     TotalCharges = fees.TotalMovaCharges,
                     NewMainBalance = newMainBalance,
+                    WalletTrusteeId = wallet.WalletTrusteeId,
                 });
         }
     }
