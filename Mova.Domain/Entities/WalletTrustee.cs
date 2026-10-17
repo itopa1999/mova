@@ -8,12 +8,19 @@ namespace Mova.Domain.Entities;
 [Table("wallet_trustees")]
 public class WalletTrustee : BaseEntity
 {
-    public string PublicId { get; set; } = string.Empty;
+    public string OwnerPublicId { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? Name { get; set; }
-    public long WalletId { get; set; }
-    public Wallet Wallet { get; set; } = null!;
+    public WalletTrusteeStatus Status { get; set; } = WalletTrusteeStatus.Pending;
+    public byte[]? VerificationTokenHash { get; set; }
+    public DateTimeOffset? TokenExpiresAt { get; set; }
+
+    public DateTimeOffset InvitedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? VerifiedAt { get; set; }
+    public string? ConsentedFromIp { get; set; }
 }
+
+
 
 [Table("release_requests")]
 public class ReleaseRequest : BaseEntity
@@ -51,4 +58,10 @@ public enum ReleaseRequestStatus
     Approved = 2,
     Rejected = 3,
     Expired = 4,
+}
+
+public enum WalletTrusteeStatus
+{
+    Pending  = 1,
+    Verified = 2
 }

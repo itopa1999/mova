@@ -1613,6 +1613,9 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<int?>("UtilityType")
                         .HasColumnType("integer");
 
+                    b.Property<long?>("WalletTrusteeId")
+                        .HasColumnType("bigint");
+
                     b.ComplexProperty<Dictionary<string, object>>("AvailableAmount", "Mova.Domain.Entities.Wallet.AvailableAmount#Money", b1 =>
                         {
                             b1.Property<string>("Currency")
@@ -1711,6 +1714,8 @@ namespace Mova.Infrastructure.Migrations
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("UserPublicId");
+
+                    b.HasIndex("WalletTrusteeId");
 
                     b.HasIndex("Type", "Status");
 
@@ -1966,6 +1971,10 @@ namespace Mova.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("ConsentedFromIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1985,6 +1994,9 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
+                    b.Property<DateTimeOffset>("InvitedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -1999,29 +2011,35 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
 
-                    b.Property<string>("PublicId")
+                    b.Property<string>("OwnerPublicId")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<long>("WalletId")
-                        .HasColumnType("bigint");
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
-                    b.Property<long?>("WalletId1")
-                        .HasColumnType("bigint");
+                    b.Property<DateTimeOffset?>("TokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("VerificationTokenHash")
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
                     b.HasIndex("Email");
 
-                    b.HasIndex("PublicId")
-                        .IsUnique();
+                    b.HasIndex("VerificationTokenHash")
+                        .IsUnique()
+                        .HasFilter("\"VerificationTokenHash\" IS NOT NULL");
 
-                    b.HasIndex("WalletId")
-                        .IsUnique();
-
-                    b.HasIndex("WalletId1")
-                        .IsUnique();
+                    b.HasIndex("Status", "TokenExpiresAt")
+                        .HasFilter("\"Status\" = 1");
 
                     b.ToTable("wallet_trustees", (string)null);
                 });
@@ -2404,9 +2422,16 @@ namespace Mova.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Mova.Domain.Entities.WalletTrustee", "Trustee")
+                        .WithMany()
+                        .HasForeignKey("WalletTrusteeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("BankAccount");
 
                     b.Navigation("Category");
+
+                    b.Navigation("Trustee");
                 });
 
             modelBuilder.Entity("Mova.Domain.Entities.WalletRule", b =>
@@ -2429,21 +2454,6 @@ namespace Mova.Infrastructure.Migrations
                     b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("Mova.Domain.Entities.WalletTrustee", b =>
-                {
-                    b.HasOne("Mova.Domain.Entities.Wallet", "Wallet")
-                        .WithMany()
-                        .HasForeignKey("WalletId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Mova.Domain.Entities.Wallet", null)
-                        .WithOne("Trustee")
-                        .HasForeignKey("Mova.Domain.Entities.WalletTrustee", "WalletId1");
-
-                    b.Navigation("Wallet");
-                });
-
             modelBuilder.Entity("Mova.Domain.Entities.RenewalPolicy", b =>
                 {
                     b.Navigation("Events");
@@ -2460,8 +2470,6 @@ namespace Mova.Infrastructure.Migrations
                     b.Navigation("ScheduledReleases");
 
                     b.Navigation("Transactions");
-
-                    b.Navigation("Trustee");
                 });
 #pragma warning restore 612, 618
         }

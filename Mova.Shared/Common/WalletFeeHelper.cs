@@ -33,7 +33,7 @@ public static class WalletFeeHelper
         decimal totalPayoutFee = 0m;
 
         // Only Bank payouts are charged a per-release fee.
-        // Everything else (Wallet, Main, Utilities) → no payout fee.
+        // Everything else (Wallet, Main, Utilities, Trustee) → no payout fee.
         if (string.Equals(
                 payoutDestination,
                 "bank",
