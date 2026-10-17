@@ -13,6 +13,7 @@ using Mova.Infrastructure;
 using Mova.Infrastructure.Jobs;
 using Mova.Api.RateLimiting;
 using Mova.Api.HealthChecks;
+using Mova.Application.Helpers;
 
 namespace Mova.Api;
 
@@ -185,6 +186,8 @@ public class Startup(IConfiguration configuration)
             _configuration.GetSection(SwaggerSettings.SectionName));
         services.Configure<HangfireSettings>(
             _configuration.GetSection(HangfireSettings.SectionName));
+        services.Configure<TrusteeOptions>(
+            _configuration.GetSection(TrusteeOptions.SectionName));
 
         services.AddDataProtection();
     }
@@ -211,6 +214,11 @@ public class Startup(IConfiguration configuration)
         //     "process-pending-processing-transactions",
         //     job => job.ExecuteAsync(CancellationToken.None),
         //     Cron.MinuteInterval(1));
+
+        // recurringJobManager.AddOrUpdate<ExpirePendingTrusteesJob>(
+        //     "expire-pending-trustees",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.HourInterval(2));
 
         // ─────────────────────────────────────────────────────────────
         // 1. Exception handler FIRST — catches exceptions from every

@@ -8,7 +8,7 @@ public enum PinChallengeType
     CreateWallet = 1,
     BankAccountDeletion = 2,
     AddBankAccount = 3,
-    AccountDeletion = 4, //
+    AccountDeletion = 4, 
     ManualTransferToBank = 5,
     ManualPayUtilities = 6,
     BreakWallet = 7,
@@ -16,7 +16,9 @@ public enum PinChallengeType
     UnpausedWallet = 9,
     RestartWallet = 10,
     LinkBankAccountToWallet = 11,
-    WalletAutomation = 12, //
+    WalletAutomation = 12,
+    DeleteTrustee = 13,
+    CreateWalletTrustee = 14,
     ChangeTransactionPin
 
 }

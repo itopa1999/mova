@@ -74,6 +74,7 @@ public sealed class HomeQuery
         public decimal TargetAmount { get; set; }
         public decimal ReleaseAmount { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;  
         public bool HasAutomation { get; set; }
         public string? AutomationStatus { get; set; }
     }
@@ -193,6 +194,7 @@ public sealed class HomeQuery
                         TargetAmount = w.TargetAmount.ToDecimal(),
                         ReleaseAmount = w.Rule?.Amount.ToDecimal() ?? 0m,
                         Status = w.Status.ToString(),
+                        Type = w.Type.ToString(),
                         HasAutomation = hasPolicy,
                         AutomationStatus = hasPolicy ? policy!.Status.ToString() : null
                     };

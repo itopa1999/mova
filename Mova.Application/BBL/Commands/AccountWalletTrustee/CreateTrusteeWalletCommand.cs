@@ -43,6 +43,9 @@ public sealed class CreateTrusteeWalletCommand
 
         [Range(1, long.MaxValue)]
         public long? WalletTrusteeId { get; set; }
+
+        [Range(1, long.MaxValue)]
+        public long BankAccountId { get; set; }
     }
 
     public sealed class CreateTrusteeWalletResponseDto
@@ -183,6 +186,27 @@ public sealed class CreateTrusteeWalletCommand
                     "The selected wallet category does not exist.");
             }
 
+            var bankAccount = await _unitOfWork.Query<BankAccount>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x => x.Id == request.BankAccountId &&
+                        x.UserPublicId == request.UserPublicId,
+                    cancellationToken);
+
+            if (bankAccount is null)
+            {
+                return new BaseResult<CreateTrusteeWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "The selected bank account does not exist or does not belong to you.");
+            }
+
+            if (bankAccount.Status != BankAccountStatus.Active)
+            {
+                return new BaseResult<CreateTrusteeWalletResponseDto>(
+                    HttpStatusCode.BadRequest,
+                    "The selected bank account is not active.");
+            }
+
             var trusteeAlreadyLinked = request.WalletTrusteeId.HasValue;
 
             if (trusteeAlreadyLinked)
@@ -252,7 +276,7 @@ public sealed class CreateTrusteeWalletCommand
             {
                 UserPublicId = request.UserPublicId,
                 CategoryId = request.CategoryId,
-                BankAccountId = null,
+                BankAccountId = request.BankAccountId,
                 PayoutDestination = PayoutDestination.Trustee,
                 Name = walletName,
                 Description = string.IsNullOrWhiteSpace(request.Description)
@@ -387,3 +411,5 @@ public sealed class CreateTrusteeWalletCommand
         }
     }
 }
+
+// to do: send an notification email to the trustee when a wallet is created and linked to them, informing them of their responsibilities and the need for approval on releases.
