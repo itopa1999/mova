@@ -27,16 +27,13 @@ public sealed class MarkNotificationAsRead
     public sealed class Handler : IRequestHandler<Command, BaseResult>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ICacheService _cache;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            ICacheService cache,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _cache = cache;
             _logger = logger;
         }
 
@@ -88,9 +85,6 @@ public sealed class MarkNotificationAsRead
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
-
-            await _cache.DeletePrefixAsync(
-                CacheKeys.NotificationsPrefix(request.UserPublicId));
 
             op.Success($"Notification {request.NotificationId} marked as read.");
 

@@ -16,20 +16,17 @@ public sealed class BackgroundNotificationJob
     private readonly ISmsService _smsService;
     private readonly ILogger<BackgroundNotificationJob> _logger;
     private readonly ApplicationDbContext _context;
-    private readonly ICacheService _cache;
 
     public BackgroundNotificationJob(
         IEmailService emailService,
         ISmsService smsService,
         ILogger<BackgroundNotificationJob> logger,
-        ApplicationDbContext context,
-        ICacheService cache)
+        ApplicationDbContext context)
     {
         _emailService = emailService;
         _smsService = smsService;
         _logger = logger;
         _context = context;
-        _cache = cache;
     }
 
     [AutomaticRetry(Attempts = 3)]
@@ -183,8 +180,6 @@ public sealed class BackgroundNotificationJob
                 .AddAsync(notification, cancellationToken);
 
             await _context.SaveChangesAsync(cancellationToken);
-
-            await _cache.DeletePrefixAsync(CacheKeys.NotificationsPrefix(userId));
 
             op.Success($"In-app notification saved. Id: {notification.Id}");
         }

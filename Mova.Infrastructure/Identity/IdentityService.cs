@@ -1,42 +1,28 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Common;
 using Mova.Infrastructure.Identity.Extensions;
 using Mova.Infrastructure.Persistence;
-using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Identity;
 
 public sealed class IdentityService : IIdentityService
 {
-    private static readonly TimeSpan ProfileCacheTtl = TimeSpan.FromSeconds(60);
-
-    /// <summary>
-    /// Index entries expire faster than profiles. A stale index just costs an
-    /// extra DB round-trip; it can never serve stale profile data because the
-    /// profile itself is always read under its own canonical key.
-    /// </summary>
-    private static readonly TimeSpan ProfileIndexTtl = TimeSpan.FromSeconds(30);
-
     private readonly UserManager<User> _userManager;
     private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher<User> _passwordHasher;
-    private readonly ICacheService _cache;
 
     public IdentityService(
         UserManager<User> userManager,
         ApplicationDbContext context,
-        IPasswordHasher<User> passwordHasher,
-        ICacheService cache)
+        IPasswordHasher<User> passwordHasher)
     {
         _userManager = userManager;
         _context = context;
         _passwordHasher = passwordHasher;
-        _cache = cache;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -64,7 +50,6 @@ public sealed class IdentityService : IIdentityService
             ProfilePicture = DefaultProfilePictures.PickRandom(),
             Balance = Money.FromNaira(0),
             AccountStatus = UserAccountStatus.Active,
-            
         };
 
         user.BvnHash = _passwordHasher.HashPassword(user, BVN);
@@ -167,8 +152,7 @@ public sealed class IdentityService : IIdentityService
     }
 
     // ─────────────────────────────────────────────────────────────
-    // READ PATH — resolve identifier → userId (cheap, short TTL),
-    // then read the profile under a single canonical key by userId.
+    // READ PATH — resolve identifier → userId, then load profile by id
     // ─────────────────────────────────────────────────────────────
     public async Task<UserIdentityDto?> GetByIdentifierAsync(
         string identifier,
@@ -181,33 +165,17 @@ public sealed class IdentityService : IIdentityService
 
         identifier = identifier.Trim();
 
-        // 1. Resolve identifier → user id (cached with short TTL).
-        var userId = await _cache.GetOrSetFastAsync(
-            CacheKeys.ProfileIndex(identifier),
-            async ct =>
-            {
-                var user = await FindUserByIdentifierAsync(identifier, ct);
-                return user?.Id;
-            },
-            timeout: ProfileIndexTtl,
-            cancellationToken: cancellationToken);
-
-        if (userId is null)
+        var user = await FindUserByIdentifierAsync(identifier, cancellationToken);
+        if (user is null)
         {
             return null;
         }
 
-        // 2. Read the profile under its canonical key by id.
-        return await _cache.GetOrSetFastAsync(
-            CacheKeys.Profile(userId.Value),
-            ct => GetByIdUncachedAsync(userId.Value, ct),
-            timeout: ProfileCacheTtl,
-            cancellationToken: cancellationToken);
+        return await GetByIdAsync(user.Id, cancellationToken);
     }
 
     /// <summary>
     /// Resolves an identifier (PublicId / email / phone) to the User entity.
-    /// Called only on index miss or after invalidation.
     /// </summary>
     private async Task<User?> FindUserByIdentifierAsync(
         string identifier,
@@ -225,10 +193,9 @@ public sealed class IdentityService : IIdentityService
     }
 
     /// <summary>
-    /// Canonical profile read, by user id. This is the only place the
-    /// profile DTO is built for caching.
+    /// Canonical profile read, by user id.
     /// </summary>
-    private async Task<UserIdentityDto?> GetByIdUncachedAsync(
+    private async Task<UserIdentityDto?> GetByIdAsync(
         long userId,
         CancellationToken cancellationToken)
     {
@@ -363,8 +330,6 @@ public sealed class IdentityService : IIdentityService
             return (false, string.Join(", ", result.Errors.Select(x => x.Description)));
         }
 
-        await InvalidateUserCacheAsync(existingUser);
-
         return (true, string.Empty);
     }
 
@@ -398,8 +363,6 @@ public sealed class IdentityService : IIdentityService
             return (false, errors);
         }
 
-        await InvalidateUserCacheAsync(user);
-
         return (true, string.Empty);
     }
 
@@ -423,8 +386,6 @@ public sealed class IdentityService : IIdentityService
             return (false, errors);
         }
 
-        await InvalidateUserCacheAsync(user);
-
         return (true, string.Empty);
     }
 
@@ -447,9 +408,7 @@ public sealed class IdentityService : IIdentityService
 
         user.Balance = Money.FromNaira(user.Balance.ToDecimal() + amount);
 
-        // Save FIRST, then invalidate. The next read repopulates with fresh data.
         await _context.SaveChangesAsync(cancellationToken);
-        await InvalidateUserCacheAsync(user);
 
         return true;
     }
@@ -471,7 +430,6 @@ public sealed class IdentityService : IIdentityService
         user.Balance = Money.FromNaira(user.Balance.ToDecimal() - amount);
 
         await _context.SaveChangesAsync(cancellationToken);
-        await InvalidateUserCacheAsync(user);
 
         return true;
     }
@@ -524,7 +482,6 @@ public sealed class IdentityService : IIdentityService
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-        await InvalidateUserCacheAsync(user);
 
         return true;
     }
@@ -562,8 +519,6 @@ public sealed class IdentityService : IIdentityService
 
         user.LastKnownDeviceId = deviceId;
         await _context.SaveChangesAsync(cancellationToken);
-
-        await InvalidateUserCacheAsync(user);
 
         return true;
     }
@@ -687,33 +642,4 @@ public sealed class IdentityService : IIdentityService
             user.RestrictionReasonDetails,
             user.RestrictedAt,
             user.RestrictionExpiresAt);
-
-    // ─────────────────────────────────────────────────────────────
-    // INVALIDATION — one canonical profile key + its three index
-    // entries. Cheap, deterministic, no string-format guessing.
-    // ─────────────────────────────────────────────────────────────
-    private async Task InvalidateUserCacheAsync(User user)
-    {
-        // 1. The single canonical profile key. This is the only key that
-        //    actually holds profile data.
-        await _cache.DeleteAsync(CacheKeys.Profile(user.Id));
-
-        // 2. The identifier index entries. They have a short TTL anyway,
-        //    but deleting them means the very next lookup re-resolves
-        //    cleanly instead of waiting up to 30s.
-        if (!string.IsNullOrWhiteSpace(user.PublicId))
-        {
-            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PublicId));
-        }
-
-        if (!string.IsNullOrWhiteSpace(user.Email))
-        {
-            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.Email));
-        }
-
-        if (!string.IsNullOrWhiteSpace(user.PhoneNumber))
-        {
-            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PhoneNumber));
-        }
-    }
 }

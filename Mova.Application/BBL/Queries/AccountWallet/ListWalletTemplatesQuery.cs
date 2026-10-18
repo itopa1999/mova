@@ -2,19 +2,15 @@ using System.Net;
 using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
-using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.Queries.WalletTemplates;
 
 public sealed class ListWalletTemplatesQuery
 {
-    private static readonly TimeSpan TemplatesCacheTtl = TimeSpan.FromHours(12);
-
     public sealed class Query : IRequest<BaseResult<ListWalletTemplatesResponseDto>>
     {
         [Range(1, 1000000)]
@@ -62,14 +58,10 @@ public sealed class ListWalletTemplatesQuery
         : IRequestHandler<Query, BaseResult<ListWalletTemplatesResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ICacheService _cache;
 
-        public Handler(
-            IUnitOfWork unitOfWork,
-            ICacheService cache)
+        public Handler(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _cache = cache;
         }
 
         public async Task<BaseResult<ListWalletTemplatesResponseDto>> Handle(
@@ -82,13 +74,8 @@ public sealed class ListWalletTemplatesQuery
                 var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
                 if (pageSize > 100) pageSize = 100;
 
-                // Load the full active template set — cache-backed
-                var allTemplates = await _cache.GetOrSetFastAsync(
-                    CacheKeys.WalletTemplates(),
-                    LoadAllTemplatesFromDbAsync,
-                    timeout: TemplatesCacheTtl,
-                    cancellationToken: cancellationToken)
-                    ?? new List<WalletTemplateDto>();
+                // Load the full active template set
+                var allTemplates = await LoadAllTemplatesFromDbAsync(cancellationToken);
 
                 // ─── Filter in memory ────────────────────────
                 IEnumerable<WalletTemplateDto> filtered = allTemplates;
