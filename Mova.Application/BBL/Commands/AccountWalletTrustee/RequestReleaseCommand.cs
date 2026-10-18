@@ -46,6 +46,7 @@ public sealed class RequestReleaseCommand
         public string TrusteeEmail { get; init; } = string.Empty;
         public string? TrusteeName { get; init; }
         public DateTimeOffset ExpiresAt { get; init; }
+        public bool Notification { get; init; }
     }
 
     public sealed class Handler
@@ -242,23 +243,6 @@ public sealed class RequestReleaseCommand
                 ApprovalTokenHash = tokenHash,
             };
 
-            // var payout = new Payout
-            // {
-            //     UserPublicId = wallet.UserPublicId,
-            //     WalletId = wallet.Id,
-            //     BankAccountId = wallet.BankAccountId,
-            //     Destination = wallet.PayoutDestination,
-            //     Amount = amountMoney,
-            //     Fee = Money.FromNaira(0),
-            //     NetAmount = amountMoney,
-            //     Reference = $"trustee-release:{releaseRequest.Id}",
-            //     Provider = null,
-            //     ProviderReference = null,
-            //     FailedAttempts = 0,
-            //     Status = PayoutStatus.Pending,
-            //     InitiatedAt = DateTimeOffset.UtcNow,
-            // };
-
             await _unitOfWork.AddAsync(releaseRequest, cancellationToken);
 
             // Reserve funds: LockedAmount -= Amount
@@ -321,6 +305,7 @@ public sealed class RequestReleaseCommand
                     TrusteeEmail = trustee.Email,
                     TrusteeName = trustee.Name,
                     ExpiresAt = expiresAt,
+                    Notification = true
                 });
         }
 

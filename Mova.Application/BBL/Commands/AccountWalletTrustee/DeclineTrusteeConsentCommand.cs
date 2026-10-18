@@ -134,9 +134,10 @@ public sealed class DeclineTrusteeConsentCommand
                     "Trustee invitation declined");
             }
 
-            return new BaseResult(
+            return new BaseResult<object>(
                 HttpStatusCode.OK,
-                "Invitation declined. The wallet owner will be notified.");
+                "Invitation declined. The wallet owner will be notified.",
+                new { notification = true });
         }
     }
 }

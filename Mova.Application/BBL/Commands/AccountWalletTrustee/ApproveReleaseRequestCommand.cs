@@ -228,9 +228,10 @@ public sealed class ApproveReleaseRequestCommand
                     "Release approved");
             }
 
-            return new BaseResult(
+            return new BaseResult<object>(
                 HttpStatusCode.OK,
-                "Release approved. The wallet owner has been notified.");
+                "Release approved. The wallet owner has been notified.",
+                new { notification = true });
         }
     }
 }

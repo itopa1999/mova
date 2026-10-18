@@ -6,10 +6,18 @@ namespace Mova.Infrastructure.Security;
 
 public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStore
 {
-    private const int MaximumFailures = 3;
+    private const int MaximumFailures = 4;
     private static readonly TimeSpan AttemptWindow = TimeSpan.FromHours(1);
     private static readonly TimeSpan LockDuration = TimeSpan.FromHours(1);
 
+    // Return codes:
+    //   0 = None       — attempts remaining, no warning
+    //   1 = LockedNow  — the lock was just set by this failure
+    //   2 = Warning    — this was the final allowed attempt; next failure locks
+    //
+    // ARGV[1] = attempt-window ms (PEXPIRE on counter)
+    // ARGV[2] = max failures
+    // ARGV[3] = lock duration ms (PX on lock key)
     private const string RecordFailureScript = """
         if redis.call('EXISTS', KEYS[2]) == 1 then
             return 1
@@ -22,6 +30,9 @@ public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStor
             redis.call('SET', KEYS[2], '1', 'PX', ARGV[3])
             redis.call('DEL', KEYS[1])
             return 1
+        end
+        if attempts == tonumber(ARGV[2]) - 1 then
+            return 2
         end
         return 0
         """;
@@ -49,7 +60,7 @@ public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStor
         return _database.KeyExistsAsync(CacheKeys.TransactionPinLock(userPublicId));
     }
 
-    public async Task<bool> RecordFailureAsync(
+    public async Task<TransactionPinFailureOutcome> RecordFailureAsync(
         string userPublicId,
         CancellationToken cancellationToken = default)
     {
@@ -67,7 +78,12 @@ public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStor
                 (long)LockDuration.TotalMilliseconds
             ]);
 
-        return (long)result == 1;
+        return (long)result switch
+        {
+            1 => TransactionPinFailureOutcome.LockedNow,
+            2 => TransactionPinFailureOutcome.Warning,
+            _ => TransactionPinFailureOutcome.None,
+        };
     }
 
     public async Task<bool> ResetAfterSuccessfulVerificationAsync(

@@ -56,6 +56,7 @@ public sealed class CreateTrusteeWalletCommand
         public decimal TotalCharges { get; init; }
         public decimal NewMainBalance { get; init; }
         public long? WalletTrusteeId { get; init; }
+        public bool Notification { get; init; }
     }
 
     public sealed class Handler
@@ -208,16 +209,17 @@ public sealed class CreateTrusteeWalletCommand
             }
 
             var trusteeAlreadyLinked = request.WalletTrusteeId.HasValue;
+            WalletTrustee? linkedTrustee = null;
 
             if (trusteeAlreadyLinked)
             {
-                var trustee = await _unitOfWork.Query<WalletTrustee>()
+                linkedTrustee = await _unitOfWork.Query<WalletTrustee>()
                     .AsNoTracking()
                     .FirstOrDefaultAsync(
                         x => x.Id == request.WalletTrusteeId!.Value,
                         cancellationToken);
 
-                if (trustee is null)
+                if (linkedTrustee is null)
                 {
                     op.Warning($"Trustee {request.WalletTrusteeId} not found.");
                     return new BaseResult<CreateTrusteeWalletResponseDto>(
@@ -225,20 +227,20 @@ public sealed class CreateTrusteeWalletCommand
                         "The selected trustee does not exist.");
                 }
 
-                if (trustee.OwnerPublicId != request.UserPublicId)
+                if (linkedTrustee.OwnerPublicId != request.UserPublicId)
                 {
                     op.Warning(
-                        $"Trustee {trustee.Id} is owned by {trustee.OwnerPublicId}, " +
+                        $"Trustee {linkedTrustee.Id} is owned by {linkedTrustee.OwnerPublicId}, " +
                         $"not by {request.UserPublicId}.");
                     return new BaseResult<CreateTrusteeWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         "The selected trustee does not belong to you.");
                 }
 
-                if (trustee.Status != WalletTrusteeStatus.Verified)
+                if (linkedTrustee.Status != WalletTrusteeStatus.Verified)
                 {
                     op.Warning(
-                        $"Trustee {trustee.Id} is not verified. Status: {trustee.Status}");
+                        $"Trustee {linkedTrustee.Id} is not verified. Status: {linkedTrustee.Status}");
                     return new BaseResult<CreateTrusteeWalletResponseDto>(
                         HttpStatusCode.BadRequest,
                         "The selected trustee has not accepted their invitation yet.");
@@ -323,6 +325,7 @@ public sealed class CreateTrusteeWalletCommand
                 cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+
             if (fees.TotalMovaCharges > 0)
             {
                 var feeTransaction = new Transaction
@@ -392,6 +395,41 @@ public sealed class CreateTrusteeWalletCommand
                     $"Your {walletName} trustee wallet is ready");
             }
 
+            // ── Notify the linked trustee that they now guard this wallet ──
+            if (linkedTrustee is not null && !string.IsNullOrWhiteSpace(linkedTrustee.Email))
+            {
+                var ownerDisplayName = string.IsNullOrWhiteSpace(request.FirstName)
+                    ? "The wallet owner"
+                    : request.FirstName.Trim();
+
+                var trusteeDisplayName = string.IsNullOrWhiteSpace(linkedTrustee.Name)
+                    ? linkedTrustee.Email.Split('@')[0]
+                    : linkedTrustee.Name.Trim();
+
+                var trusteeEmailBody =
+                    $"Hi {trusteeDisplayName},\n\n" +
+                    $"{ownerDisplayName} has made you the trustee on their " +
+                    $"\"{walletName}\" wallet on MOVA.\n\n" +
+                    $"The wallet currently holds ₦{request.TargetAmount:N0}, and no money " +
+                    $"can leave it without your approval. Here's what to expect:\n\n" +
+                    $"• Whenever {ownerDisplayName} requests a release, you'll be notified " +
+                    $"and asked to approve or reject it.\n" +
+                    $"• You'll have 3 hours to respond to each request.\n" +
+                    $"• If you don't respond in time, the request expires automatically and " +
+                    $"no funds move.\n\n" +
+                    $"You're the safeguard here — nothing is released without your say-so. ";
+                    
+                _notificationQueue.QueueNotificationEmail(
+                    trusteeDisplayName,
+                    linkedTrustee.Email,
+                    trusteeEmailBody,
+                    $"{ownerDisplayName} linked you as trustee on {walletName}");
+
+                op.Success(
+                    $"Trustee notified by email. TrusteeId: {linkedTrustee.Id}, " +
+                    $"Email: {linkedTrustee.Email}");
+            }
+
             var successMessage = trusteeAlreadyLinked
                 ? "Trustee wallet created and linked to your trustee."
                 : "Trustee wallet created successfully. Add your trustee next.";
@@ -407,9 +445,8 @@ public sealed class CreateTrusteeWalletCommand
                     TotalCharges = fees.TotalMovaCharges,
                     NewMainBalance = newMainBalance,
                     WalletTrusteeId = wallet.WalletTrusteeId,
+                    Notification = true
                 });
         }
     }
 }
-
-// to do: send an notification email to the trustee when a wallet is created and linked to them, informing them of their responsibilities and the need for approval on releases.
