@@ -71,6 +71,8 @@ public static class DependencyInjection
         services.AddSingleton<IConnectionMultiplexer>(redis);
         services.AddScoped<ICacheService, RedisCacheService>();
 
+        services.AddScoped<CacheInvalidationInterceptor>();
+
         services.AddHttpContextAccessor();
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
