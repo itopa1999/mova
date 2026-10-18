@@ -1006,7 +1006,7 @@ public sealed class CreateWalletCommandTests : BaseTestWithPinChallenge
                 NotificationType.Wallet,
                 "Rent Savings wallet created",
                 It.Is<string>(m => m.Contains("Rent Savings")),
-                "/wallets",
+                "/dashboard/wallets",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
@@ -1040,7 +1040,7 @@ public sealed class CreateWalletCommandTests : BaseTestWithPinChallenge
                 It.Is<string>(m =>
                     m.Contains("MTN") &&
                     m.Contains("08012345678")),
-                "/wallets",
+                "/dashboard/wallets",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
@@ -1064,7 +1064,7 @@ public sealed class CreateWalletCommandTests : BaseTestWithPinChallenge
                 NotificationType.Wallet,
                 It.IsAny<string>(),
                 It.Is<string>(m => m.Contains("DSTV")),
-                "/wallets",
+                "/dashboard/wallets",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
@@ -1088,7 +1088,7 @@ public sealed class CreateWalletCommandTests : BaseTestWithPinChallenge
                 NotificationType.Wallet,
                 It.IsAny<string>(),
                 It.Is<string>(m => m.Contains("Ikeja Electric")),
-                "/wallets",
+                "/dashboard/wallets",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

@@ -161,7 +161,7 @@ public sealed class ExpirePendingTrusteesJob
                 "Trustee invitation expired",
                 $"Your trustee invitation to {trusteeDisplay} expired without a response. " +
                 $"You can send a new invitation whenever you're ready.",
-                "/trustees",
+                "/dashboard/trustees",
                 null,
                 CancellationToken.None);
 

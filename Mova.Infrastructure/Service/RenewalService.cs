@@ -602,7 +602,7 @@ public sealed class RenewalService : IRenewalService
             NotificationType.Wallet,
             title,
             message,
-            $"/wallet/{wallet.Id}",
+            $"/dashboard/scheduled/wallet/{wallet.Id}",
             null,
             CancellationToken.None);
 
@@ -624,7 +624,7 @@ public sealed class RenewalService : IRenewalService
             NotificationType.Wallet,
             title,
             message,
-            $"/wallet/{wallet.Id}",
+            $"/dashboard/scheduled/wallet/{wallet.Id}",
             null,
             CancellationToken.None);
 

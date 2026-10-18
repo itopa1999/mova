@@ -258,7 +258,7 @@ public sealed class DeleteBankAccountTests : BaseTestWithPinChallenge
                     m.Contains(AccountName) &&
                     m.Contains(BankName) &&
                     m.Contains("removed")),
-                "/bank",
+                "/dashboard/bank",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

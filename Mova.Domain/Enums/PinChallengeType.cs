@@ -18,7 +18,9 @@ public enum PinChallengeType
     LinkBankAccountToWallet = 11,
     WalletAutomation = 12,
     DeleteTrustee = 13,
-    CreateWalletTrustee = 14,
+    CreateTrustee = 14,
+    RequestRelease = 15,
+    CreateWalletTrustee = 16,
     ChangeTransactionPin
 
 }

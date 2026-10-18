@@ -195,7 +195,7 @@ public sealed class ChangePinCommand
                 "Transaction PIN changed",
                 "Your transaction PIN was changed successfully. " +
                 "If this wasn't you, contact support immediately.",
-                "/settings",
+                "/dashboard/settings",
                 null,
                 CancellationToken.None);
 

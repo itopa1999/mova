@@ -116,7 +116,7 @@ public sealed class DeclineTrusteeConsentCommand
                 "Trustee invitation declined",
                 $"{trusteeDisplay} declined to be your trustee.{reasonClause} " +
                 $"You can invite someone else whenever you're ready.",
-                "/trustees",
+                "/dashboard/trustees",
                 null,
                 CancellationToken.None);
 

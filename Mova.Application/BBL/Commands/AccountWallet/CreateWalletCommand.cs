@@ -556,7 +556,7 @@ public sealed class CreateWalletCommand
                 NotificationType.Wallet,
                 $"{walletName} wallet created",
                 BuildInAppMessage(walletName, firstReleaseDate, destination.Value, parsedUtilityType, request.UtilityConfig),
-                "/wallets",
+                "/dashboard/wallets",
                 null,
                 CancellationToken.None);
 

@@ -325,7 +325,7 @@ public sealed class FlutterwaveWebHookCommand
                 NotificationType.Deposit,
                 "Deposit successful",
                 inAppMessage,
-                "/add-funds?tab=history",
+                "/dashboard/add-funds?tab=history",
                 null,
                 CancellationToken.None);
 

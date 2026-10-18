@@ -326,7 +326,7 @@ public sealed class RestartWalletCommand
                 $"First release of the new cycle is scheduled for " +
                 $"{firstReleaseDate:MMM d, yyyy}. " +
                 BuildDestinationClause(wallet.PayoutDestination),
-                $"/wallet/{wallet.Id}",
+                $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 CancellationToken.None);
 

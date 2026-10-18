@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 
@@ -27,6 +28,9 @@ public sealed class ListWalletTemplatesQuery
 
         [Range(1, long.MaxValue)]
         public long? CategoryId { get; set; }
+
+        [EnumDataType(typeof(WalletType))]
+        public WalletType? WalletType { get; set; }
     }
 
     public sealed class ListWalletTemplatesResponseDto
@@ -42,6 +46,7 @@ public sealed class ListWalletTemplatesQuery
         public long CategoryId { get; init; }
         public string CategoryName { get; init; } = string.Empty;
         public string CategoryIcon { get; init; } = string.Empty;
+        public string WalletType { get; init; } = string.Empty;
         public decimal DefaultTargetAmount { get; init; }
         public decimal DefaultReleaseAmount { get; init; }
         public string DefaultFrequency { get; init; } = string.Empty;
@@ -87,6 +92,15 @@ public sealed class ListWalletTemplatesQuery
 
                 // ─── Filter in memory ────────────────────────
                 IEnumerable<WalletTemplateDto> filtered = allTemplates;
+
+                if (request.WalletType.HasValue)
+                {
+                    var typeString = request.WalletType.Value
+                        .ToString()
+                        .ToLowerInvariant();
+
+                    filtered = filtered.Where(t => t.WalletType == typeString);
+                }
 
                 if (request.CategoryId.HasValue && request.CategoryId.Value > 0)
                 {
@@ -161,6 +175,9 @@ public sealed class ListWalletTemplatesQuery
                 CategoryId = t.CategoryId,
                 CategoryName = t.Category?.Name ?? "Other",
                 CategoryIcon = t.Category?.Icon ?? "FileText",
+                WalletType = t.WalletType.HasValue
+                    ? t.WalletType.Value.ToString().ToLowerInvariant()
+                    : WalletType.Scheduled.ToString().ToLowerInvariant(),
                 DefaultTargetAmount = t.DefaultTargetAmount.ToDecimal(),
                 DefaultReleaseAmount = t.DefaultReleaseAmount.ToDecimal(),
                 DefaultFrequency = t.DefaultFrequency.ToString(),

@@ -192,7 +192,8 @@ public sealed class WalletDetails
             {
                 var wallet = await _unitOfWork.Query<Wallet>()
                     .Where(w => w.Id == request.WalletId
-                                && w.UserPublicId == request.UserPublicId)
+                                && w.UserPublicId == request.UserPublicId
+                                && w.Type == WalletType.Scheduled)
                     .Include(w => w.Rule)
                     .Include(w => w.Category)
                     .Include(w => w.ScheduledReleases)

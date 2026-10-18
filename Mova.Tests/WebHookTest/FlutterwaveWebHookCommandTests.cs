@@ -601,7 +601,7 @@ public sealed class FlutterwaveWebHookCommandTests : BaseTest
                 NotificationType.Deposit,
                 "Deposit successful",
                 It.Is<string>(m => m.Contains("5,000")),
-                "/add-funds?tab=history",
+                "/dashboard/add-funds?tab=history",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

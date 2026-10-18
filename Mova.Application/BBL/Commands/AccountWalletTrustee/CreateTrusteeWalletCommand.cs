@@ -120,7 +120,7 @@ public sealed class CreateTrusteeWalletCommand
 
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
-                PinChallengeType.CreateWallet,
+                PinChallengeType.CreateWalletTrustee,
                 cancellationToken);
 
             if (!challengeValid)
@@ -369,7 +369,7 @@ public sealed class CreateTrusteeWalletCommand
                 $"{walletName} trustee wallet created",
                 $"Your {walletName} wallet is now active and funded with " +
                 $"₦{request.TargetAmount:N0}. {nextStepMessage}",
-                "/wallets",
+                "/dashboard/wallets",
                 null,
                 CancellationToken.None);
 

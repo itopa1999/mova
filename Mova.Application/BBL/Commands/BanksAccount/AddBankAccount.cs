@@ -246,7 +246,7 @@ public sealed class AddBankAccount
                 NotificationType.System,
                 "Bank account added",
                 $"{bankAccount.AccountName} ({bankAccount.BankName}) has been linked to your MOVA account.",
-                "/bank",
+                "/dashboard/bank",
                 null,
                 CancellationToken.None);
 

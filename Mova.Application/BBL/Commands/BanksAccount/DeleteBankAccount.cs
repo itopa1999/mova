@@ -154,7 +154,7 @@ public sealed class DeleteBankAccount
                 NotificationType.System,
                 "Bank account removed",
                 $"{account.AccountName} ({account.BankName}) has been removed from your MOVA account.",
-                "/bank",
+                "/dashboard/bank",
                 null,
                 CancellationToken.None);
 

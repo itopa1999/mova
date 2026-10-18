@@ -187,7 +187,7 @@ public sealed class ToggleWalletStatusCommand
                 isPausing
                     ? "All upcoming releases for this wallet are now on hold. Your funds remain safe and you can resume anytime."
                     : "Your wallet is active again. All scheduled releases have been rescheduled and will resume as normal.",
-                $"/wallet/{request.WalletId}",
+                $"/dashboard/scheduled/wallet/{request.WalletId}",
                 null,
                 CancellationToken.None);
 

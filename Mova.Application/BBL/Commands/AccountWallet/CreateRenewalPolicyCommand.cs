@@ -342,7 +342,7 @@ public sealed class CreateRenewalPolicyCommand
                 NotificationType.Wallet,
                 $"Automation enabled for {wallet.Name}",
                 BuildInAppMessage(triggerType.Value, request.RefillUntilMainBalanceExhausted),
-                $"/wallet/{wallet.Id}",
+                $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 CancellationToken.None);
 

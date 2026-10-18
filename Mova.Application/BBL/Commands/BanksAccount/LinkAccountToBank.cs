@@ -183,7 +183,9 @@ public sealed class LinkAccountToBank
                 NotificationType.Wallet,
                 "Bank account linked",
                 $"{bankAccount.BankName} ({bankAccount.AccountNumber}) has been linked to your {wallet.Name} wallet.",
-                $"/wallet/{wallet.Id}",
+                wallet.Type == WalletType.Trustee
+                    ? $"/dashboard/trustee/wallet/{wallet.Id}"
+                    : $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 CancellationToken.None);
 

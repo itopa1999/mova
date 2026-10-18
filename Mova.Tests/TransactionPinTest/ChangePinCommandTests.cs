@@ -513,7 +513,7 @@ public sealed class ChangePinCommandTests : BaseTest
                 NotificationType.Security,
                 "Transaction PIN changed",
                 It.Is<string>(m => m.Contains("transaction PIN was changed")),
-                "/settings",
+                "/dashboard/settings",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

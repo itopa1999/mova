@@ -255,7 +255,7 @@ public sealed class PaystackWebHookCommand
                 NotificationType.Deposit,
                 "Deposit successful",
                 inAppMessage,
-                "/add-funds?tab=history",
+                "/dashboard/add-funds?tab=history",
                 null,
                 CancellationToken.None);
 

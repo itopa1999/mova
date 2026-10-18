@@ -352,7 +352,7 @@ public sealed class BreakWalletCommandTests : BaseTest
                 NotificationType.Wallet,
                 "Rent Savings wallet broken",
                 It.Is<string>(m => m.Contains("29,400")),
-                $"/wallet/{wallet.Id}",
+                $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

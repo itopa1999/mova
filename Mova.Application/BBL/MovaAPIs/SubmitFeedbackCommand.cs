@@ -190,7 +190,7 @@ public sealed class SubmitFeedbackCommand
                 NotificationType.System,
                 "Thank you for your feedback",
                 inAppMessage,
-                "/feedback",
+                "/dashboard/feedback",
                 null,
                 CancellationToken.None);
 
