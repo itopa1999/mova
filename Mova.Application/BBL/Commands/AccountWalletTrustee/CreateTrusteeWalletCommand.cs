@@ -120,7 +120,7 @@ public sealed class CreateTrusteeWalletCommand
 
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
-                PinChallengeType.CreateWallet,
+                PinChallengeType.CreateWalletTrustee,
                 cancellationToken);
 
             if (!challengeValid)

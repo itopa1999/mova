@@ -80,7 +80,7 @@ public sealed class ResendTrusteeInvitationCommand
 
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId,
-                PinChallengeType.CreateWalletTrustee,
+                PinChallengeType.CreateTrustee,
                 cancellationToken);
 
             if (!challengeValid)

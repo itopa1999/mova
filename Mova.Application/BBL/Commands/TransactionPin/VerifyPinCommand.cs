@@ -28,6 +28,11 @@ public sealed class VerifyPinCommand
         PinChallengeType.RestartWallet,
         PinChallengeType.LinkBankAccountToWallet,
         PinChallengeType.WalletAutomation,
+        PinChallengeType.DeleteTrustee,
+        PinChallengeType.CreateTrustee,
+        PinChallengeType.RequestRelease,
+        PinChallengeType.CreateWalletTrustee,
+        PinChallengeType.ChangeTransactionPin
     };
 
     public sealed class Command : IRequest<BaseResult>

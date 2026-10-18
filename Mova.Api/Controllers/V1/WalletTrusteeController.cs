@@ -14,6 +14,7 @@ using static Mova.Application.BBL.Commands.AccountWalletTrustee.CreateTrusteeWal
 using static Mova.Application.BBL.Commands.AccountWalletTrustee.DeleteTrusteeCommand;
 using static Mova.Application.BBL.Commands.AccountWalletTrustee.InviteTrusteeCommand;
 using static Mova.Application.BBL.Commands.AccountWalletTrustee.ResendTrusteeInvitationCommand;
+using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetReleaseRequestConsentQuery;
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetReleaseRequestsQuery;
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetTrusteeConsentQuery;
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetTrusteeWalletDetailQuery;
@@ -231,6 +232,23 @@ public class WalletTrusteeController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpPost("{id:long}/release-requests")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<ReleaseRequestsPageDto>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ReleaseRequests(
+        int id,
+        [FromBody] RequestReleaseCommand.Command command,
+        CancellationToken cancellationToken = default)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
+        command.WalletId = id;
+
+        var result = await _mediator.Send(command, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("{id:long}/release-requests")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<ReleaseRequestsPageDto>), (int)HttpStatusCode.OK)]
@@ -252,6 +270,58 @@ public class WalletTrusteeController(
             },
             cancellationToken);
 
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("release/validate/{token}")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
+    [ProducesResponseType(typeof(BaseResult<ReleaseRequestConsentDto>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ValidateReleaseConsent(
+        [FromRoute] string token,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetReleaseRequestConsentQuery.Query { Token = token },
+            cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+    
+    [HttpPost("release/{token}/approve")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ApproveRelease(
+        [FromRoute] string token,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new ApproveReleaseRequestCommand.Command
+            {
+                Token = token,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+            },
+            cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    
+    [HttpPost("release/{token}/reject")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> RejectRelease(
+        [FromRoute] string token,
+        [FromBody] RejectReleaseRequestCommand.Command? body,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new RejectReleaseRequestCommand.Command
+            {
+                Token = token,
+                Reason = body?.Reason,
+            },
+            cancellationToken);
         return StatusCode((int)result.StatusCode, result);
     }
 }

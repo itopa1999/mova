@@ -220,6 +220,11 @@ public class Startup(IConfiguration configuration)
         //     job => job.ExecuteAsync(CancellationToken.None),
         //     Cron.HourInterval(2));
 
+        // recurringJobManager.AddOrUpdate<ExpireReleaseRequestsJob>(
+        //     "expire-release-requests",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(5));
+
         // ─────────────────────────────────────────────────────────────
         // 1. Exception handler FIRST — catches exceptions from every
         //    middleware registered below it.
