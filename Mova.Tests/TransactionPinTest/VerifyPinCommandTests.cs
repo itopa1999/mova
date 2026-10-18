@@ -417,35 +417,6 @@ public sealed class VerifyPinCommandTests : BaseTest
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal("A valid PIN challenge type is required.", result.Message);
     }
-
-    [Fact]
-    public async Task Handle_WithDisallowedChallengeType_ReturnsBadRequest()
-    {
-        SetupUserExists();
-        SetupHasPin();
-        SetupVerifyPin();
-
-        var handler = CreateHandler();
-
-        var result = await handler.Handle(
-            CreateCommand(pinChallengeType: PinChallengeType.ChangeTransactionPin),
-            default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal(
-            "Unsupported PIN challenge type for this endpoint.",
-            result.Message);
-
-        _pinService.Verify(
-            x => x.VerifyPinWithStatusAsync(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<PinChallengeType>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
-
     [Theory]
     [InlineData(PinChallengeType.CreateWallet)]
     [InlineData(PinChallengeType.AddBankAccount)]

@@ -250,7 +250,7 @@ public sealed class AddBankAccountTests : BaseTestWithPinChallenge
                 NotificationType.System,
                 "Bank account added",
                 It.Is<string>(m => m.Contains(VerifiedAccountName) && m.Contains(BankName)),
-                "/bank",
+                "/dashboard/bank",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

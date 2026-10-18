@@ -423,7 +423,9 @@ public sealed class LinkAccountToBankTests : BaseTestWithPinChallenge
                     m.Contains(BankName) &&
                     m.Contains(AccountNumber) &&
                     m.Contains(WalletName)),
-                $"/wallet/{wallet.Id}",
+                wallet.Type == WalletType.Trustee
+                    ? $"/dashboard/trustee/wallet/{wallet.Id}"
+                    : $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

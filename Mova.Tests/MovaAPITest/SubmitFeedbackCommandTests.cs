@@ -361,7 +361,7 @@ public sealed class SubmitFeedbackCommandTests : BaseTest
                 It.Is<string>(m =>
                     m.Contains(UserFirstName) &&
                     m.Contains(AcknowledgmentMessage)),
-                "/feedback",
+                "/dashboard/feedback",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
@@ -399,7 +399,7 @@ public sealed class SubmitFeedbackCommandTests : BaseTest
                 NotificationType.System,
                 "Thank you for your feedback",
                 AcknowledgmentMessage,   // <-- exactly the generic message
-                "/feedback",
+                "/dashboard/feedback",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

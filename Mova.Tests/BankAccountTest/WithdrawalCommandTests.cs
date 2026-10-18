@@ -97,7 +97,7 @@ public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
                 NotificationType.Wallet,
                 "Withdrawal initiated",
                 It.Is<string>(message => message.Contains(result.Data.Reference)),
-                "/transactions",
+                "/dashboard/transactions",
                 null,
                 CancellationToken.None),
             Times.Once);

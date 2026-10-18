@@ -284,7 +284,7 @@ public sealed class SetPinCommandTests : BaseTest
                 NotificationType.Security,
                 "Transaction PIN created",
                 It.Is<string>(m => m.Contains("transaction PIN was created")),
-                "/settings",
+                "/dashboard/settings",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

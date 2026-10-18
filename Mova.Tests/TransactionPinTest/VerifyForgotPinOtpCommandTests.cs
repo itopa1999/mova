@@ -422,7 +422,7 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
                 It.Is<string>(m =>
                     m.Contains("identity was verified") &&
                     m.Contains("transaction PIN has been cleared")),
-                "/pin-gate",
+                "/dashboard/pin-gate",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);

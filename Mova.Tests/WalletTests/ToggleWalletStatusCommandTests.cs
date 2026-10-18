@@ -391,7 +391,7 @@ public sealed class ToggleWalletStatusCommandTests : BaseTestWithPinChallenge
                 NotificationType.Wallet,
                 "Rent Savings wallet paused",
                 It.Is<string>(m => m.Contains("on hold")),
-                $"/wallet/{wallet.Id}",
+                $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
@@ -411,7 +411,7 @@ public sealed class ToggleWalletStatusCommandTests : BaseTestWithPinChallenge
                 NotificationType.Wallet,
                 "Rent Savings wallet resumed",
                 It.Is<string>(m => m.Contains("active again")),
-                $"/wallet/{wallet.Id}",
+                $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
