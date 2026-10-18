@@ -145,9 +145,10 @@ public sealed class AcceptTrusteeConsentCommand
                     "Your trustee accepted the invitation");
             }
 
-            return new BaseResult(
+            return new BaseResult<object>(
                 HttpStatusCode.OK,
-                "You are now a trustee. The wallet owner will be notified.");
+                "You are now a trustee. The wallet owner will be notified.",
+                new { notification = true });
         }
 
         private static string? Truncate(string? value, int maxLength)

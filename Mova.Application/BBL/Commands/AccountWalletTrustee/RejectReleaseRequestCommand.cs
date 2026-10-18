@@ -159,9 +159,10 @@ public sealed class RejectReleaseRequestCommand
                     "Release rejected");
             }
 
-            return new BaseResult(
+           return new BaseResult<object>(
                 HttpStatusCode.OK,
-                "Request rejected. The wallet owner has been notified.");
+                "Request rejected. The wallet owner has been notified.",
+                new { notification = true });
         }
     }
 }
