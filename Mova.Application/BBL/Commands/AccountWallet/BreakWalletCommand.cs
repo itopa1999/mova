@@ -232,7 +232,7 @@ public sealed class BreakWalletCommand
                 $"{wallet.Name} wallet broken",
                 $"₦{amountReturned:N0} is being returned to your linked bank " +
                 $"account within a few minutes.",
-                $"/wallet/{wallet.Id}",
+                $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,
                 CancellationToken.None);
 

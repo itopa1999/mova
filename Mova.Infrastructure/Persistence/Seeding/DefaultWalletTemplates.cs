@@ -17,6 +17,7 @@ public static class DefaultWalletTemplates
             Name = "Transport Allowance",
             Description = "Daily transport money, released every weekday morning.",
             CategoryId = 2, // Transport
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(30_000),
             DefaultReleaseAmount = Money.FromNaira(1_000),
             DefaultFrequency = ReleaseFrequency.Daily,
@@ -37,6 +38,7 @@ public static class DefaultWalletTemplates
             Name = "Rent Release Plan",
             Description = "Keep rent money aside and release it at the start of each month.",
             CategoryId = 3, // Rent & Housing
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(120_000),
             DefaultReleaseAmount = Money.FromNaira(30_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -57,6 +59,7 @@ public static class DefaultWalletTemplates
             Name = "Weekly Groceries",
             Description = "Weekly food and grocery money, released every Saturday morning.",
             CategoryId = 12, // Groceries
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(20_000),
             DefaultReleaseAmount = Money.FromNaira(5_000),
             DefaultFrequency = ReleaseFrequency.Weekly,
@@ -77,6 +80,7 @@ public static class DefaultWalletTemplates
             Name = "School Fees",
             Description = "Term-based school fees, released at the start of each term.",
             CategoryId = 7, // Education
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(150_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
             DefaultFrequency = ReleaseFrequency.Quarterly,
@@ -97,6 +101,7 @@ public static class DefaultWalletTemplates
             Name = "Emergency Fund",
             Description = "Keep emergency money aside and release it on your monthly rule.",
             CategoryId = 17, // Controlled Access
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(100_000),
             DefaultReleaseAmount = Money.FromNaira(20_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -117,6 +122,7 @@ public static class DefaultWalletTemplates
             Name = "Daily Allowance",
             Description = "A small amount every day to keep daily spending in check.",
             CategoryId = 10, // Personal Care
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(30_000),
             DefaultReleaseAmount = Money.FromNaira(1_000),
             DefaultFrequency = ReleaseFrequency.Daily,
@@ -137,6 +143,7 @@ public static class DefaultWalletTemplates
             Name = "Data & Airtime",
             Description = "Monthly data and airtime budget — released in three chunks.",
             CategoryId = 13, // Mobile & Internet
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(15_000),
             DefaultReleaseAmount = Money.FromNaira(5_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -157,6 +164,7 @@ public static class DefaultWalletTemplates
             Name = "Baby Essentials",
             Description = "Weekly money for baby supplies — diapers, formula, and more.",
             CategoryId = 9, // Family
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(40_000),
             DefaultReleaseAmount = Money.FromNaira(10_000),
             DefaultFrequency = ReleaseFrequency.Weekly,
@@ -177,6 +185,7 @@ public static class DefaultWalletTemplates
             Name = "Fuel Budget",
             Description = "Daily fuel money, released every morning.",
             CategoryId = 2, // Transport
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(45_000),
             DefaultReleaseAmount = Money.FromNaira(1_500),
             DefaultFrequency = ReleaseFrequency.Daily,
@@ -197,6 +206,7 @@ public static class DefaultWalletTemplates
             Name = "Holiday Fund",
             Description = "Keep travel money separate and release it on your monthly schedule.",
             CategoryId = 11, // Travel
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(200_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -217,6 +227,7 @@ public static class DefaultWalletTemplates
             Name = "Utility Bills",
             Description = "Electricity and water bills — released at the start of each month.",
             CategoryId = 4, // Bills & Utilities
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(60_000),
             DefaultReleaseAmount = Money.FromNaira(20_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -237,6 +248,7 @@ public static class DefaultWalletTemplates
             Name = "Side Hustle Capital",
             Description = "Weekly capital for small business restocking.",
             CategoryId = 20, // Business
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(100_000),
             DefaultReleaseAmount = Money.FromNaira(25_000),
             DefaultFrequency = ReleaseFrequency.Weekly,
@@ -257,6 +269,7 @@ public static class DefaultWalletTemplates
             Name = "Entertainment",
             Description = "Weekly entertainment budget — movies, dining out, and fun.",
             CategoryId = 8, // Entertainment
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(20_000),
             DefaultReleaseAmount = Money.FromNaira(5_000),
             DefaultFrequency = ReleaseFrequency.Weekly,
@@ -277,6 +290,7 @@ public static class DefaultWalletTemplates
             Name = "Health & Fitness",
             Description = "Monthly gym, supplements, and health expenses.",
             CategoryId = 6, // Health
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(30_000),
             DefaultReleaseAmount = Money.FromNaira(10_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -297,6 +311,7 @@ public static class DefaultWalletTemplates
             Name = "Wedding Release Plan",
             Description = "Keep event money aside and release it when your schedule says so.",
             CategoryId = 9, // Family
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(500_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -317,6 +332,7 @@ public static class DefaultWalletTemplates
             Name = "Landlord Rent",
             Description = "Monthly rent paid directly to your landlord's bank account.",
             CategoryId = 3, // Rent & Housing
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(90_000),
             DefaultReleaseAmount = Money.FromNaira(30_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -337,6 +353,7 @@ public static class DefaultWalletTemplates
             Name = "Pocket Money",
             Description = "Small daily pocket money for everyday expenses.",
             CategoryId = 10, // Personal Care
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(15_000),
             DefaultReleaseAmount = Money.FromNaira(500),
             DefaultFrequency = ReleaseFrequency.Daily,
@@ -357,6 +374,7 @@ public static class DefaultWalletTemplates
             Name = "Annual Subscriptions",
             Description = "Yearly subscriptions — domains, software, insurance.",
             CategoryId = 14, // Subscriptions
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(120_000),
             DefaultReleaseAmount = Money.FromNaira(120_000),
             DefaultFrequency = ReleaseFrequency.Yearly,
@@ -377,6 +395,7 @@ public static class DefaultWalletTemplates
             Name = "Weekly Release Plan",
             Description = "Keep a set amount aside and make it available in weekly releases.",
             CategoryId = 17, // Controlled Access
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(52_000),
             DefaultReleaseAmount = Money.FromNaira(1_000),
             DefaultFrequency = ReleaseFrequency.Weekly,
@@ -397,6 +416,7 @@ public static class DefaultWalletTemplates
             Name = "Family Support",
             Description = "Monthly support sent directly to a family member's bank account.",
             CategoryId = 9, // Family
+            WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(60_000),
             DefaultReleaseAmount = Money.FromNaira(20_000),
             DefaultFrequency = ReleaseFrequency.Monthly,
@@ -405,6 +425,206 @@ public static class DefaultWalletTemplates
             IconName = "Users",
             Tags = new[] { "family", "support", "monthly", "bank", "parents" },
             SortOrder = 20,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 21. Family emergency fund with joint control.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Family Emergency Fund",
+            Description = "Shared family money that needs another family member's approval to release.",
+            CategoryId = 9,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(200_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "ShieldCheck",
+            Tags = new[] { "family", "emergency", "trustee", "shared", "approval" },
+            SortOrder = 21,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 22. Joint wedding planning fund.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Wedding Fund",
+            Description = "Money for the big day, with a trusted family member co-signing every release.",
+            CategoryId = 9,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(500_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "HeartHandshake",
+            Tags = new[] { "wedding", "trustee", "event", "shared", "approval" },
+            SortOrder = 22,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 23. Business partnership capital.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Business Partnership Fund",
+            Description = "Capital held by the partnership — releases need sign-off from a partner.",
+            CategoryId = 20,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(1_000_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Bank,
+            IconName = "Briefcase",
+            Tags = new[] { "business", "partnership", "trustee", "capital", "approval" },
+            SortOrder = 23,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 24. Elder care fund.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Elder Care Fund",
+            Description = "Money set aside for parents' care, with a sibling approving every release.",
+            CategoryId = 9,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(300_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Bank,
+            IconName = "Heart",
+            Tags = new[] { "parents", "elder", "care", "trustee", "family" },
+            SortOrder = 24,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 25. Children's school fees (co-signed).
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "School Fees (Co-signed)",
+            Description = "Fees that need another guardian's approval before money leaves the wallet.",
+            CategoryId = 7,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(300_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Bank,
+            IconName = "GraduationCap",
+            Tags = new[] { "school", "fees", "education", "trustee", "children" },
+            SortOrder = 25,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 26. Couples' joint savings.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Joint Savings",
+            Description = "A shared goal — both of you decide when money leaves this wallet.",
+            CategoryId = 17,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(400_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "Users",
+            Tags = new[] { "couple", "savings", "trustee", "shared", "joint" },
+            SortOrder = 26,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 27. Group project fund.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Group Project Fund",
+            Description = "Shared money for a project — releases need a teammate's sign-off.",
+            CategoryId = 20,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(250_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "Users",
+            Tags = new[] { "team", "project", "trustee", "shared", "approval" },
+            SortOrder = 27,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 28. Debt repayment reserve.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Debt Repayment Reserve",
+            Description = "Money ring-fenced for debt — a trustee approves before any payout.",
+            CategoryId = 17,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(150_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Bank,
+            IconName = "Landmark",
+            Tags = new[] { "debt", "repayment", "trustee", "reserve", "approval" },
+            SortOrder = 28,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 29. Charity / Zakat fund.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Charity Fund",
+            Description = "Money set aside for giving — a trusted person approves each disbursement.",
+            CategoryId = 17,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(100_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Bank,
+            IconName = "HandCoins",
+            Tags = new[] { "charity", "zakat", "giving", "trustee", "shared" },
+            SortOrder = 29,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 30. Friends' group trip fund.
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Group Trip Fund",
+            Description = "Friends' group trip money — one trusted member approves every release.",
+            CategoryId = 11,
+            WalletType = WalletType.Trustee,
+            DefaultTargetAmount = Money.FromNaira(400_000),
+            DefaultReleaseAmount = Money.FromNaira(0),
+            DefaultFrequency = ReleaseFrequency.Once,
+            DefaultFrequencyConfig = "{}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "Plane",
+            Tags = new[] { "travel", "group", "trip", "trustee", "shared" },
+            SortOrder = 30,
             IsActive = true,
         },
     };

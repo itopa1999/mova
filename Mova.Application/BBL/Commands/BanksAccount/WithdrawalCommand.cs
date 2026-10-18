@@ -328,7 +328,7 @@ public sealed class WithdrawalCommand
                 NotificationType.Wallet,
                 "Withdrawal initiated",
                 notificationMessage,
-                "/transactions",
+                "/dashboard/transactions",
                 null,
                 CancellationToken.None);
 

@@ -120,7 +120,7 @@ public sealed class SetPinCommand
                 "Transaction PIN created",
                 "Your transaction PIN was created successfully. " +
                 "You'll need it to confirm sensitive actions.",
-                "/settings",
+                "/dashboard/settings",
                 null,
                 CancellationToken.None);
 

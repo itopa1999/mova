@@ -162,7 +162,7 @@ public sealed class VerifyForgotPinOtpCommand
                 "Your identity was verified and your transaction PIN has been cleared. " +
                 "Set a new PIN to continue using secure actions. " +
                 "If this wasn't you, contact support immediately.",
-                "/pin-gate",
+                "/dashboard/pin-gate",
                 null,
                 CancellationToken.None);
 

@@ -10,6 +10,7 @@ using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Application.BBL.Queries.WalletTemplates;
+using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using static Mova.Application.BBL.Commands.AccountWallet.CreateRenewalPolicyCommand;
@@ -416,6 +417,7 @@ public class WalletController(
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         [FromQuery] long? categoryId = null,
+        [FromQuery] WalletType? walletType = null,
         CancellationToken cancellationToken = default)
     {
         var query = new ListWalletTemplatesQuery.Query
@@ -424,6 +426,7 @@ public class WalletController(
             PageSize = pageSize,
             Search = search,
             CategoryId = categoryId,
+            WalletType = walletType
         };
 
         var result = await _mediator.Send(query, cancellationToken);

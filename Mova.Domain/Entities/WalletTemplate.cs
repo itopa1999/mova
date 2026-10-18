@@ -13,6 +13,7 @@ public class WalletTemplate : BaseEntity
     public string Description { get; set; } = string.Empty;
 
     public long CategoryId { get; set; }
+    public WalletType? WalletType { get; set; }
 
     public Money DefaultTargetAmount { get; set; } = Money.FromNaira(0);
 

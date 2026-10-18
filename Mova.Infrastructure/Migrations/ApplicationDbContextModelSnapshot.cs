@@ -1924,6 +1924,11 @@ namespace Mova.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
+                    b.Property<int?>("WalletType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.ComplexProperty<Dictionary<string, object>>("DefaultReleaseAmount", "Mova.Domain.Entities.WalletTemplate.DefaultReleaseAmount#Money", b1 =>
                         {
                             b1.Property<string>("Currency")
@@ -1959,6 +1964,9 @@ namespace Mova.Infrastructure.Migrations
 
                     b.HasIndex("SortOrder")
                         .HasDatabaseName("ix_wallet_templates_sort_order");
+
+                    b.HasIndex("WalletType", "IsActive")
+                        .HasDatabaseName("ix_wallet_templates_type_active");
 
                     b.ToTable("wallet_templates", (string)null);
                 });

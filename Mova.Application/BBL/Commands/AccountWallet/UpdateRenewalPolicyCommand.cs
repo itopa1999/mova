@@ -288,7 +288,7 @@ public sealed class UpdateRenewalPolicyCommand
                 NotificationType.Wallet,
                 $"{wallet.Name} automation updated",
                 BuildInAppMessage(wallet.Name, request.RefillUntilMainBalanceExhausted),
-                $"/wallet/{wallet.Id}/automation",
+                $"/dashboard/scheduled/wallet/{wallet.Id}/automation",
                 null,
                 CancellationToken.None);
 

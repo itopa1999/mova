@@ -125,7 +125,7 @@ public sealed class AcceptTrusteeConsentCommand
                 $"{trusteeDisplay} has accepted to be your trustee. " +
                 $"You can now select them when creating a trustee wallet. " +
                 $"Every release from that wallet will need their approval within 3 hours.",
-                "/trustees",
+                "/dashboard/trustees",
                 null,
                 CancellationToken.None);
 

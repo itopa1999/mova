@@ -24,6 +24,11 @@ public class WalletTemplateConfiguration : IEntityTypeConfiguration<WalletTempla
         builder.Property(x => x.CategoryId)
             .IsRequired();
 
+        builder.Property(x => x.WalletType)
+            .HasConversion<int>()
+            .IsRequired(false)
+            .HasDefaultValue(WalletType.Scheduled);
+
         builder.ComplexProperty(
             x => x.DefaultTargetAmount,
             money =>
@@ -97,5 +102,10 @@ public class WalletTemplateConfiguration : IEntityTypeConfiguration<WalletTempla
 
         builder.HasIndex(x => x.SortOrder)
             .HasDatabaseName("ix_wallet_templates_sort_order");
+
+        // New: lets the FE fetch only scheduled or only trustee templates
+        // without scanning the whole table.
+        builder.HasIndex(x => new { x.WalletType, x.IsActive })
+            .HasDatabaseName("ix_wallet_templates_type_active");
     }
 }
