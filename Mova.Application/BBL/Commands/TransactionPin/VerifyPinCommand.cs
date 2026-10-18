@@ -176,6 +176,16 @@ public sealed class VerifyPinCommand
                         "Too many incorrect PIN attempts. Your transaction PIN is locked for 1 hour. Please try again in 1 hour.");
                 }
 
+                if (verificationResult == TransactionPinVerificationResult.InvalidFinalWarning)
+                {
+                    op.Warning(
+                        $"Transaction PIN final warning for user {request.UserPublicId} — " +
+                        $"one more incorrect attempt will lock the PIN.");
+                    return new BaseResult(
+                        HttpStatusCode.BadRequest,
+                        "Incorrect PIN. One more incorrect attempt will lock your PIN for 1 hour.");
+                }
+
                 op.Warning($"Invalid PIN provided for user {request.UserPublicId}.");
                 return new BaseResult(
                     HttpStatusCode.Unauthorized,

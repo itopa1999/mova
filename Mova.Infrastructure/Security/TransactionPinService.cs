@@ -161,13 +161,18 @@ public class TransactionPinService : ITransactionPinService
             return TransactionPinVerificationResult.Verified;
         }
 
-        var lockWasTriggered = await _pinAttemptStore.RecordFailureAsync(
+        var outcome = await _pinAttemptStore.RecordFailureAsync(
             UserPublicId,
             cancellationToken);
 
-        if (lockWasTriggered)
+        if (outcome == TransactionPinFailureOutcome.LockedNow)
         {
             return TransactionPinVerificationResult.LockedNow;
+        }
+
+        if (outcome == TransactionPinFailureOutcome.Warning)
+        {
+            return TransactionPinVerificationResult.InvalidFinalWarning;
         }
 
         return await _pinAttemptStore.IsLockedAsync(UserPublicId, cancellationToken)

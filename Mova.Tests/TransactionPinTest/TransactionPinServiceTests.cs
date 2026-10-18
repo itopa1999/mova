@@ -50,7 +50,7 @@ public sealed class TransactionPinServiceTests : BaseTest
     }
 
     [Fact]
-    public async Task VerifyPinWithStatusAsync_LocksAfterThreeFailures()
+    public async Task VerifyPinWithStatusAsync_WarnsOnThirdAndLocksOnFourthFailure()
     {
         var hasher = new PasswordHasher<User>();
         var user = new User
@@ -71,16 +71,31 @@ public sealed class TransactionPinServiceTests : BaseTest
         var attemptStore = new InMemoryPinAttemptStore();
         var service = CreateService(hasher, attemptStore);
 
+        // 1st failure → Invalid
         Assert.Equal(
             TransactionPinVerificationResult.Invalid,
             await service.VerifyPinWithStatusAsync(
                 UserPublicId, "000000", PinChallengeType.CreateWallet));
 
+        // 2nd failure → Invalid
         Assert.Equal(
             TransactionPinVerificationResult.Invalid,
             await service.VerifyPinWithStatusAsync(
                 UserPublicId, "000000", PinChallengeType.CreateWallet));
 
+        Assert.False(attemptStore.IsLocked(UserPublicId));
+        Assert.Equal(2, attemptStore.FailureCount(UserPublicId));
+
+        // 3rd failure → InvalidFinalWarning (final warning, still not locked)
+        Assert.Equal(
+            TransactionPinVerificationResult.InvalidFinalWarning,
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, "000000", PinChallengeType.CreateWallet));
+
+        Assert.False(attemptStore.IsLocked(UserPublicId));
+        Assert.Equal(3, attemptStore.FailureCount(UserPublicId));
+
+        // 4th failure → LockedNow (this is the one that fires the lock)
         Assert.Equal(
             TransactionPinVerificationResult.LockedNow,
             await service.VerifyPinWithStatusAsync(
@@ -88,12 +103,14 @@ public sealed class TransactionPinServiceTests : BaseTest
 
         Assert.True(attemptStore.IsLocked(UserPublicId));
 
+        // Counter is cleared when the lock fires (mirrors Lua's DEL KEYS[1])
+        Assert.Equal(0, attemptStore.FailureCount(UserPublicId));
+
+        // 5th call — even with the CORRECT pin — short-circuits to Locked
         Assert.Equal(
             TransactionPinVerificationResult.Locked,
             await service.VerifyPinWithStatusAsync(
                 UserPublicId, Pin, PinChallengeType.CreateWallet));
-
-        Assert.Equal(3, attemptStore.FailureCount(UserPublicId));
     }
 
     [Fact]
@@ -143,12 +160,12 @@ public sealed class TransactionPinServiceTests : BaseTest
         var attemptStore = new InMemoryPinAttemptStore();
         var service = CreateService(hasher, attemptStore);
 
-        await service.VerifyPinWithStatusAsync(
-            UserPublicId, "000000", PinChallengeType.CreateWallet);
-        await service.VerifyPinWithStatusAsync(
-            UserPublicId, "000000", PinChallengeType.CreateWallet);
-        await service.VerifyPinWithStatusAsync(
-            UserPublicId, "000000", PinChallengeType.CreateWallet);
+        // 4 failures — lock fires on the 4th
+        for (var i = 0; i < 4; i++)
+        {
+            await service.VerifyPinWithStatusAsync(
+                UserPublicId, "000000", PinChallengeType.CreateWallet);
+        }
 
         Assert.True(attemptStore.IsLocked(UserPublicId));
 
@@ -181,7 +198,6 @@ public sealed class TransactionPinServiceTests : BaseTest
                 UserPublicId, Pin, PinChallengeType.CreateWallet));
 
         Assert.True(attemptStore.IsLocked(UserPublicId));
-        Assert.Equal(3, attemptStore.FailureCount(UserPublicId));
     }
 
     [Fact]
@@ -285,9 +301,17 @@ public sealed class TransactionPinServiceTests : BaseTest
             LastName = "User"
         };
 
+    /// <summary>
+    /// In-memory fake that mirrors the production <c>RedisTransactionPinAttemptStore</c>:
+    /// a separate lock flag (like the <c>lock:</c> Redis key) and a counter that is
+    /// cleared when the lock fires (like <c>DEL KEYS[1]</c> in the Lua script).
+    /// </summary>
     private sealed class InMemoryPinAttemptStore : ITransactionPinAttemptStore
     {
+        private const int MaxFailures = 4;
+
         private readonly Dictionary<string, int> _failureCounts = new();
+        private readonly HashSet<string> _lockedUsers = new();
 
         public bool LockDuringSuccessfulReset { get; init; }
 
@@ -295,19 +319,40 @@ public sealed class TransactionPinServiceTests : BaseTest
             _failureCounts.GetValueOrDefault(userPublicId);
 
         public bool IsLocked(string userPublicId) =>
-            FailureCount(userPublicId) >= 3;
+            _lockedUsers.Contains(userPublicId);
 
         public Task<bool> IsLockedAsync(
             string userPublicId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(IsLocked(userPublicId));
 
-        public Task<bool> RecordFailureAsync(
+        public Task<TransactionPinFailureOutcome> RecordFailureAsync(
             string userPublicId,
             CancellationToken cancellationToken = default)
         {
-            _failureCounts[userPublicId] = FailureCount(userPublicId) + 1;
-            return Task.FromResult(FailureCount(userPublicId) == 3);
+            // Mirrors Lua: "if EXISTS lock then return 1"
+            if (IsLocked(userPublicId))
+            {
+                return Task.FromResult(TransactionPinFailureOutcome.LockedNow);
+            }
+
+            var count = FailureCount(userPublicId) + 1;
+            _failureCounts[userPublicId] = count;
+
+            var outcome = count switch
+            {
+                >= MaxFailures => TransactionPinFailureOutcome.LockedNow,
+                MaxFailures - 1 => TransactionPinFailureOutcome.Warning,
+                _ => TransactionPinFailureOutcome.None,
+            };
+
+            if (outcome == TransactionPinFailureOutcome.LockedNow)
+            {
+                _lockedUsers.Add(userPublicId);
+                _failureCounts.Remove(userPublicId);   // mirrors DEL KEYS[1]
+            }
+
+            return Task.FromResult(outcome);
         }
 
         public Task<bool> ResetAfterSuccessfulVerificationAsync(
@@ -316,7 +361,7 @@ public sealed class TransactionPinServiceTests : BaseTest
         {
             if (LockDuringSuccessfulReset)
             {
-                _failureCounts[userPublicId] = 3;
+                _lockedUsers.Add(userPublicId);
                 return Task.FromResult(false);
             }
 
@@ -334,6 +379,7 @@ public sealed class TransactionPinServiceTests : BaseTest
             CancellationToken cancellationToken = default)
         {
             _failureCounts.Remove(userPublicId);
+            _lockedUsers.Remove(userPublicId);
             return Task.CompletedTask;
         }
     }

@@ -6,7 +6,7 @@ public interface ITransactionPinAttemptStore
         string userPublicId,
         CancellationToken cancellationToken = default);
 
-    Task<bool> RecordFailureAsync(
+    Task<TransactionPinFailureOutcome> RecordFailureAsync(
         string userPublicId,
         CancellationToken cancellationToken = default);
 
@@ -17,4 +17,12 @@ public interface ITransactionPinAttemptStore
     Task ResetAsync(
         string userPublicId,
         CancellationToken cancellationToken = default);
+}
+
+
+public enum TransactionPinFailureOutcome
+{
+    None,
+    Warning,
+    LockedNow,
 }

@@ -630,9 +630,6 @@ POST /api/schedule/preview
 4. i need redis to be added to like places that need it the most please. ans also set a 
 4.1 stampede way of invalidating the record redis
 5. please check that verifying money evrything is good about the money transaction, i don't wanna be in debt
-6. user wants to purchases and there's bad error and till the backedn os throwing 500, please fix that.
-7. add a throwerror to invocke the rollover transaction please. 
-8. for the rollback transaction to work please let one savechanges save all the stuff except exception flag it lemme confirm.
 
 
 
@@ -758,9 +755,3 @@ Added `verify-connectivity` job:
 - Verifies Postgres (`SELECT 1`) and Redis (`PING`) against production credentials using `tools/Mova.HealthCheck`.
 - `promote-to-production` now `needs: [test, verify-connectivity]` — no deploy if either fails.
 - Two new repo secrets: `POSTGRES_CONNECTION_STRING`, `REDIS_CONNECTION_STRING`.
-
-
-
-MUST TEST login endpopint 
-_identityService.CreditBalanceAsync( check all the code base please for the transaction and also
-the BeginAtomicSerializableAsync 

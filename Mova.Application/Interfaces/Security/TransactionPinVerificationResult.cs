@@ -5,5 +5,6 @@ public enum TransactionPinVerificationResult
     Verified,
     Invalid,
     Locked,
-    LockedNow
+    LockedNow,
+    InvalidFinalWarning 
 }
