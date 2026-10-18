@@ -31,7 +31,6 @@ public sealed class TransactionPinServiceTests : BaseTest
         return new TransactionPinService(
             Context,
             hasher,
-            Mock.Of<ICacheService>(),
             attemptStore,
             _pinChallengeMock.Object);
     }
@@ -221,7 +220,6 @@ public sealed class TransactionPinServiceTests : BaseTest
         var service = new TransactionPinService(
             Context,
             hasher,
-            Mock.Of<ICacheService>(),
             attemptStore,
             _pinChallengeMock.Object);
 
@@ -251,7 +249,6 @@ public sealed class TransactionPinServiceTests : BaseTest
         var service = new TransactionPinService(
             Context,
             hasher,
-            Mock.Of<ICacheService>(),
             attemptStore,
             _pinChallengeMock.Object);
 

@@ -21,7 +21,6 @@ public sealed class ProcessScheduledReleasesJob
     private readonly IWalletRuleService _walletRuleService;
     private readonly INotificationQueue _notificationQueue;
     private readonly IRenewalService _renewalService;
-    private readonly ICacheService _cache;
     private readonly IIdentityService _identityService;
 
     public ProcessScheduledReleasesJob(
@@ -30,7 +29,6 @@ public sealed class ProcessScheduledReleasesJob
         IWalletRuleService walletRuleService,
         INotificationQueue notificationQueue,
         IRenewalService renewalService,
-        ICacheService cache,
         IIdentityService identityService)
     {
         _context = context;
@@ -38,7 +36,6 @@ public sealed class ProcessScheduledReleasesJob
         _walletRuleService = walletRuleService;
         _notificationQueue = notificationQueue;
         _renewalService = renewalService;
-        _cache = cache;
         _identityService = identityService;
     }
 
@@ -290,9 +287,6 @@ public sealed class ProcessScheduledReleasesJob
         // either way. Log and move on.
         try
         {
-            await _cache.DeletePrefixAsync(
-                CacheKeys.NotificationsPrefix(wallet.UserPublicId));
-
             await SendReleaseNotificationsAsync(
                 wallet.UserPublicId,
                 wallet.Name,

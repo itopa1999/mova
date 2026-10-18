@@ -1,19 +1,14 @@
 using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common;
-using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.MovaAPIs;
 
 public sealed class GetNotificationsQuery
 {
-    private static readonly TimeSpan NotificationsCacheTtl =
-        TimeSpan.FromSeconds(30);
-
     public sealed class Query
         : IRequest<BaseResult<List<NotificationDto>>>
     {
@@ -37,14 +32,10 @@ public sealed class GetNotificationsQuery
         : IRequestHandler<Query, BaseResult<List<NotificationDto>>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ICacheService _cache;
 
-        public Handler(
-            IUnitOfWork unitOfWork,
-            ICacheService cache)
+        public Handler(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _cache = cache;
         }
 
         public async Task<BaseResult<List<NotificationDto>>> Handle(
@@ -58,23 +49,15 @@ public sealed class GetNotificationsQuery
                     "User ID is required.");
             }
 
-            var cacheKey = CacheKeys.Notifications(
+            var notifications = await LoadNotificationsFromDbAsync(
                 request.UserPublicId,
-                request.UnreadOnly);
-
-            var notifications = await _cache.GetOrSetFastAsync(
-                cacheKey,
-                ct => LoadNotificationsFromDbAsync(
-                    request.UserPublicId,
-                    request.UnreadOnly,
-                    ct),
-                timeout: NotificationsCacheTtl,
-                cancellationToken: cancellationToken);
+                request.UnreadOnly,
+                cancellationToken);
 
             return new BaseResult<List<NotificationDto>>(
                 HttpStatusCode.OK,
                 "Notifications retrieved successfully.",
-                notifications ?? new List<NotificationDto>());
+                notifications);
         }
 
         private async Task<List<NotificationDto>> LoadNotificationsFromDbAsync(

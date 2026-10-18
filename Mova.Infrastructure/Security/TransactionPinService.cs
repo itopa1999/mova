@@ -14,20 +14,17 @@ public class TransactionPinService : ITransactionPinService
 {
     private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher<User> _passwordHasher;
-    private readonly ICacheService _cache;
     private readonly ITransactionPinAttemptStore _pinAttemptStore;
     private readonly IPinChallenge _pinChallenge;
 
     public TransactionPinService(
         ApplicationDbContext context,
         IPasswordHasher<User> passwordHasher,
-        ICacheService cache,
         ITransactionPinAttemptStore pinAttemptStore,
         IPinChallenge pinChallenge)
     {
         _context = context;
         _passwordHasher = passwordHasher;
-        _cache = cache;
         _pinAttemptStore = pinAttemptStore;
         _pinChallenge = pinChallenge;
     }
@@ -73,7 +70,6 @@ public class TransactionPinService : ITransactionPinService
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        await InvalidateUserCacheAsync(user);
         await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
     }
 
@@ -209,7 +205,6 @@ public class TransactionPinService : ITransactionPinService
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        await InvalidateUserCacheAsync(user);
         await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
     }
 
@@ -229,7 +224,6 @@ public class TransactionPinService : ITransactionPinService
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        await InvalidateUserCacheAsync(user);
         await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
 
         return true;
@@ -246,33 +240,6 @@ public class TransactionPinService : ITransactionPinService
         {
             throw new ArgumentException(
                 "PIN must contain exactly 6 digits.");
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // INVALIDATION — matches IdentityService.InvalidateUserCacheAsync
-    // so both services invalidate the exact same keys.
-    // ─────────────────────────────────────────────────────────────
-    private async Task InvalidateUserCacheAsync(User user)
-    {
-        // Single canonical profile key.
-        await _cache.DeleteAsync(CacheKeys.Profile(user.Id));
-
-        // Identifier index entries — short TTL anyway, deleted eagerly
-        // so the next lookup re-resolves cleanly.
-        if (!string.IsNullOrWhiteSpace(user.PublicId))
-        {
-            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PublicId));
-        }
-
-        if (!string.IsNullOrWhiteSpace(user.Email))
-        {
-            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.Email));
-        }
-
-        if (!string.IsNullOrWhiteSpace(user.PhoneNumber))
-        {
-            await _cache.DeleteAsync(CacheKeys.ProfileIndex(user.PhoneNumber));
         }
     }
 }

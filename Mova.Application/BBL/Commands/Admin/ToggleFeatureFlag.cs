@@ -8,7 +8,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
-using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.Admin;
@@ -36,16 +35,13 @@ public sealed class ToggleFeatureFlag
         : IRequestHandler<Command, BaseResult<ToggleFeatureFlagDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ICacheService _cache;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            ICacheService cache,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _cache = cache;
             _logger = logger;
         }
 
@@ -94,8 +90,6 @@ public sealed class ToggleFeatureFlag
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
-
-            await _cache.DeleteAsync(CacheKeys.FeatureFlags());
 
             op.Success(
                 $"Feature flag '{flag.Name}' " +

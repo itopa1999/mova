@@ -16,7 +16,6 @@ public sealed class ToggleFeatureFlagTests : BaseTest
     {
         return new ToggleFeatureFlag.Handler(
             UnitOfWork,
-            Mock.Of<ICacheService>(),
             Mock.Of<ILogger<ToggleFeatureFlag.Handler>>());
     }
 
