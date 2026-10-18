@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Mova.Application.Interfaces.Identity;
+using Mova.Infrastructure.Caching;
 using Mova.Infrastructure.Persistence;
 
 namespace Mova.Infrastructure.Identity;
@@ -15,7 +16,8 @@ public static class DependencyInjection
     {
         services.AddScoped<IIdentityService, IdentityService>();
 
-        services.AddDbContext<ApplicationDbContext>(options =>
+        
+        services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
         {
             var databaseProvider = configuration
                 .GetValue<string>("DatabaseProvider")?
@@ -38,7 +40,11 @@ public static class DependencyInjection
                 throw new InvalidOperationException(
                     $"Unsupported database provider: {databaseProvider}");
             }
+
+            options.AddInterceptors(
+                serviceProvider.GetRequiredService<CacheInvalidationInterceptor>());
         });
+
 
         services
             .AddIdentity<User, IdentityRole<long>>(options =>

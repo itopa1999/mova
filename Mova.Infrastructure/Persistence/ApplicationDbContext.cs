@@ -77,35 +77,68 @@ public class ApplicationDbContext
         }
     }
 
-    public override async Task<int> SaveChangesAsync(
+    
+public override int SaveChanges()
+{
+    PrepareChanges();
+    return base.SaveChanges();
+}
+
+public override int SaveChanges(bool acceptAllChangesOnSuccess)
+{
+    PrepareChanges();
+    return base.SaveChanges(acceptAllChangesOnSuccess);
+}
+
+    public override Task<int> SaveChangesAsync(
         CancellationToken cancellationToken = default)
     {
-        var entries = ChangeTracker.Entries<BaseEntity>();
+        PrepareChanges();
+        return base.SaveChangesAsync(cancellationToken);
+    }
 
-        foreach (var entry in entries)
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        PrepareChanges();
+        return base.SaveChangesAsync(
+            acceptAllChangesOnSuccess,
+            cancellationToken);
+    }
+
+    private void PrepareChanges()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var currentUserId = _currentUser?.UserId.ToString();
+
+        foreach (var entry in ChangeTracker.Entries<BaseEntity>())
         {
             switch (entry.State)
             {
                 case EntityState.Added:
-                    entry.Entity.CreatedAt = DateTimeOffset.UtcNow;
+                    entry.Entity.CreatedAt = now;
                     break;
 
                 case EntityState.Modified:
-                    entry.Entity.ModifiedAt = DateTimeOffset.UtcNow;
-                    entry.Entity.ModifiedBy = _currentUser?.UserId.ToString();
+                    entry.Entity.ModifiedAt = now;
+                    entry.Entity.ModifiedBy = currentUserId;
                     break;
 
                 case EntityState.Deleted:
                     entry.State = EntityState.Modified;
                     entry.Entity.IsDeleted = true;
-                    entry.Entity.DeletedAt = DateTimeOffset.UtcNow;
-                    entry.Entity.DeletedBy = _currentUser?.UserId.ToString();
+                    entry.Entity.DeletedAt = now;
+                    entry.Entity.DeletedBy = currentUserId;
+                    entry.Entity.ModifiedAt = now;
+                    entry.Entity.ModifiedBy = currentUserId;
                     break;
             }
         }
 
         foreach (var entry in ChangeTracker.Entries()
-                     .Where(x => x.State is EntityState.Added or EntityState.Modified))
+                    .Where(entry => entry.State is
+                        EntityState.Added or EntityState.Modified))
         {
             foreach (var property in entry.Properties)
             {
@@ -116,7 +149,5 @@ public class ApplicationDbContext
                 }
             }
         }
-
-        return await base.SaveChangesAsync(cancellationToken);
     }
 }

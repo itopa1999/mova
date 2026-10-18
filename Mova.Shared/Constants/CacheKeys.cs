@@ -4,9 +4,10 @@ public static class CacheKeys
 {
     // ── Profile ────────────────────────────────────────────────
     public static string Profile(long userId) => $"profile:byid:{userId}";
-    public const string ProfilePrefix = "profile:";
     public static string ProfileIndex(string identifier) =>
         $"profile:idx:{Norm(identifier)}";
+    public const string ProfilePrefix = "profile:";
+
 
     // ── Banks ──────────────────────────────────────────────────
     public static string BanksAll() => "banks:all";
@@ -18,10 +19,13 @@ public static class CacheKeys
         $"banks:slug:{Norm(slug)}";
     public const string BanksPrefix = "banks:";
 
+
     // ── Feature flags ──────────────────────────────────────────
     public static string FeatureFlags() => "feature_flags:map";
     public static string FeatureFlagsList() => "feature_flags:list";
     public const string FeatureFlagsPrefix = "feature_flags:";
+
+
 
     // ── Notifications ──────────────────────────────────────────
     public static string Notifications(string userPublicId, bool unreadOnly) =>
@@ -29,11 +33,17 @@ public static class CacheKeys
     public static string NotificationsPrefix(string userPublicId) =>
         $"notifications:{Norm(userPublicId)}:";
 
-    // ── Wallet ─────────────────────────────────────────────────
+
+
+    // ── Wallet Template ─────────────────────────────────────────────────
     public static string WalletTemplates() => "wallet_templates:all";
     public const string WalletTemplatesPrefix = "wallet_templates:";
+
+
+    // ── Wallet Categories ─────────────────────────────────────────────────
     public static string WalletCategories() => "wallet_categories:all";
     public const string WalletCategoriesPrefix = "wallet_categories:";
+    
 
     // ── Home dashboard ─────────────────────────────────────────
     public static string HomeDashboard(string userPublicId) =>
