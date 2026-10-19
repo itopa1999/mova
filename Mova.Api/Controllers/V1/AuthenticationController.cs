@@ -396,9 +396,9 @@ public class AuthenticationController(
 
         return new CookieOptions
         {
-            HttpOnly = true,
+            HttpOnly = false,
             Secure = true,
-            SameSite = SameSiteMode.None,
+            SameSite = SameSiteMode.Lax,
             Path = "/"
         };
     }
