@@ -61,17 +61,15 @@ public static class DependencyInjection
             redisConnectionString);
 
         redisOptions.AbortOnConnectFail = false;
-        redisOptions.ConnectTimeout = 10000;
-        redisOptions.SyncTimeout = 10000;
-        redisOptions.ConnectRetry = 5;
+        redisOptions.ConnectTimeout = 1000;
+        redisOptions.SyncTimeout = 1000;
+        redisOptions.AsyncTimeout = 1000;
+        redisOptions.ConnectRetry = 1;
         redisOptions.ClientName = "MOVA-API";
 
-        var redis = ConnectionMultiplexer.Connect(redisOptions);
-
-        services.AddSingleton<IConnectionMultiplexer>(redis);
+        services.AddSingleton<IConnectionMultiplexer>(
+            _ => ConnectionMultiplexer.Connect(redisOptions));
         services.AddScoped<ICacheService, RedisCacheService>();
-
-        services.AddScoped<CacheInvalidationInterceptor>();
 
         services.AddHttpContextAccessor();
 

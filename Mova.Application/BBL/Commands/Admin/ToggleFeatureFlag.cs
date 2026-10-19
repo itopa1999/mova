@@ -8,6 +8,7 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.Admin;
@@ -35,13 +36,16 @@ public sealed class ToggleFeatureFlag
         : IRequestHandler<Command, BaseResult<ToggleFeatureFlagDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
+            ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -56,11 +60,14 @@ public sealed class ToggleFeatureFlag
                 ("IsEnabled", request.IsEnabled));
 
             var flag = await _unitOfWork.Query<FeatureFlag>()
-                .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken);
+                .FirstOrDefaultAsync(
+                    x => x.Id == request.Id,
+                    cancellationToken);
 
             if (flag is null)
             {
                 op.Warning($"Feature flag not found: {request.Id}");
+
                 return new BaseResult<ToggleFeatureFlagDto>(
                     HttpStatusCode.NotFound,
                     $"Feature flag '{request.Id}' not found.");
@@ -84,12 +91,17 @@ public sealed class ToggleFeatureFlag
                     });
             }
 
-            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
+            await using var tx =
+                await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             flag.IsEnabled = request.IsEnabled;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
+
+            await _cacheService.DeletePrefixAsync(
+                CacheKeys.FeatureFlagsPrefix,
+                cancellationToken);
 
             op.Success(
                 $"Feature flag '{flag.Name}' " +

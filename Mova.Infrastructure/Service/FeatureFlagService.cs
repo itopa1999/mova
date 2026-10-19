@@ -68,9 +68,6 @@ public sealed class FeatureFlagService : IFeatureFlagService
     private async Task<List<FeatureFlagSnapshot>> LoadFlagsListFromDbAsync(
         CancellationToken cancellationToken)
     {
-        Console.WriteLine(
-            "[DATABASE LOAD] Loading feature-flag list from the database.");
-
         return await _context.FeatureFlags
             .AsNoTracking()
             .OrderBy(x => x.Name)
