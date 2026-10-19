@@ -2,8 +2,9 @@ using System.Net;
 using System.Text.Json;
 using Moq;
 using StackExchange.Redis;
-using Xunit;
 using Mova.Infrastructure.Caching;
+using Microsoft.Extensions.Logging;
+
 
 namespace Mova.Tests.Caching;
 
@@ -11,6 +12,7 @@ public sealed class RedisCacheServiceUnitTests
 {
     private readonly Mock<IConnectionMultiplexer> _redis = new();
     private readonly Mock<IDatabase> _database = new();
+    private readonly Mock<ILogger<RedisCacheService>> _logger = new();
 
     private RedisCacheService CreateService()
     {
@@ -35,7 +37,7 @@ public sealed class RedisCacheServiceUnitTests
                 It.IsAny<When>()))
             .ReturnsAsync(true);
 
-        return new RedisCacheService(_redis.Object);
+        return new RedisCacheService(_redis.Object, _logger.Object);
     }
 
     private static string JsonWeb<T>(T value) =>
@@ -418,7 +420,9 @@ public async Task DeleteAsync_ReadBackThroughService_ShowsKeyIsGone()
         .ReturnsAsync((RedisKey key, CommandFlags flags) =>
             store.Remove(key.ToString()));
 
-    var service = new RedisCacheService(freshRedis.Object);
+    var service = new RedisCacheService(
+    freshRedis.Object,
+    Mock.Of<ILogger<RedisCacheService>>());
 
     // 1. Cache miss: callback runs and the value is stored.
     var write = await service.GetOrSetFastAsync<string>(
@@ -678,7 +682,9 @@ public async Task GetOrSetFastAsync_WhenJsonIsCorrupt_RepopulatesCache()
         return true;
     });
 
-    var service = new RedisCacheService(freshRedis.Object);
+    var service = new RedisCacheService(
+    freshRedis.Object,
+    Mock.Of<ILogger<RedisCacheService>>());
     var callbackCalls = 0;
 
     var result = await service.GetOrSetFastAsync<string>(
@@ -756,7 +762,9 @@ public async Task DeletePrefixAsync_WhenLaterBatchFails_ReturnsFalse()
                     "Simulated failure on second batch"));
         });
 
-    var service = new RedisCacheService(redis.Object);
+    var service = new RedisCacheService(
+    redis.Object,
+    Mock.Of<ILogger<RedisCacheService>>());
 
     var result = await service.DeletePrefixAsync("banks:");
 
@@ -779,7 +787,9 @@ public async Task DeleteAsync_WhenCancellationRequested_ThrowsOperationCanceledE
     using var cts = new CancellationTokenSource();
     await cts.CancelAsync();
 
-    var service = new RedisCacheService(redis.Object);
+    var service = new RedisCacheService(
+    redis.Object,
+    Mock.Of<ILogger<RedisCacheService>>());
 
     await Assert.ThrowsAnyAsync<OperationCanceledException>(
         () => service.DeleteAsync("cancelled-key", cts.Token));

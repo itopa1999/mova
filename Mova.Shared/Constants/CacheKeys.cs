@@ -45,13 +45,6 @@ public static class CacheKeys
     public const string WalletCategoriesPrefix = "wallet_categories:";
     
 
-    // ── Home dashboard ─────────────────────────────────────────
-    public static string HomeDashboard(string userPublicId) =>
-        $"home:dashboard:{Norm(userPublicId)}";
-    public static string HomeDashboardPrefix(string userPublicId) =>
-        $"home:dashboard:{Norm(userPublicId)}";
-    public const string HomeDashboardGlobalPrefix = "home:dashboard:";
-
     // ── Transaction PIN ────────────────────────────────────────
     // Prefix matches the method name (TransactionPin*) so that the key
     // visible in Redis matches the code that produced it.

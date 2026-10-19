@@ -17,7 +17,7 @@ public static class DependencyInjection
         services.AddScoped<IIdentityService, IdentityService>();
 
         
-        services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
+        services.AddDbContext<ApplicationDbContext>((options) =>
         {
             var databaseProvider = configuration
                 .GetValue<string>("DatabaseProvider")?
@@ -40,9 +40,6 @@ public static class DependencyInjection
                 throw new InvalidOperationException(
                     $"Unsupported database provider: {databaseProvider}");
             }
-
-            options.AddInterceptors(
-                serviceProvider.GetRequiredService<CacheInvalidationInterceptor>());
         });
 
 
