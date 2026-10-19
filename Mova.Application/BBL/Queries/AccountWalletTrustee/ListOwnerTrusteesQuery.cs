@@ -2,10 +2,12 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.Queries.AccountWalletTrustee;
 
@@ -39,20 +41,44 @@ public sealed class ListOwnerTrusteesQuery
     public sealed class Handler
         : IRequestHandler<Query, BaseResult<ListOwnerTrusteesResponseDto>>
     {
-        private readonly IUnitOfWork _unitOfWork;
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(24);
 
-        public Handler(IUnitOfWork unitOfWork)
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
+
+        public Handler(
+            IUnitOfWork unitOfWork,
+            ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
         }
 
         public async Task<BaseResult<ListOwnerTrusteesResponseDto>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
+            var cacheKey = CacheKeys.OwnerTrustees(request.UserPublicId);
+
+            var response = await _cacheService.GetOrSetAsync(
+                cacheKey,
+                ct => LoadTrusteesFromDbAsync(request.UserPublicId, ct),
+                timeout: CacheDuration,
+                cancellationToken: cancellationToken);
+
+            return new BaseResult<ListOwnerTrusteesResponseDto>(
+                HttpStatusCode.OK,
+                "Trustees retrieved.",
+                response!);
+        }
+
+        private async Task<ListOwnerTrusteesResponseDto?> LoadTrusteesFromDbAsync(
+            string userPublicId,
+            CancellationToken cancellationToken)
+        {
             var trustees = await _unitOfWork.Query<WalletTrustee>()
                 .AsNoTracking()
-                .Where(x => x.OwnerPublicId == request.UserPublicId)
+                .Where(x => x.OwnerPublicId == userPublicId)
                 .OrderByDescending(x => x.InvitedAt)
                 .Select(x => new
                 {
@@ -95,7 +121,7 @@ public sealed class ListOwnerTrusteesQuery
                 })
                 .ToList();
 
-            var response = new ListOwnerTrusteesResponseDto
+            return new ListOwnerTrusteesResponseDto
             {
                 Items = items,
                 PendingCount = items.Count(i =>
@@ -103,11 +129,6 @@ public sealed class ListOwnerTrusteesQuery
                 VerifiedCount = items.Count(i =>
                     string.Equals(i.Status, nameof(WalletTrusteeStatus.Verified), StringComparison.OrdinalIgnoreCase)),
             };
-
-            return new BaseResult<ListOwnerTrusteesResponseDto>(
-                HttpStatusCode.OK,
-                "Trustees retrieved.",
-                response);
         }
     }
 }

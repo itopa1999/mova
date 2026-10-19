@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Mova.Application.Helpers;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -13,6 +14,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
@@ -54,13 +56,16 @@ public sealed class InviteTrusteeCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
         private readonly TrusteeOptions _trusteeOptions;
+        private readonly ICacheService _cacheService;
+
         public Handler(
             IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
-            IOptions<TrusteeOptions> trusteeOptions)
+            IOptions<TrusteeOptions> trusteeOptions,
+            ICacheService cacheService)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
@@ -68,6 +73,7 @@ public sealed class InviteTrusteeCommand
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
             _trusteeOptions = trusteeOptions.Value;
+            _cacheService = cacheService;
         }
 
         public async Task<BaseResult<InviteTrusteeResponseDto>> Handle(
@@ -169,6 +175,10 @@ public sealed class InviteTrusteeCommand
 
             await _unitOfWork.AddAsync(trustee, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _cacheService.DeleteAsync(
+                CacheKeys.OwnerTrustees(request.UserPublicId),
+                cancellationToken);
 
             var consentUrl = $"{_trusteeOptions.ConsentBaseUrl.TrimEnd('/')}/{rawToken}";
             var trusteeDisplayName = trusteeName ?? trusteeEmail.Split('@')[0];

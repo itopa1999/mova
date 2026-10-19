@@ -1,11 +1,13 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Jobs;
@@ -16,17 +18,20 @@ public sealed class ExpirePendingTrusteesJob
     private readonly ILogger<ExpirePendingTrusteesJob> _logger;
     private readonly IIdentityService _identityService;
     private readonly INotificationQueue _notificationQueue;
+    private readonly ICacheService _cacheService;
 
     public ExpirePendingTrusteesJob(
         ApplicationDbContext context,
         ILogger<ExpirePendingTrusteesJob> logger,
         IIdentityService identityService,
-        INotificationQueue notificationQueue)
+        INotificationQueue notificationQueue,
+        ICacheService cacheService)
     {
         _context = context;
         _logger = logger;
         _identityService = identityService;
         _notificationQueue = notificationQueue;
+        _cacheService = cacheService;
     }
 
     [DisableConcurrentExecution(300)]
@@ -129,6 +134,10 @@ public sealed class ExpirePendingTrusteesJob
             op.Success("Race lost — trustee accepted or deleted by another process.");
             return false;
         }
+
+        await _cacheService.DeleteAsync(
+            CacheKeys.OwnerTrustees(trustee.OwnerPublicId),
+            cancellationToken);
 
         op.Success(
             $"Expired trustee. OwnerId: {trustee.OwnerPublicId}, " +

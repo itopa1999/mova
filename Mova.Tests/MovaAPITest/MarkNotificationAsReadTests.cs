@@ -19,7 +19,8 @@ public sealed class MarkNotificationAsReadTests : BaseTest
     {
         return new MarkNotificationAsRead.Handler(
             UnitOfWork,
-            Mock.Of<ILogger<MarkNotificationAsRead.Handler>>());
+            Mock.Of<ILogger<MarkNotificationAsRead.Handler>>(),
+            Mock.Of<ICacheService>());
     }
 
     private MarkNotificationAsRead.Command CreateCommand(

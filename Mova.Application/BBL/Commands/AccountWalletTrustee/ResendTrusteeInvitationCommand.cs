@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Mova.Application.Helpers;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -13,6 +14,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
@@ -51,6 +53,7 @@ public sealed class ResendTrusteeInvitationCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
         private readonly TrusteeOptions _trusteeOptions;
+        private readonly ICacheService _cacheService;
 
         public Handler(
             IIdentityService identityService,
@@ -58,7 +61,8 @@ public sealed class ResendTrusteeInvitationCommand
             ILogger<Handler> logger,
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
-            IOptions<TrusteeOptions> trusteeOptions)
+            IOptions<TrusteeOptions> trusteeOptions,
+            ICacheService cacheService)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
@@ -66,6 +70,7 @@ public sealed class ResendTrusteeInvitationCommand
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
             _trusteeOptions = trusteeOptions.Value;
+            _cacheService = cacheService;
         }
 
         public async Task<BaseResult<ResendTrusteeInvitationResponseDto>> Handle(
@@ -136,6 +141,10 @@ public sealed class ResendTrusteeInvitationCommand
                     HttpStatusCode.Gone,
                     "This invitation is no longer pending. It may have been accepted or removed.");
             }
+
+            await _cacheService.DeleteAsync(
+                CacheKeys.OwnerTrustees(request.UserPublicId),
+                cancellationToken);
 
             var consentUrl = $"{_trusteeOptions.ConsentBaseUrl.TrimEnd('/')}/{rawToken}";
             var trusteeDisplayName = string.IsNullOrWhiteSpace(trustee.Name)

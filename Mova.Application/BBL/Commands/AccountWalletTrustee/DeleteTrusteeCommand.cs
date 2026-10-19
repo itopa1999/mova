@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -11,6 +12,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
@@ -50,19 +52,22 @@ public sealed class DeleteTrusteeCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
         private readonly ILogger<Handler> _logger;
+        private readonly ICacheService _cacheService;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
-            ILogger<Handler> logger)
+            ILogger<Handler> logger,
+            ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
             _logger = logger;
+            _cacheService = cacheService;
         }
 
         public async Task<BaseResult<DeleteTrusteeResponseDto>> Handle(
@@ -166,6 +171,10 @@ public sealed class DeleteTrusteeCommand
                     HttpStatusCode.Gone,
                     "This trustee has already been removed.");
             }
+
+            await _cacheService.DeleteAsync(
+                CacheKeys.OwnerTrustees(request.UserPublicId),
+                cancellationToken);
 
             op.Success(
                 $"Trustee deleted. TrusteeId: {trustee.Id}, " +

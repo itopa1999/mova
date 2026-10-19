@@ -131,6 +131,8 @@ public sealed class RedisCacheService : ICacheService
         cancellationToken.ThrowIfCancellationRequested();
 
         var fullKey = BuildKey(key);
+        Console.WriteLine(
+            $"[DATA LOAD] INITIAL FOR redis: {fullKey}.");
 
         try
         {
@@ -140,6 +142,8 @@ public sealed class RedisCacheService : ICacheService
             {
                 try
                 {
+                    Console.WriteLine(
+            $"[DATA LOAD] Loading list from the redis: {fullKey}.");
                     return JsonSerializer.Deserialize<T>(
                         raw.ToString(),
                         SerializerOptions);

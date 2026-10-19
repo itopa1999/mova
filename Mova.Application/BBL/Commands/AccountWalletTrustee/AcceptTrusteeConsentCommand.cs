@@ -5,12 +5,14 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Helpers;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
@@ -35,17 +37,20 @@ public sealed class AcceptTrusteeConsentCommand
         private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
+        private readonly ICacheService _cacheService;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
-            ILogger<Handler> logger)
+            ILogger<Handler> logger,
+            ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
             _logger = logger;
+            _cacheService = cacheService;
         }
 
         public async Task<BaseResult> Handle(
@@ -109,6 +114,10 @@ public sealed class AcceptTrusteeConsentCommand
                     HttpStatusCode.Gone,
                     "This invitation has already been accepted.");
             }
+
+            await _cacheService.DeleteAsync(
+                CacheKeys.OwnerTrustees(trustee.OwnerPublicId),
+                cancellationToken);
 
             var trusteeDisplay = string.IsNullOrWhiteSpace(trustee.Name)
                 ? trustee.Email
