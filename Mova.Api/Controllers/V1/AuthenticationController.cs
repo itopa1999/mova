@@ -384,21 +384,13 @@ public class AuthenticationController(
 
         var secure = isProduction || HttpContext.Request.IsHttps;
 
-        // return new CookieOptions
-        // {
-        //     HttpOnly = true,
-        //     Secure = secure,
-        //     SameSite = isProduction
-        //         ? SameSiteMode.None
-        //         : SameSiteMode.Strict,
-        //     Path = "/"
-        // };
-
         return new CookieOptions
         {
-            HttpOnly = false,
-            Secure = true,
-            SameSite = SameSiteMode.Lax,
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = isProduction
+                ? SameSiteMode.None
+                : SameSiteMode.Strict,
             Path = "/"
         };
     }
