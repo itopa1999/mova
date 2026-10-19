@@ -40,49 +40,33 @@
 //     private void SetupCacheMiss()
 //     {
 //         _cache
-//             .Setup(x => x.GetOrSetFastAsync(
+//             .Setup(x => x.GetOrSetAsync(
 //                 It.IsAny<string>(),
-//                 It.IsAny<Func<CancellationToken, Task<List<ListWalletTemplatesQuery.WalletTemplateDto>>>>(),
+//                 It.IsAny<Func<CancellationToken, Task<ListWalletTemplatesQuery.ListWalletTemplatesResponseDto?>>>(),
+//                 It.IsAny<TimeSpan?>(),
+//                 It.IsAny<TimeSpan?>(),
 //                 It.IsAny<TimeSpan?>(),
 //                 It.IsAny<CancellationToken>()))
 //             .Returns(
 //                 (string _,
-//                  Func<CancellationToken, Task<List<ListWalletTemplatesQuery.WalletTemplateDto>>> factory,
+//                  Func<CancellationToken, Task<ListWalletTemplatesQuery.ListWalletTemplatesResponseDto?>> factory,
 //                  TimeSpan? _,
-//                  CancellationToken ct) => factory(ct));
+//                  TimeSpan? _,
+//                  TimeSpan? _,
+//                  CancellationToken ct) => factory(ct)!);
 //     }
 
-//     private void SetupCacheHit(List<ListWalletTemplatesQuery.WalletTemplateDto> cached)
+//     private void SetupCacheHit(ListWalletTemplatesQuery.ListWalletTemplatesResponseDto cached)
 //     {
 //         _cache
-//             .Setup(x => x.GetOrSetFastAsync(
+//             .Setup(x => x.GetOrSetAsync(
 //                 It.IsAny<string>(),
-//                 It.IsAny<Func<CancellationToken, Task<List<ListWalletTemplatesQuery.WalletTemplateDto>>>>(),
+//                 It.IsAny<Func<CancellationToken, Task<ListWalletTemplatesQuery.ListWalletTemplatesResponseDto?>>>(),
+//                 It.IsAny<TimeSpan?>(),
+//                 It.IsAny<TimeSpan?>(),
 //                 It.IsAny<TimeSpan?>(),
 //                 It.IsAny<CancellationToken>()))
 //             .ReturnsAsync(cached);
-//     }
-
-//     private void SetupCacheReturnsNull()
-//     {
-//         _cache
-//             .Setup(x => x.GetOrSetFastAsync(
-//                 It.IsAny<string>(),
-//                 It.IsAny<Func<CancellationToken, Task<List<ListWalletTemplatesQuery.WalletTemplateDto>>>>(),
-//                 It.IsAny<TimeSpan?>(),
-//                 It.IsAny<CancellationToken>()))
-//             .ReturnsAsync((List<ListWalletTemplatesQuery.WalletTemplateDto>?)null!);
-//     }
-
-//     private void SetupCacheThrows()
-//     {
-//         _cache
-//             .Setup(x => x.GetOrSetFastAsync(
-//                 It.IsAny<string>(),
-//                 It.IsAny<Func<CancellationToken, Task<List<ListWalletTemplatesQuery.WalletTemplateDto>>>>(),
-//                 It.IsAny<TimeSpan?>(),
-//                 It.IsAny<CancellationToken>()))
-//             .ThrowsAsync(new InvalidOperationException("Simulated cache failure"));
 //     }
 
 //     private async Task<WalletCategory> SeedCategoryAsync(
@@ -329,7 +313,7 @@
 //             targetNaira: 2000m,
 //             releaseNaira: 250m,
 //             iconName: "HomeIcon",
-//             tags: new[]{ "essential" },
+//             tags: new[] { "essential" },
 //             frequency: ReleaseFrequency.Weekly,
 //             frequencyConfig: "{\"dayOfWeek\":1}",
 //             destination: PayoutDestination.Wallet,
@@ -364,9 +348,11 @@
 //         await handler.Handle(CreateQuery(), default);
 
 //         _cache.Verify(
-//             x => x.GetOrSetFastAsync(
-//                 CacheKeys.WalletTemplates(),
-//                 It.IsAny<Func<CancellationToken, Task<List<ListWalletTemplatesQuery.WalletTemplateDto>>>>(),
+//             x => x.GetOrSetAsync(
+//                 CacheKeys.WalletTemplates(1, 20, null, null, null),
+//                 It.IsAny<Func<CancellationToken, Task<ListWalletTemplatesQuery.ListWalletTemplatesResponseDto?>>>(),
+//                 It.IsAny<TimeSpan?>(),
+//                 It.IsAny<TimeSpan?>(),
 //                 It.IsAny<TimeSpan?>(),
 //                 It.IsAny<CancellationToken>()),
 //             Times.Once);
@@ -381,48 +367,29 @@
 //         await handler.Handle(CreateQuery(), default);
 
 //         _cache.Verify(
-//             x => x.GetOrSetFastAsync(
+//             x => x.GetOrSetAsync(
 //                 It.IsAny<string>(),
-//                 It.IsAny<Func<CancellationToken, Task<List<ListWalletTemplatesQuery.WalletTemplateDto>>>>(),
+//                 It.IsAny<Func<CancellationToken, Task<ListWalletTemplatesQuery.ListWalletTemplatesResponseDto?>>>(),
 //                 TimeSpan.FromHours(12),
+//                 It.IsAny<TimeSpan?>(),
+//                 It.IsAny<TimeSpan?>(),
 //                 It.IsAny<CancellationToken>()),
 //             Times.Once);
 //     }
 
 //     [Fact]
-//     public async Task Handle_WhenCacheReturnsNull_ReturnsEmptyPage()
-//     {
-//         SetupCacheReturnsNull();
-
-//         var handler = CreateHandler();
-//         var result = await handler.Handle(CreateQuery(), default);
-
-//         Assert.True(result.IsSuccess);
-//         Assert.Empty(result.Data!.Items);
-//         Assert.Equal(0, result.Data.TotalCount);
-//     }
-
-//     [Fact]
-//     public async Task Handle_WhenCacheThrows_ReturnsInternalServerError()
-//     {
-//         SetupCacheThrows();
-
-//         var handler = CreateHandler();
-//         var result = await handler.Handle(CreateQuery(), default);
-
-//         Assert.False(result.IsSuccess);
-//         Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
-//         Assert.Equal(
-//             "An error occurred while retrieving wallet templates. Please try again later.",
-//             result.Message);
-//     }
-
-//     [Fact]
 //     public async Task Handle_OnCacheHit_SkipsDatabase()
 //     {
-//         var cached = new List<ListWalletTemplatesQuery.WalletTemplateDto>
+//         var cached = new ListWalletTemplatesQuery.ListWalletTemplatesResponseDto
 //         {
-//             new() { Id = 1, Name = "From cache" },
+//             Page = 1,
+//             PageSize = 20,
+//             TotalCount = 1,
+//             TotalPages = 1,
+//             Items = new List<ListWalletTemplatesQuery.WalletTemplateDto>
+//             {
+//                 new() { Id = 1, Name = "From cache" }
+//             }
 //         };
 
 //         SetupCacheHit(cached);

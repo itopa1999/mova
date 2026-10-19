@@ -35,14 +35,41 @@ public static class CacheKeys
 
 
 
-    // ── Wallet Template ─────────────────────────────────────────────────
-    public static string WalletTemplates() => "wallet_templates:all";
+    // ── Wallet Templates ────────────────────────────────────────────────
+    public static string WalletTemplates(
+        int page,
+        int pageSize,
+        string? search,
+        long? categoryId,
+        string? walletType)
+    {
+        var normalizedSearch = string.IsNullOrWhiteSpace(search)
+            ? string.Empty
+            : search.Trim().ToLowerInvariant();
+
+        var normalizedWalletType = string.IsNullOrWhiteSpace(walletType)
+            ? "any"
+            : walletType.Trim().ToLowerInvariant();
+
+        return $"wallet_templates:page:{page}" +
+            $":size:{pageSize}" +
+            $":search:{Uri.EscapeDataString(normalizedSearch)}" +
+            $":category:{categoryId?.ToString() ?? "any"}" +
+            $":type:{normalizedWalletType}";
+    }
+
     public const string WalletTemplatesPrefix = "wallet_templates:";
 
 
     // ── Wallet Categories ─────────────────────────────────────────────────
     public static string WalletCategories() => "wallet_categories:all";
     public const string WalletCategoriesPrefix = "wallet_categories:";
+
+
+    // ── Wallet Trustees ───────────────────────────────────────────────────
+    public static string OwnerTrustees(string ownerPublicId) =>
+        $"wallet_trustees:owner:{Norm(ownerPublicId)}";
+    public const string WalletTrusteesPrefix = "wallet_trustees:";
     
 
     // ── Transaction PIN ────────────────────────────────────────

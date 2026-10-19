@@ -1,9 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.MovaAPIs;
 
@@ -31,11 +36,18 @@ public sealed class GetNotificationsQuery
     public sealed class Handler
         : IRequestHandler<Query, BaseResult<List<NotificationDto>>>
     {
-        private readonly IUnitOfWork _unitOfWork;
+        private static readonly TimeSpan CacheDuration =
+            TimeSpan.FromHours(6);
 
-        public Handler(IUnitOfWork unitOfWork)
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
+
+        public Handler(
+            IUnitOfWork unitOfWork,
+            ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
         }
 
         public async Task<BaseResult<List<NotificationDto>>> Handle(
@@ -49,15 +61,25 @@ public sealed class GetNotificationsQuery
                     "User ID is required.");
             }
 
-            var notifications = await LoadNotificationsFromDbAsync(
-                request.UserPublicId,
-                request.UnreadOnly,
-                cancellationToken);
+            var userPublicId = request.UserPublicId.Trim();
+
+            var cacheKey = CacheKeys.Notifications(
+                userPublicId,
+                request.UnreadOnly);
+
+            var notifications = await _cacheService.GetOrSetAsync(
+                cacheKey,
+                ct => LoadNotificationsFromDbAsync(
+                    userPublicId,
+                    request.UnreadOnly,
+                    ct),
+                timeout: CacheDuration,
+                cancellationToken: cancellationToken);
 
             return new BaseResult<List<NotificationDto>>(
                 HttpStatusCode.OK,
                 "Notifications retrieved successfully.",
-                notifications);
+                notifications ?? new List<NotificationDto>());
         }
 
         private async Task<List<NotificationDto>> LoadNotificationsFromDbAsync(
@@ -85,7 +107,7 @@ public sealed class GetNotificationsQuery
                     Message = x.Message,
                     IsRead = x.IsRead,
                     ActionUrl = x.ActionUrl,
-                    CreatedAt = x.CreatedAt,
+                    CreatedAt = x.CreatedAt
                 })
                 .ToListAsync(cancellationToken);
         }
