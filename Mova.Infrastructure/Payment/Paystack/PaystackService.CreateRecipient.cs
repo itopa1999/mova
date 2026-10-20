@@ -1,18 +1,26 @@
-
-
 using System.Text.Json.Serialization;
-using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
 
 namespace Mova.Infrastructure.Payment;
 
 public sealed partial class PaystackService
 {
-    private async Task<TransferResult> CreateRecipientAsync(
+    private async Task<CreateRecipientResult> CreateRecipientAsync(
         BankAccount bankAccount,
         Dictionary<string, string> headers,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(bankAccount.AccountName) ||
+            string.IsNullOrWhiteSpace(bankAccount.AccountNumber) ||
+            string.IsNullOrWhiteSpace(bankAccount.BankCode))
+        {
+            return new CreateRecipientResult
+            {
+                CallSucceeded = false,
+                Message = "Account name, account number, and bank code are required."
+            };
+        }
+
         var url =
             $"{_settings.BaseUrl.TrimEnd('/')}/transferrecipient";
 
@@ -34,23 +42,30 @@ public sealed partial class PaystackService
                 headers,
                 cancellationToken);
 
-        if (response is null || !response.Status || response.Data is null)
+        if (response is null)
         {
-            return new TransferResult
+            return new CreateRecipientResult
             {
-                IsSuccessful = false,
-                Status = "failed",
-                Reference = string.Empty,
-                Message = response?.Message ?? "Unable to create Paystack recipient."
+                CallSucceeded = false,
+                Message = "No response from Paystack."
             };
         }
 
-        return new TransferResult
+        if (!response.Status || response.Data is null ||
+            string.IsNullOrWhiteSpace(response.Data.RecipientCode))
         {
-            IsSuccessful = true,
-            Status = "success",
-            Reference = response.Data.RecipientCode,
-            Message = "Recipient created."
+            return new CreateRecipientResult
+            {
+                CallSucceeded = false,
+                Message = response.Message ?? "Unable to create Paystack recipient."
+            };
+        }
+
+        return new CreateRecipientResult
+        {
+            CallSucceeded = true,
+            RecipientCode = response.Data.RecipientCode,
+            Message = response.Message ?? "Recipient created."
         };
     }
 
@@ -101,4 +116,17 @@ public sealed partial class PaystackService
         [JsonPropertyName("bank_code")]
         public string BankCode { get; set; } = string.Empty;
     }
+
+    public sealed class CreateRecipientResult
+    {
+        public bool CallSucceeded { get; set; }
+        public string? RecipientCode { get; set; }
+        public string? Message { get; set; }
+    }
 }
+
+// todo
+// Check this before shipping:
+// Create a recipient.
+// Create the same recipient again with the same account number/bank code.
+// Inspect the raw HTTP status and JSON.

@@ -166,7 +166,7 @@ public sealed class ApproveReleaseRequestCommand
                 Amount = releaseRequest.Amount,
                 Type = TransactionType.Withdrawal,
                 Status = TransactionStatus.Completed,
-                Reference = $"trustee-release:{releaseRequest.Id}",
+                Reference = $"trustee-release_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = now,
             };
 

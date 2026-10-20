@@ -1,25 +1,73 @@
+using Mova.Domain.Enums;
 
 namespace Mova.Infrastructure.Payment;
-public static class PaystackTransactionStatusMapper
+
+public static class PaystackPaymentStatusMapper
 {
-    public static string NormalizeStatus(string? status)
+    public static TransactionStatus NormalizeStatus(string? status)
     {
         if (string.IsNullOrWhiteSpace(status))
-            return "pending";
+            return TransactionStatus.Pending;
 
-        return status.ToLowerInvariant() switch
+        return status.Trim().ToLowerInvariant() switch
         {
-            "successful" => "success",
-            "success" => "success",
-            "completed" => "success",
-            "failed" => "failed",
-            "cancelled" => "failed",
-            "reversed" => "reversed",
-            "pending" => "pending",
-            "new" => "pending",
-            "processing" => "pending",
-            "queued" => "pending",
-            _ => "pending"
+            "success" or "successful" or "completed"
+                => TransactionStatus.Completed,
+
+            "failed" or "cancelled"
+                => TransactionStatus.Failed,
+
+            "abandoned"
+                => TransactionStatus.Abandoned,
+
+            "reversed"
+                => TransactionStatus.Reversed,
+
+            "processing"
+                => TransactionStatus.Processing,
+
+            "pending" or "ongoing" or "queued" or "new"
+                => TransactionStatus.Pending,
+
+            _ => TransactionStatus.Pending
         };
     }
+
+    public static string NormalizeStatusString(string? status)
+        => NormalizeStatus(status).ToString();
+}
+
+public static class PaystackTransferStatusMapper
+{
+    public static TransactionStatus NormalizeStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return TransactionStatus.Pending;
+
+        return status.Trim().ToLowerInvariant() switch
+        {
+            "otp" or "received"
+                => TransactionStatus.Processing,
+
+            "pending"
+                => TransactionStatus.Pending,
+
+            "success"
+                => TransactionStatus.Completed,
+
+            "failed" or "blocked" or "rejected"
+                => TransactionStatus.Failed,
+
+            "abandoned"
+                => TransactionStatus.Abandoned,
+
+            "reversed"
+                => TransactionStatus.Reversed,
+
+            _ => TransactionStatus.Pending
+        };
+    }
+
+    public static string NormalizeStatusString(string? status)
+        => NormalizeStatus(status).ToString();
 }

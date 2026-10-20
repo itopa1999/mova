@@ -307,7 +307,7 @@ public sealed class CreateTrusteeWalletCommand
                 Amount = targetMoney,
                 Type = TransactionType.Deposit,
                 Status = TransactionStatus.Completed,
-                Reference = $"trustee-wallet-created:{wallet.Id}",
+                Reference = $"trustee-wallet-created_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 
@@ -336,7 +336,7 @@ public sealed class CreateTrusteeWalletCommand
                     Amount = Money.FromNaira(fees.TotalMovaCharges),
                     Type = TransactionType.Fee,
                     Status = TransactionStatus.Completed,
-                    Reference = $"trustee-wallet-fee:{wallet.Id}",
+                    Reference = $"trustee-wallet-fee_{wallet.Id:D12}".ToLowerInvariant(),
                     CompletedAt = DateTimeOffset.UtcNow,
                 };
 

@@ -172,7 +172,7 @@ public sealed class ProcessScheduledReleasesJob
                  or PayoutDestination.Main
                  or PayoutDestination.Utilities)
         {
-            var payoutReference = $"scheduled-payout:{scheduledRelease.Id}";
+            var payoutReference = $"scheduled_payout_{scheduledRelease.Id:N}".ToLowerInvariant();
 
             var payoutAlreadyExists = await _context.Set<Payout>()
                 .AnyAsync(x => x.Reference == payoutReference, cancellationToken);

@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 
 namespace Mova.Infrastructure.Payment;
@@ -13,13 +14,33 @@ public sealed partial class PaystackService
         string reference,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Reference is required."
+            };
+        }
+
+        if (amount.MinorUnits <= 0)
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Amount must be greater than zero."
+            };
+        }
+
         var headers = new Dictionary<string, string>
         {
             ["Authorization"] = $"Bearer {_settings.SecretKey}"
         };
 
-        // Step 1 — create a recipient if we don't already have one.
-        // Paystack requires a recipient_code for every transfer.
         var recipientCode = bankAccount.PaystackRecipientCode;
 
         if (string.IsNullOrWhiteSpace(recipientCode))
@@ -27,17 +48,22 @@ public sealed partial class PaystackService
             var recipientResult = await CreateRecipientAsync(
                 bankAccount, headers, cancellationToken);
 
-            if (!recipientResult.IsSuccessful)
-                return recipientResult;
+            if (!recipientResult.CallSucceeded ||
+                string.IsNullOrWhiteSpace(recipientResult.RecipientCode))
+            {
+                return new TransferResult
+                {
+                    CallSucceeded = false,
+                    Status = TransactionStatus.Pending,
+                    Reference = reference,
+                    Message = recipientResult.Message ?? "Unable to create transfer recipient."
+                };
+            }
 
-            recipientCode = recipientResult.Reference;
-
-            // Persist the code so we only create the recipient once.
-            // The caller (job) is responsible for saving the entity.
+            recipientCode = recipientResult.RecipientCode;
             bankAccount.PaystackRecipientCode = recipientCode;
         }
 
-        // Step 2 — initiate the transfer.
         var transferUrl =
             $"{_settings.BaseUrl.TrimEnd('/')}/transfer";
 
@@ -45,13 +71,15 @@ public sealed partial class PaystackService
         {
             Source = "balance",
             Amount = (long)amount.MinorUnits,
-            Recipient = recipientCode!,
+            Recipient = recipientCode,
             Reason = $"Payout {reference}",
             Reference = reference
         };
 
         var response =
-            await _externalApiClient.PostAsync<PaystackTransferRequest, PaystackPaymentInintiatorTransferResponse>(
+            await _externalApiClient.PostAsync<
+                PaystackTransferRequest,
+                PaystackPaymentInitiatorTransferResponse>(
                 transferUrl,
                 payload,
                 headers,
@@ -61,8 +89,8 @@ public sealed partial class PaystackService
         {
             return new TransferResult
             {
-                IsSuccessful = false,
-                Status = "failed",
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No response from Paystack."
             };
@@ -72,18 +100,40 @@ public sealed partial class PaystackService
         {
             return new TransferResult
             {
-                IsSuccessful = false,
-                Status = "failed",
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message ?? "Unable to initiate transfer."
             };
         }
 
+        if (!string.Equals(response.Data.Reference, reference, StringComparison.Ordinal))
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Reference mismatch between request and Paystack response."
+            };
+        }
+
+        if (response.Data.Amount != (long)amount.MinorUnits)
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Amount mismatch between request and Paystack response."
+            };
+        }
+
         return new TransferResult
         {
-            IsSuccessful = true,
-            Status = FlutterwaveTransactionStatusMapper.NormalizeStatus(response.Data.Status),
-            Reference = response.Data.Reference ?? reference,
+            CallSucceeded = true,
+            Status = PaystackTransferStatusMapper.NormalizeStatus(response.Data.Status),
+            Reference = response.Data.Reference!,
             Message = response.Message ?? "Transfer initiated."
         };
     }
@@ -106,7 +156,7 @@ public sealed partial class PaystackService
         public string Reference { get; set; } = string.Empty;
     }
 
-    private sealed class PaystackPaymentInintiatorTransferResponse
+    private sealed class PaystackPaymentInitiatorTransferResponse
     {
         [JsonPropertyName("status")]
         public bool Status { get; set; }

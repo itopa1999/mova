@@ -4,10 +4,11 @@ namespace Mova.Application.Interfaces.Payment;
 
 public sealed class PaymentVerificationResult
 {
-    public bool IsSuccessful { get; set; }
-    public string Status { get; set; } = string.Empty;
-    public string Reference { get; set; } = string.Empty;
-    public string Message { get; set; } = string.Empty;
+    public bool CallSucceeded { get; set; }
     public bool Found { get; set; }
-    public TransactionStatus? LocalStatus { get; set; }
+    public TransactionStatus Status { get; set; } = TransactionStatus.Pending;
+    public string? Reference { get; set; }
+    public string? Message { get; set; }
+    public long Amount { get; set; }
+    public string? Currency { get; set; }
 }

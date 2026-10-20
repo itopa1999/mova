@@ -365,7 +365,7 @@ public sealed class RenewalService : IRenewalService
                 Amount = refillMoney,
                 Type = TransactionType.Refill,
                 Status = TransactionStatus.Completed,
-                Reference = $"renewal-refill:{wallet.Id}:{Guid.NewGuid():N}",
+                Reference = $"renewal-refill_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 
@@ -394,7 +394,7 @@ public sealed class RenewalService : IRenewalService
                 Amount = Money.FromNaira(fees.TotalMovaCharges),
                 Type = TransactionType.Fee,
                 Status = TransactionStatus.Completed,
-                Reference = $"renewal-fee:{wallet.Id}:{Guid.NewGuid():N}",
+                Reference = $"renewal-fee_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 

@@ -293,7 +293,7 @@ public sealed class BreakWalletCommandTests : BaseTest
             Amount = Money.FromNaira(29_400m),
             Type = TransactionType.Refund,
             Status = TransactionStatus.Processing,
-            Reference = $"wallet-break:{wallet.Id}",
+            Reference = $"wallet-break_{wallet.Id:D12}".ToLowerInvariant(),
         };
         await UnitOfWork.AddAsync(existing);
         await UnitOfWork.SaveChangesAsync();

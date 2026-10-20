@@ -1,5 +1,3 @@
-
-
 using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Payment;
 
@@ -7,10 +5,22 @@ namespace Mova.Infrastructure.Payment;
 
 public sealed partial class PaystackService
 {
-    public async Task<PaystackDedicatedAccountResult?> CreateDedicatedVirtualAccountAsync(
+    public async Task<CreateDedicatedAccountResult> CreateDedicatedVirtualAccountAsync(
         string customerCode,
+        string? firstName = null,
+        string? lastName = null,
+        string? phoneNumber = null,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(customerCode))
+        {
+            return new CreateDedicatedAccountResult
+            {
+                CallSucceeded = false,
+                Message = "Customer code is required."
+            };
+        }
+
         var url =
             $"{_settings.BaseUrl.TrimEnd('/')}/dedicated_account";
 
@@ -21,7 +31,10 @@ public sealed partial class PaystackService
 
         var payload = new PaystackCreateDedicatedAccountRequest
         {
-            Customer = customerCode
+            Customer = customerCode,
+            FirstName = firstName,
+            LastName = lastName,
+            Phone = phoneNumber
         };
 
         var response =
@@ -33,17 +46,49 @@ public sealed partial class PaystackService
                 headers,
                 cancellationToken);
 
-        if (response is null || !response.Status || response.Data is null)
-            return null;
-
-        return new PaystackDedicatedAccountResult
+        if (response is null)
         {
+            return new CreateDedicatedAccountResult
+            {
+                CallSucceeded = false,
+                Message = "No response from Paystack."
+            };
+        }
+
+        if (!response.Status || response.Data is null ||
+            string.IsNullOrWhiteSpace(response.Data.AccountNumber))
+        {
+            return new CreateDedicatedAccountResult
+            {
+                CallSucceeded = false,
+                Message = response.Message ?? "Unable to create dedicated virtual account."
+            };
+        }
+
+        if (!string.Equals(
+                response.Data.Customer?.CustomerCode,
+                customerCode,
+                StringComparison.Ordinal))
+        {
+            return new CreateDedicatedAccountResult
+            {
+                CallSucceeded = false,
+                Message = "Customer code mismatch between request and Paystack response."
+            };
+        }
+
+        return new CreateDedicatedAccountResult
+        {
+            CallSucceeded = true,
+            Message = response.Message ?? "Dedicated virtual account created.",
             AccountId = response.Data.Id.ToString(),
             AccountNumber = response.Data.AccountNumber,
             AccountName = response.Data.AccountName,
             BankName = response.Data.Bank?.Name ?? string.Empty,
-            Currency = response.Data.Currency ?? "NGN",
-            CustomerCode = response.Data.Customer?.CustomerCode ?? customerCode
+            Currency = response.Data.Currency ?? string.Empty,
+            CustomerCode = response.Data.Customer!.CustomerCode!,
+            IsActive = response.Data.Active,
+            IsAssigned = response.Data.Assigned
         };
     }
 
@@ -51,6 +96,18 @@ public sealed partial class PaystackService
     {
         [JsonPropertyName("customer")]
         public string Customer { get; set; } = string.Empty;
+
+        [JsonPropertyName("first_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? FirstName { get; set; }
+
+        [JsonPropertyName("last_name")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LastName { get; set; }
+
+        [JsonPropertyName("phone")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Phone { get; set; }
     }
 
     private sealed class PaystackCreateDedicatedAccountResponse
@@ -125,3 +182,10 @@ public sealed partial class PaystackService
         public string? Phone { get; set; }
     }
 }
+
+// todo
+// Calling twice for the same customer — Paystack returns the 
+// existing DVA rather than creating a new one. Confirm the second 
+// call returns status: true with the same account_number and id as the 
+// first. If it returns an error instead, log it distinctly so operators can 
+// distinguish "DVA already exists" from a genuine failure.

@@ -11,6 +11,34 @@ public sealed partial class PaystackService
         string reference,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            return new PaymentInitializationResultDto
+            {
+                Success = false,
+                Message = "A valid email address is required."
+            };
+        }
+
+        if (amount <= 0)
+        {
+            return new PaymentInitializationResultDto
+            {
+                Success = false,
+                Message = "Amount must be greater than zero."
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(reference) ||
+            reference.Any(c => !char.IsLetterOrDigit(c) && c != '-' && c != '.' && c != '='))
+        {
+            return new PaymentInitializationResultDto
+            {
+                Success = false,
+                Message = "Reference contains invalid characters."
+            };
+        }
+
         var url =
             $"{_settings.BaseUrl.TrimEnd('/')}/transaction/initialize";
 
@@ -43,7 +71,8 @@ public sealed partial class PaystackService
             };
         }
 
-        if (!response.Status || response.Data is null)
+        if (!response.Status || response.Data is null ||
+            string.IsNullOrWhiteSpace(response.Data.AuthorizationUrl))
         {
             return new PaymentInitializationResultDto
             {
@@ -52,10 +81,21 @@ public sealed partial class PaystackService
             };
         }
 
+        if (!string.Equals(response.Data.Reference, reference, StringComparison.Ordinal))
+        {
+            return new PaymentInitializationResultDto
+            {
+                Success = false,
+                Message = "Reference mismatch between request and Paystack response."
+            };
+        }
+
         return new PaymentInitializationResultDto
         {
             Success = true,
             AuthorizationUrl = response.Data.AuthorizationUrl,
+            AccessCode = response.Data.AccessCode,
+            Reference = response.Data.Reference
         };
     }
 

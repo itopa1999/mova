@@ -164,7 +164,7 @@ public sealed class FundAccount
                     "User not found.");
             }
 
-            var reference = $"MOVA-{Guid.NewGuid():N}".ToUpperInvariant();
+            var reference = $"mova_{Guid.NewGuid():N}";
 
             var (providerEnabled, providerName) = provider switch
             {

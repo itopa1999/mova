@@ -277,7 +277,7 @@ public sealed class WithdrawalCommand
                     "The wallet does not have enough available balance.");
             }
 
-            var reference = $"WDL-{Guid.NewGuid():N}";
+            var reference = $"WDL_{Guid.NewGuid():N}";
 
             wallet.AvailableAmount = Money.FromMinorUnits(
                 wallet.AvailableAmount.MinorUnits - amount.MinorUnits,

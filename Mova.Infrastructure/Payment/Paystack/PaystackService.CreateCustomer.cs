@@ -1,5 +1,3 @@
-
-
 using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Payment;
 
@@ -7,13 +5,22 @@ namespace Mova.Infrastructure.Payment;
 
 public sealed partial class PaystackService
 {
-    public async Task<PaystackCustomerResult?> CreateCustomerAsync(
+    public async Task<PaystackCustomerResult> CreateCustomerAsync(
         string firstName,
         string lastName,
         string email,
         string phoneNumber,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        {
+            return new PaystackCustomerResult
+            {
+                CallSucceeded = false,
+                Message = "A valid email address is required."
+            };
+        }
+
         var url =
             $"{_settings.BaseUrl.TrimEnd('/')}/customer";
 
@@ -39,17 +46,44 @@ public sealed partial class PaystackService
                 headers,
                 cancellationToken);
 
-        if (response is null || !response.Status || response.Data is null)
-            return null;
+        if (response is null)
+        {
+            return new PaystackCustomerResult
+            {
+                CallSucceeded = false,
+                Message = "No response from Paystack."
+            };
+        }
+
+        if (!response.Status || response.Data is null ||
+            string.IsNullOrWhiteSpace(response.Data.CustomerCode))
+        {
+            return new PaystackCustomerResult
+            {
+                CallSucceeded = false,
+                Message = response.Message ?? "Unable to create Paystack customer."
+            };
+        }
+
+        if (!string.Equals(response.Data.Email, email, StringComparison.OrdinalIgnoreCase))
+        {
+            return new PaystackCustomerResult
+            {
+                CallSucceeded = false,
+                Message = "Email mismatch between request and Paystack response."
+            };
+        }
 
         return new PaystackCustomerResult
         {
+            CallSucceeded = true,
+            Message = response.Message ?? "Customer created.",
             CustomerCode = response.Data.CustomerCode,
             CustomerId = response.Data.Id.ToString(),
-            Email = response.Data.Email ?? email,
-            FirstName = firstName,
-            LastName = lastName,
-            Phone = phoneNumber
+            Email = response.Data.Email,
+            FirstName = response.Data.FirstName ?? firstName,
+            LastName = response.Data.LastName ?? lastName,
+            Phone = response.Data.Phone ?? phoneNumber
         };
     }
 
@@ -101,3 +135,9 @@ public sealed partial class PaystackService
         public string? Phone { get; set; }
     }
 }
+
+// todo
+// Check this before shipping:
+// Create a customer.
+// Create the same customer again with the same data
+// Inspect the raw HTTP status and JSON.
