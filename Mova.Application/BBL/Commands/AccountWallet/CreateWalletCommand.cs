@@ -467,7 +467,7 @@ public sealed class CreateWalletCommand
                 Amount = targetMoney,
                 Type = TransactionType.Deposit,
                 Status = TransactionStatus.Completed,
-                Reference = $"wallet-created:{wallet.Id}",
+                Reference = $"wallet-created_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 
@@ -493,7 +493,7 @@ public sealed class CreateWalletCommand
                 Amount = Money.FromNaira(fees.TotalMovaCharges),
                 Type = TransactionType.Fee,
                 Status = TransactionStatus.Completed,
-                Reference = $"wallet-fee:{wallet.Id}",
+                Reference = $"wallet-fee_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 

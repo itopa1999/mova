@@ -137,7 +137,7 @@ public sealed class BreakWalletCommand
                     "The amount available after the break fee is invalid.");
             }
 
-            var reference = $"wallet-break:{wallet.Id}";
+            var reference = $"wallet_break_{wallet.Id:D12}".ToLowerInvariant();
 
             var alreadyProcessed = await _unitOfWork.Query<Transaction>()
                 .AnyAsync(x => x.Reference == reference, cancellationToken);
@@ -194,7 +194,7 @@ public sealed class BreakWalletCommand
                 Amount = breakFeeMoney,
                 Type = TransactionType.Fee,
                 Status = TransactionStatus.Completed,
-                Reference = $"wallet-break-fee:{wallet.Id}",
+                Reference = $"wallet-break-fee_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 

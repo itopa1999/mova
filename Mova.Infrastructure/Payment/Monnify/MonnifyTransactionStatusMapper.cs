@@ -13,20 +13,52 @@ public static class MonnifyTransactionStatusMapper
         return paymentStatus.Trim().ToUpperInvariant() switch
         {
             "PAID" or "OVERPAID" => TransactionStatus.Completed,
+
             "PROCESSING" or "IN_PROGRESS" => TransactionStatus.Processing,
-            "FAILED" or "CANCELLED" or "EXPIRED" => TransactionStatus.Failed,
+
+            "PARTIALLY_PAID" => TransactionStatus.Failed,
+
+            "EXPIRED" => TransactionStatus.Abandoned,
+
+            "FAILED" or "CANCELLED" => TransactionStatus.Failed,
+
             "REVERSED" or "REFUNDED" => TransactionStatus.Reversed,
-            "PENDING" or "PARTIALLY_PAID" => TransactionStatus.Pending,
+
+            "PENDING" => TransactionStatus.Pending,
+
             _ => TransactionStatus.Pending
         };
     }
+}
 
-    public static string ToLegacyResultStatus(TransactionStatus status) => status switch
+/// <summary>
+/// Maps Monnify disbursement (transfer) statuses to MOVA's transaction lifecycle.
+/// Source: /api/v2/disbursements/single/summary -> responseBody.status
+/// </summary>
+public static class MonnifyTransferStatusMapper
+{
+    public static TransactionStatus ToTransactionStatus(string? status)
     {
-        TransactionStatus.Completed => "success",
-        TransactionStatus.Failed => "failed",
-        TransactionStatus.Reversed => "reversed",
-        TransactionStatus.Processing => "processing",
-        _ => "pending"
-    };
+        if (string.IsNullOrWhiteSpace(status))
+            return TransactionStatus.Pending;
+
+        return status.Trim().ToUpperInvariant() switch
+        {
+            "SUCCESS" => TransactionStatus.Completed,
+
+            "FAILED" => TransactionStatus.Failed,
+
+            "REVERSED" => TransactionStatus.Reversed,
+
+            // MFA enabled (default): OTP must be submitted before processing.
+            "PENDING_AUTHORIZATION" => TransactionStatus.Processing,
+
+            // OTP email could not be delivered; transfer will not proceed automatically.
+            "OTP_EMAIL_DISPATCH_FAILED" => TransactionStatus.Failed,
+
+            "PENDING" => TransactionStatus.Pending,
+
+            _ => TransactionStatus.Pending
+        };
+    }
 }

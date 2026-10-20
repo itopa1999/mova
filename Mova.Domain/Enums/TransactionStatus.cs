@@ -17,5 +17,6 @@ public enum TransactionStatus
     Processing = 2,
     Completed = 3,
     Failed = 4,
-    Reversed = 5
+    Reversed = 5,
+    Abandoned = 6
 }

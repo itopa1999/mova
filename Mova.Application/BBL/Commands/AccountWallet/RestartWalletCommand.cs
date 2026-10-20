@@ -247,7 +247,7 @@ public sealed class RestartWalletCommand
                 Amount = targetMoney,
                 Type = TransactionType.Deposit,
                 Status = TransactionStatus.Completed,
-                Reference = $"wallet-restart:{wallet.Id}:{Guid.NewGuid():N}",
+                Reference = $"wallet-restart_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 
@@ -273,7 +273,7 @@ public sealed class RestartWalletCommand
                 Amount = Money.FromNaira(fees.TotalMovaCharges),
                 Type = TransactionType.Fee,
                 Status = TransactionStatus.Completed,
-                Reference = $"wallet-restart-fee:{wallet.Id}:{Guid.NewGuid():N}",
+                Reference = $"wallet-restart-fee_{wallet.Id:D12}".ToLowerInvariant(),
                 CompletedAt = DateTimeOffset.UtcNow,
             };
 
