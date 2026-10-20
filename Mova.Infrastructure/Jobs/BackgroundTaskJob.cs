@@ -37,120 +37,133 @@ public sealed class BackgroundTaskJob
             "Starting virtual account creation for user {UserPublicId}.",
             userPublicId);
 
-        // 1. Make sure the user exists
         var userExists = await _context.Users
-            .AnyAsync(
-                x => x.PublicId == userPublicId,
-                cancellationToken);
+            .AnyAsync(x => x.PublicId == userPublicId, cancellationToken);
 
         if (!userExists)
         {
             _logger.LogWarning(
                 "User {UserPublicId} was not found while creating virtual account.",
                 userPublicId);
-
             return;
         }
 
         var existingAccount = await _context.VirtualAccounts
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                x =>
-                    x.UserPublicId == userPublicId &&
-                    x.Provider == PaymentProvider.Paystack &&
-                    x.Status == VirtualAccountStatus.Active,
+                x => x.UserPublicId == userPublicId &&
+                     x.Provider == PaymentProvider.Paystack,
                 cancellationToken);
 
         if (existingAccount is not null)
         {
             _logger.LogInformation(
-                "User {UserPublicId} already has an active Paystack virtual account {AccountNumber}.",
+                "User {UserPublicId} already has a Paystack virtual account " +
+                "{AccountNumber} with status {Status}. Skipping.",
                 userPublicId,
-                existingAccount.AccountNumber);
-
+                existingAccount.AccountNumber,
+                existingAccount.Status);
             return;
         }
 
-        try
+        var customer = await _paystackService.CreateCustomerAsync(
+            firstName, lastName, email, phoneNumber, cancellationToken);
+
+        if (!customer.CallSucceeded ||
+            string.IsNullOrWhiteSpace(customer.CustomerCode))
         {
-            // 3. Create/find Paystack customer
-            var customer = await _paystackService.CreateCustomerAsync(
+            _logger.LogError(
+                "Paystack customer creation failed for {UserPublicId}: {Message}",
+                userPublicId,
+                customer.Message);
+
+            throw new InvalidOperationException(
+                $"Unable to create Paystack customer for user {userPublicId}: " +
+                $"{customer.Message}");
+        }
+
+        _logger.LogInformation(
+            "Paystack customer created/found for {UserPublicId}. Customer: {CustomerCode}.",
+            userPublicId,
+            customer.CustomerCode);
+
+        var dedicatedAccount =
+            await _paystackService.CreateDedicatedVirtualAccountAsync(
+                customer.CustomerCode,
                 firstName,
                 lastName,
-                email,
                 phoneNumber,
                 cancellationToken);
 
-            if (customer is null)
-            {
-                throw new InvalidOperationException(
-                    $"Unable to create Paystack customer for user {userPublicId}.");
-            }
-
-            _logger.LogInformation(
-                "Paystack customer created/found for {UserPublicId}. Customer: {CustomerCode}.",
+        if (!dedicatedAccount.CallSucceeded ||
+            string.IsNullOrWhiteSpace(dedicatedAccount.AccountNumber))
+        {
+            _logger.LogError(
+                "DVA creation failed for {UserPublicId}: {Message}",
                 userPublicId,
-                customer.CustomerCode);
+                dedicatedAccount.Message);
 
-            // 4. Create Paystack Dedicated Virtual Account
-            var dedicatedAccount =
-                await _paystackService.CreateDedicatedVirtualAccountAsync(
-                    customer.CustomerCode,
-                    cancellationToken);
+            throw new InvalidOperationException(
+                $"Paystack did not return a dedicated virtual account for user " +
+                $"{userPublicId}: {dedicatedAccount.Message}");
+        }
 
-            if (dedicatedAccount is null)
-            {
-                throw new InvalidOperationException(
-                    $"Paystack did not return a dedicated virtual account for user {userPublicId}.");
-            }
+        if (!dedicatedAccount.IsActive || !dedicatedAccount.IsAssigned)
+        {
+            _logger.LogWarning(
+                "DVA for {UserPublicId} returned but is not active/assigned " +
+                "(Active: {Active}, Assigned: {Assigned}). Not persisting.",
+                userPublicId,
+                dedicatedAccount.IsActive,
+                dedicatedAccount.IsAssigned);
 
-            if (string.IsNullOrWhiteSpace(dedicatedAccount.AccountNumber))
-            {
-                throw new InvalidOperationException(
-                    $"Paystack returned an empty account number for user {userPublicId}.");
-            }
+            throw new InvalidOperationException(
+                $"Paystack DVA for user {userPublicId} is not active yet " +
+                $"(Active: {dedicatedAccount.IsActive}, " +
+                $"Assigned: {dedicatedAccount.IsAssigned}).");
+        }
 
-            // 5. Save the virtual account in our own table
-            var virtualAccount = new VirtualAccount
-            {
-                UserPublicId = userPublicId,
+        var virtualAccount = new VirtualAccount
+        {
+            UserPublicId = userPublicId,
+            Provider = PaymentProvider.Paystack,
+            ProviderCustomerId = customer.CustomerCode,
+            ProviderAccountId = dedicatedAccount.AccountId,
+            AccountNumber = dedicatedAccount.AccountNumber,
+            BankName = dedicatedAccount.BankName,
+            AccountName = dedicatedAccount.AccountName,
+            Currency = "NGN",
+            Status = VirtualAccountStatus.Active
+        };
 
-                Provider = PaymentProvider.Paystack,
-
-                ProviderCustomerId = customer.CustomerCode,
-
-                ProviderAccountId = dedicatedAccount.AccountId,
-
-                AccountNumber = dedicatedAccount.AccountNumber,
-
-                BankName = dedicatedAccount.BankName,
-
-                AccountName = dedicatedAccount.AccountName,
-
-                Currency = "NGN",
-
-                Status = VirtualAccountStatus.Active
-            };
-
+        try
+        {
             _context.VirtualAccounts.Add(virtualAccount);
-
             await _context.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Paystack virtual account created successfully for {UserPublicId}. " +
+                "Paystack virtual account created for {UserPublicId}. " +
                 "Account: {AccountNumber}, Bank: {BankName}.",
                 userPublicId,
                 dedicatedAccount.AccountNumber,
                 dedicatedAccount.BankName);
         }
-        catch (Exception ex)
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            _logger.LogError(
-                ex,
-                "Failed to create Paystack virtual account for {UserPublicId}.",
+            _logger.LogInformation(
+                "Virtual account for {UserPublicId} was created concurrently. Skipping.",
                 userPublicId);
-
-            throw;
         }
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException ex)
+    {
+        // Npgsql: SqlState 23505 (unique_violation)
+        // SQL Server: error 2601 / 2627
+        // Adjust for whichever database provider you use.
+        var message = ex.InnerException?.Message ?? string.Empty;
+        return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("23505", StringComparison.OrdinalIgnoreCase);
     }
 }

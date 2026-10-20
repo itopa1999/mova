@@ -33,7 +33,7 @@ public sealed partial class PaystackService
             reference.Any(c => !(c is (>= 'a' and <= 'z')
                                     or (>= 'A' and <= 'Z')
                                     or (>= '0' and <= '9')
-                                    or '-' or '.' or '=')))
+                                    or '-' or '.' or '=' or '_')))
         {
             return new PaymentInitializationResultDto
             {

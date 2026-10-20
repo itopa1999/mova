@@ -19,6 +19,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference is required."
@@ -30,6 +31,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Amount must be greater than zero."
@@ -54,6 +56,7 @@ public sealed partial class FlutterwaveService
                 return new TransferResult
                 {
                     CallSucceeded = false,
+                    Found = false,
                     Status = TransactionStatus.Pending,
                     Reference = reference,
                     Message = recipientResult.Message
@@ -95,6 +98,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No response from Flutterwave."
@@ -107,6 +111,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message ?? "Unable to initiate transfer."
@@ -118,6 +123,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference mismatch between request and Flutterwave response."
@@ -129,6 +135,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Amount mismatch between request and Flutterwave response."
@@ -138,6 +145,7 @@ public sealed partial class FlutterwaveService
         return new TransferResult
         {
             CallSucceeded = true,
+            Found = true,
             Status = FlutterwaveTransferStatusMapper.NormalizeStatus(response.Data.Status),
             Reference = response.Data.Reference!,
             Message = response.Message ?? "Transfer initiated."

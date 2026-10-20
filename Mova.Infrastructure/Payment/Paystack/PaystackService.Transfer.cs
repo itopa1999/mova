@@ -19,6 +19,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference is required."
@@ -30,6 +31,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Amount must be greater than zero."
@@ -54,6 +56,7 @@ public sealed partial class PaystackService
                 return new TransferResult
                 {
                     CallSucceeded = false,
+                    Found = false,
                     Status = TransactionStatus.Pending,
                     Reference = reference,
                     Message = recipientResult.Message ?? "Unable to create transfer recipient."
@@ -90,6 +93,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No response from Paystack."
@@ -101,6 +105,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message ?? "Unable to initiate transfer."
@@ -112,6 +117,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference mismatch between request and Paystack response."
@@ -123,6 +129,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Amount mismatch between request and Paystack response."
@@ -132,6 +139,7 @@ public sealed partial class PaystackService
         return new TransferResult
         {
             CallSucceeded = true,
+            Found = true,
             Status = PaystackTransferStatusMapper.NormalizeStatus(response.Data.Status),
             Reference = response.Data.Reference!,
             Message = response.Message ?? "Transfer initiated."

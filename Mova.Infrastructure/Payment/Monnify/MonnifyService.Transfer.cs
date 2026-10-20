@@ -80,6 +80,7 @@ public sealed partial class MonnifyService
         => new()
         {
             CallSucceeded = false,
+            Found = false,
             Status = TransactionStatus.Pending,
             Reference = reference,
             Message = message
@@ -98,6 +99,8 @@ public sealed partial class MonnifyService
 
         if (!response.RequestSuccessful || response.ResponseBody is null)
         {
+            // Could be "not found" or a transient error — we cannot tell
+            // the two apart safely, so treat as unknown and retry.
             return Failed(reference, response.ResponseMessage ?? fallback);
         }
 
@@ -140,6 +143,7 @@ public sealed partial class MonnifyService
         return new TransferResult
         {
             CallSucceeded = true,
+            Found = true,
             Status = status,
             Reference = response.ResponseBody.Reference!,
             Message = message

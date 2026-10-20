@@ -1,5 +1,3 @@
-
-
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Enums;
 
@@ -16,6 +14,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference is required."
@@ -44,6 +43,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No response from Flutterwave."
@@ -55,6 +55,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message ?? "Unable to verify transfer."
@@ -66,6 +67,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = true,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Transfer not found yet."
@@ -81,6 +83,7 @@ public sealed partial class FlutterwaveService
             return new TransferResult
             {
                 CallSucceeded = true,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No transfer found with the supplied reference."
@@ -90,6 +93,7 @@ public sealed partial class FlutterwaveService
         return new TransferResult
         {
             CallSucceeded = true,
+            Found = true,
             Status = FlutterwaveTransferStatusMapper.NormalizeStatus(transfer.Status),
             Reference = transfer.Reference!,
             Message = transfer.CompleteMessage

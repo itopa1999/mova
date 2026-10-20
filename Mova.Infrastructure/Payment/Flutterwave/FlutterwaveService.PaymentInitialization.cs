@@ -29,12 +29,17 @@ public sealed partial class FlutterwaveService
             };
         }
 
-        if (string.IsNullOrWhiteSpace(reference))
+        if (string.IsNullOrWhiteSpace(reference) ||
+            reference.Any(c => !(c is (>= 'a' and <= 'z')
+                                    or (>= 'A' and <= 'Z')
+                                    or (>= '0' and <= '9')
+                                    or '-' or '.' or '=' or '_')))
         {
             return new PaymentInitializationResultDto
             {
                 CallSucceeded = false,
-                Message = "Payment reference is required."
+                Message = "Reference contains invalid characters. " +
+                          "Only letters, digits, '-', '.', and '=' are allowed."
             };
         }
 

@@ -32,6 +32,7 @@ public sealed class FundAccount
     public sealed class FundAccountDto
     {
         public string AuthorizationUrl { get; set; } = string.Empty;
+        public string Reference { get; set; } = string.Empty;
     }
 
     internal static class ProviderParser
@@ -164,8 +165,6 @@ public sealed class FundAccount
                     "User not found.");
             }
 
-            var reference = $"mova_{Guid.NewGuid():N}";
-
             var (providerEnabled, providerName) = provider switch
             {
                 PaymentProvider.Paystack => (
@@ -191,6 +190,23 @@ public sealed class FundAccount
                     "Payment cannot be completed at this time, please choose another gateway method.");
             }
 
+            var reference = $"mova_{Guid.NewGuid():N}";
+            var transaction = new Transaction
+            {
+                UserPublicId = request.UserPublicId,
+                WalletId = null,
+                Title = $"Fund account via {provider}",
+                Provider = provider,
+                Amount = Money.FromNaira(request.Amount),
+                Type = TransactionType.Deposit,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                CompletedAt = null,
+            };
+
+            await _unitOfWork.AddAsync(transaction, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
             PaymentInitializationResultDto response = provider switch
             {
                 PaymentProvider.Paystack => await _paystackService.InitializePaymentAsync(
@@ -204,39 +220,32 @@ public sealed class FundAccount
 
                 _ => new PaymentInitializationResultDto
                 {
-                    Success = false,
+                    CallSucceeded = false,
                     Message = "Unsupported payment provider.",
                 },
             };
 
-            if (!response.Success || string.IsNullOrWhiteSpace(response.AuthorizationUrl))
+            if (!response.CallSucceeded ||
+                string.IsNullOrWhiteSpace(response.AuthorizationUrl))
             {
                 op.Warning($"{providerName} init failed: {response.Message}");
+
+                transaction.Status = TransactionStatus.Failed;
+                _unitOfWork.Update(transaction);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
                 return new BaseResult<FundAccountDto>(
                     HttpStatusCode.BadRequest,
                     response.Message ?? $"Unable to initialize {providerName} payment.");
             }
 
-            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
-
-            var transaction = new Transaction
-            {
-                UserPublicId = request.UserPublicId,
-                WalletId = null,
-                Title = $"Fund account via {provider}",
-                Provider = provider,
-                Amount = Money.FromNaira(request.Amount),
-                Type = TransactionType.Deposit,
-                Status = TransactionStatus.Processing,
-                Reference = reference,
-                CompletedAt = null,
-            };
-
-            await _unitOfWork.AddAsync(transaction, cancellationToken);
+            transaction.Status = TransactionStatus.Processing;
+            _unitOfWork.Update(transaction);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
 
-            op.Success($"Payment initialized. TransactionId: {transaction.Id}.");
+            op.Success(
+                $"Payment initialized. TransactionId: {transaction.Id}, " +
+                $"Reference: {reference}, AccessCode: {response.AccessCode ?? "(none)"}.");
 
             return new BaseResult<FundAccountDto>(
                 HttpStatusCode.OK,
@@ -244,6 +253,7 @@ public sealed class FundAccount
                 new FundAccountDto
                 {
                     AuthorizationUrl = response.AuthorizationUrl,
+                    Reference = reference,
                 });
         }
     }

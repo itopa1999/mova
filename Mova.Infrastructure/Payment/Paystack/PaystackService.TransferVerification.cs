@@ -15,6 +15,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference is required."
@@ -40,6 +41,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No response from Paystack."
@@ -52,6 +54,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = true,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message
@@ -63,6 +66,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message ?? "Unable to verify transfer."
@@ -74,6 +78,7 @@ public sealed partial class PaystackService
             return new TransferResult
             {
                 CallSucceeded = false,
+                Found = false,
                 Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference mismatch between request and Paystack response."
@@ -83,6 +88,7 @@ public sealed partial class PaystackService
         return new TransferResult
         {
             CallSucceeded = true,
+            Found = true,
             Status = PaystackTransferStatusMapper.NormalizeStatus(response.Data.Status),
             Reference = response.Data.Reference,
             Message = response.Message ?? "Transfer verified."
