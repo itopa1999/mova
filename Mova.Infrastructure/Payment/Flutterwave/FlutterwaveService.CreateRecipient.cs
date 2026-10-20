@@ -1,30 +1,39 @@
-
-
 using System.Text.Json.Serialization;
-using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
 
 namespace Mova.Infrastructure.Payment;
 
 public sealed partial class FlutterwaveService
 {
-    private async Task<TransferResult> CreateRecipientAsync(
+    private async Task<CreateRecipientResult> CreateRecipientAsync(
         BankAccount bankAccount,
         Dictionary<string, string> headers,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(bankAccount.AccountName) ||
+            string.IsNullOrWhiteSpace(bankAccount.AccountNumber) ||
+            string.IsNullOrWhiteSpace(bankAccount.BankCode))
+        {
+            return new CreateRecipientResult
+            {
+                CallSucceeded = false,
+                Message = "Account name, account number, and bank code are required."
+            };
+        }
+
+        var currency = string.IsNullOrWhiteSpace(bankAccount.Currency)
+            ? "NGN"
+            : bankAccount.Currency!;
+
         var url =
-            $"{_settings.BaseUrl.TrimEnd('/')}/transfers/recipients";
+            $"{_settings.BaseUrl.TrimEnd('/')}/beneficiaries";
 
         var payload = new FlutterwaveCreateRecipientRequest
         {
-            Type = "bank",
-            Name = bankAccount.AccountName,
             AccountNumber = bankAccount.AccountNumber,
-            BankCode = bankAccount.BankCode,
-            Currency = string.IsNullOrWhiteSpace(bankAccount.Currency)
-                ? "NGN"
-                : bankAccount.Currency!
+            AccountBank = bankAccount.BankCode,
+            BeneficiaryName = bankAccount.AccountName,
+            Currency = currency
         };
 
         var response =
@@ -36,43 +45,44 @@ public sealed partial class FlutterwaveService
                     headers,
                     cancellationToken);
 
-        if (response is null
-            || response.Status != "success"
-            || response.Data is null)
+        if (response is null)
         {
-            return new TransferResult
+            return new CreateRecipientResult
             {
-                IsSuccessful = false,
-                Status = "failed",
-                Reference = string.Empty,
-                Message = response?.Message
-                    ?? "Unable to create Flutterwave recipient."
+                CallSucceeded = false,
+                Message = "No response from Flutterwave."
             };
         }
 
-        return new TransferResult
+        if (!string.Equals(response.Status, "success", StringComparison.OrdinalIgnoreCase)
+            || response.Data is null
+            || string.IsNullOrWhiteSpace(response.Data.Id))
         {
-            IsSuccessful = true,
-            Status = "success",
-            Reference = response.Data.Id.ToString(),
-            Message = "Recipient created."
+            return new CreateRecipientResult
+            {
+                CallSucceeded = false,
+                Message = response.Message ?? "Unable to create Flutterwave recipient."
+            };
+        }
+
+        return new CreateRecipientResult
+        {
+            CallSucceeded = true,
+            RecipientId = response.Data.Id,
+            Message = response.Message ?? "Recipient created."
         };
     }
 
-
     private sealed class FlutterwaveCreateRecipientRequest
     {
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = "bank";
-
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
-
         [JsonPropertyName("account_number")]
         public string AccountNumber { get; set; } = string.Empty;
 
-        [JsonPropertyName("bank_code")]
-        public string BankCode { get; set; } = string.Empty;
+        [JsonPropertyName("account_bank")]
+        public string AccountBank { get; set; } = string.Empty;
+
+        [JsonPropertyName("beneficiary_name")]
+        public string BeneficiaryName { get; set; } = string.Empty;
 
         [JsonPropertyName("currency")]
         public string Currency { get; set; } = "NGN";
@@ -93,7 +103,7 @@ public sealed partial class FlutterwaveService
     private sealed class FlutterwaveRecipientData
     {
         [JsonPropertyName("id")]
-        public long Id { get; set; }
+        public string Id { get; set; } = string.Empty;
 
         [JsonPropertyName("account_number")]
         public string? AccountNumber { get; set; }
@@ -103,5 +113,12 @@ public sealed partial class FlutterwaveService
 
         [JsonPropertyName("full_name")]
         public string? FullName { get; set; }
+    }
+
+    public sealed class CreateRecipientResult
+    {
+        public bool CallSucceeded { get; set; }
+        public string? Message { get; set; }
+        public string? RecipientId { get; set; }
     }
 }

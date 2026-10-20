@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Payment;
+using Mova.Domain.Enums;
 
 namespace Mova.Infrastructure.Payment;
 
@@ -13,9 +14,9 @@ public sealed partial class FlutterwaveService
         {
             return new PaymentVerificationResult
             {
-                IsSuccessful = false,
+                CallSucceeded = false,
                 Found = false,
-                Status = "pending",
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "Reference is required."
             };
@@ -36,19 +37,13 @@ public sealed partial class FlutterwaveService
                 headers,
                 cancellationToken);
 
-        Console.WriteLine("===== FLUTTERWAVE VERIFY RESPONSE4 =====");
-        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-            response,
-            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-        Console.WriteLine("====================================");
-
         if (response is null)
         {
             return new PaymentVerificationResult
             {
-                IsSuccessful = false,
+                CallSucceeded = false,
                 Found = false,
-                Status = "pending",
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No response from Flutterwave."
             };
@@ -59,9 +54,9 @@ public sealed partial class FlutterwaveService
         {
             return new PaymentVerificationResult
             {
-                IsSuccessful = true,
+                CallSucceeded = true,
                 Found = false,
-                Status = "not_found",
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message
             };
@@ -72,21 +67,63 @@ public sealed partial class FlutterwaveService
         {
             return new PaymentVerificationResult
             {
-                IsSuccessful = false,
+                CallSucceeded = false,
                 Found = false,
-                Status = "pending",
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message ?? "Unable to verify payment."
             };
         }
 
+        if (!string.Equals(response.Data.TxRef, reference, StringComparison.Ordinal))
+        {
+            return new PaymentVerificationResult
+            {
+                CallSucceeded = false,
+                Found = true,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Reference mismatch between request and Flutterwave response."
+            };
+        }
+
+        var normalizedStatus =
+            FlutterwavePaymentStatusMapper.NormalizeStatus(response.Data.Status);
+
         return new PaymentVerificationResult
         {
-            IsSuccessful = true,
+            CallSucceeded = true,
             Found = true,
-            Status = FlutterwaveTransactionStatusMapper.NormalizeStatus(response.Data.Status),
-            Reference = reference,
-            Message = response.Message,
+            Status = normalizedStatus,
+            Reference = response.Data.TxRef!,
+            Amount = response.Data.Amount ?? 0m,
+            Currency = response.Data.Currency,
+            Message = BuildPaymentMessage(response.Data, normalizedStatus)
+        };
+    }
+
+    private static string BuildPaymentMessage(
+        FlutterwaveVerifyPaymentData data,
+        TransactionStatus status)
+    {
+        return status switch
+        {
+            TransactionStatus.Completed =>
+                $"Payment completed successfully. Amount: {data.Amount:N2} {data.Currency}.",
+
+            TransactionStatus.Failed =>
+                data.ProcessorResponse ?? "Payment failed.",
+
+            TransactionStatus.Abandoned =>
+                "Customer did not complete the payment.",
+
+            TransactionStatus.Reversed =>
+                "Payment was reversed (refund or chargeback).",
+
+            TransactionStatus.Pending or TransactionStatus.Processing =>
+                "Payment is still pending.",
+
+            _ => data.ProcessorResponse ?? "Payment status unknown."
         };
     }
 
@@ -127,5 +164,8 @@ public sealed partial class FlutterwaveService
 
         [JsonPropertyName("payment_type")]
         public string? PaymentType { get; set; }
+
+        [JsonPropertyName("processor_response")]
+        public string? ProcessorResponse { get; set; }
     }
 }

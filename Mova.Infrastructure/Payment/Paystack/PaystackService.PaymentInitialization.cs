@@ -15,7 +15,7 @@ public sealed partial class PaystackService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "A valid email address is required."
             };
         }
@@ -24,18 +24,22 @@ public sealed partial class PaystackService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "Amount must be greater than zero."
             };
         }
 
         if (string.IsNullOrWhiteSpace(reference) ||
-            reference.Any(c => !char.IsLetterOrDigit(c) && c != '-' && c != '.' && c != '='))
+            reference.Any(c => !(c is (>= 'a' and <= 'z')
+                                    or (>= 'A' and <= 'Z')
+                                    or (>= '0' and <= '9')
+                                    or '-' or '.' or '=')))
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
-                Message = "Reference contains invalid characters."
+                CallSucceeded = false,
+                Message = "Reference contains invalid characters. " +
+                          "Only letters, digits, '-', '.', and '=' are allowed."
             };
         }
 
@@ -66,7 +70,7 @@ public sealed partial class PaystackService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "No response from Paystack."
             };
         }
@@ -76,7 +80,7 @@ public sealed partial class PaystackService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = response.Message ?? "Unable to initialize Paystack payment."
             };
         }
@@ -85,14 +89,15 @@ public sealed partial class PaystackService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "Reference mismatch between request and Paystack response."
             };
         }
 
         return new PaymentInitializationResultDto
         {
-            Success = true,
+            CallSucceeded = true,
+            Message = response.Message ?? "Payment initialized.",
             AuthorizationUrl = response.Data.AuthorizationUrl,
             AccessCode = response.Data.AccessCode,
             Reference = response.Data.Reference

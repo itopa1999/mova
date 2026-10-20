@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 
 namespace Mova.Infrastructure.Payment;
@@ -13,12 +14,33 @@ public sealed partial class FlutterwaveService
         string reference,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Reference is required."
+            };
+        }
+
+        if (amount.ToDecimal() <= 0)
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Amount must be greater than zero."
+            };
+        }
+
         var headers = new Dictionary<string, string>
         {
             ["Authorization"] = $"Bearer {_settings.SecretKey}"
         };
 
-        // Step 1 — create a recipient if we don't already have one.
         var recipientId = bankAccount.FlutterwaveRecipientId;
 
         if (string.IsNullOrWhiteSpace(recipientId))
@@ -26,15 +48,23 @@ public sealed partial class FlutterwaveService
             var recipientResult = await CreateRecipientAsync(
                 bankAccount, headers, cancellationToken);
 
-            if (!recipientResult.IsSuccessful)
-                return recipientResult;
+            if (!recipientResult.CallSucceeded ||
+                string.IsNullOrWhiteSpace(recipientResult.RecipientId))
+            {
+                return new TransferResult
+                {
+                    CallSucceeded = false,
+                    Status = TransactionStatus.Pending,
+                    Reference = reference,
+                    Message = recipientResult.Message
+                        ?? "Unable to create Flutterwave recipient."
+                };
+            }
 
-            recipientId = recipientResult.Reference;
-
+            recipientId = recipientResult.RecipientId;
             bankAccount.FlutterwaveRecipientId = recipientId;
         }
 
-        // Step 2 — initiate the transfer.
         var url =
             $"{_settings.BaseUrl.TrimEnd('/')}/transfers";
 
@@ -64,86 +94,53 @@ public sealed partial class FlutterwaveService
         {
             return new TransferResult
             {
-                IsSuccessful = false,
-                Status = "failed",
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = "No response from Flutterwave."
             };
         }
 
-        if (response.Status != "success" || response.Data is null)
+        if (!string.Equals(response.Status, "success", StringComparison.OrdinalIgnoreCase)
+            || response.Data is null)
         {
             return new TransferResult
             {
-                IsSuccessful = false,
-                Status = "failed",
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
                 Reference = reference,
                 Message = response.Message ?? "Unable to initiate transfer."
             };
         }
 
+        if (!string.Equals(response.Data.Reference, reference, StringComparison.Ordinal))
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Reference mismatch between request and Flutterwave response."
+            };
+        }
+
+        if (response.Data.Amount != amount.ToDecimal())
+        {
+            return new TransferResult
+            {
+                CallSucceeded = false,
+                Status = TransactionStatus.Pending,
+                Reference = reference,
+                Message = "Amount mismatch between request and Flutterwave response."
+            };
+        }
+
         return new TransferResult
         {
-            IsSuccessful = true,
-            Status = FlutterwaveTransactionStatusMapper.NormalizeStatus(response.Data.Status),
-            Reference = response.Data.Reference ?? reference,
+            CallSucceeded = true,
+            Status = FlutterwaveTransferStatusMapper.NormalizeStatus(response.Data.Status),
+            Reference = response.Data.Reference!,
             Message = response.Message ?? "Transfer initiated."
-        };
-    }
-
-    public async Task<TransferResult> VerifyTransferAsync(
-        string reference,
-        CancellationToken cancellationToken = default)
-    {
-        var query =
-            $"?reference={Uri.EscapeDataString(reference)}";
-
-        var url =
-            $"{_settings.BaseUrl.TrimEnd('/')}/transfers{query}";
-
-        var headers = new Dictionary<string, string>
-        {
-            ["Authorization"] = $"Bearer {_settings.SecretKey}"
-        };
-
-        var response =
-            await _externalApiClient.GetAsync<FlutterwaveTransferListResponse>(
-                url,
-                headers,
-                cancellationToken);
-
-        if (response is null)
-        {
-            return new TransferResult
-            {
-                IsSuccessful = false,
-                Status = "failed",
-                Reference = reference,
-                Message = "No response from Flutterwave."
-            };
-        }
-
-        if (response.Status != "success"
-            || response.Data is null
-            || response.Data.Count == 0)
-        {
-            return new TransferResult
-            {
-                IsSuccessful = false,
-                Status = "failed",
-                Reference = reference,
-                Message = response.Message ?? "Transfer not found."
-            };
-        }
-
-        var transfer = response.Data[0];
-
-        return new TransferResult
-        {
-            IsSuccessful = true,
-            Status = FlutterwaveTransactionStatusMapper.NormalizeStatus(transfer.Status),
-            Reference = transfer.Reference ?? reference,
-            Message = response.Message ?? "Transfer verified."
         };
     }
 

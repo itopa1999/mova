@@ -15,7 +15,7 @@ public sealed partial class FlutterwaveService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "Customer email is required."
             };
         }
@@ -24,7 +24,7 @@ public sealed partial class FlutterwaveService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "Payment amount must be greater than zero."
             };
         }
@@ -33,7 +33,7 @@ public sealed partial class FlutterwaveService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "Payment reference is required."
             };
         }
@@ -71,26 +71,28 @@ public sealed partial class FlutterwaveService
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
+                CallSucceeded = false,
                 Message = "No response from Flutterwave."
             };
         }
 
-        if (response.Status != "success" || response.Data is null)
+        if (!string.Equals(response.Status, "success", StringComparison.OrdinalIgnoreCase)
+            || response.Data is null
+            || string.IsNullOrWhiteSpace(response.Data.Link))
         {
             return new PaymentInitializationResultDto
             {
-                Success = false,
-                Message = response.Message
-                    ?? "Unable to initialize Flutterwave payment."
+                CallSucceeded = false,
+                Message = response.Message ?? "Unable to initialize Flutterwave payment."
             };
         }
 
         return new PaymentInitializationResultDto
         {
-            Success = true,
-            Message = response.Message,
+            CallSucceeded = true,
+            Message = response.Message ?? "Payment initialized.",
             AuthorizationUrl = response.Data.Link,
+            Reference = reference
         };
     }
 

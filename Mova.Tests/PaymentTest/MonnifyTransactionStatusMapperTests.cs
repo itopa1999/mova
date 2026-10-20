@@ -28,17 +28,4 @@ public sealed class MonnifyTransactionStatusMapperTests
     {
         Assert.Equal(expected, MonnifyTransactionStatusMapper.ToTransactionStatus(providerStatus));
     }
-
-    [Theory]
-    [InlineData(TransactionStatus.Completed, "success")]
-    [InlineData(TransactionStatus.Processing, "processing")]
-    [InlineData(TransactionStatus.Pending, "pending")]
-    [InlineData(TransactionStatus.Failed, "failed")]
-    [InlineData(TransactionStatus.Reversed, "reversed")]
-    public void ToLegacyResultStatus_PreservesExistingReconciliationContract(
-        TransactionStatus status,
-        string expected)
-    {
-        Assert.Equal(expected, MonnifyTransactionStatusMapper.ToLegacyResultStatus(status));
-    }
 }

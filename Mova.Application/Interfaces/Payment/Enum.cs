@@ -22,10 +22,12 @@ public sealed class ResolveBankAccountResult
 
 public sealed class PaymentInitializationResultDto
 {
-    public bool Success { get; set; }
+    public bool CallSucceeded  { get; set; }
     public string? Message { get; set; }
 
     public string? AuthorizationUrl { get; set; }
+    public string? TransactionReference { get; set; }
+    public string? PaymentReference { get; set; }
     public string? AccessCode { get; set; }
     public string? Reference { get; set; }
 }
