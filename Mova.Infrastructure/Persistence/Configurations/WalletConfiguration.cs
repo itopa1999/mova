@@ -172,7 +172,14 @@ public class WalletConfiguration : IEntityTypeConfiguration<Wallet>
             .HasForeignKey(x => x.WalletTrusteeId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(x => x.SavingsCircle)
+            .WithMany()
+            .HasForeignKey(x => x.SavingsCircleId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(x => x.WalletTrusteeId);
+        
+        builder.HasIndex(x => x.SavingsCircleId);
 
         builder.HasIndex(x => x.UserPublicId);
 

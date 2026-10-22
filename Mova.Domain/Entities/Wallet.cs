@@ -15,6 +15,7 @@ public class Wallet : BaseEntity
 
     public long? BankAccountId { get; set; }
     public long? WalletTrusteeId { get; set; }
+    public long? SavingsCircleId { get; set; }
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }
@@ -71,7 +72,7 @@ public class Wallet : BaseEntity
     public IReadOnlyCollection<ReleaseRequest> ReleaseRequests => _releaseRequests.AsReadOnly();
 
     public WalletCategory Category { get; set; } = null!;
-
+    public SavingsCircle? SavingsCircle { get; set; }
     public BankAccount? BankAccount { get; set; }
     public UtilityType? UtilityType { get; set; }
     public string? UtilityConfigJson { get; set; }

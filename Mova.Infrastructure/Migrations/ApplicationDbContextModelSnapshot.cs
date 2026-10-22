@@ -422,6 +422,133 @@ namespace Mova.Infrastructure.Migrations
                     b.ToTable("bank_accounts", (string)null);
                 });
 
+            modelBuilder.Entity("Mova.Domain.Entities.CircleMember", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Identifier")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTimeOffset>("InvitedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MissedContributions")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("PayoutReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("RotationPosition")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SavingsCircleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserPublicId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long?>("WalletId")
+                        .HasColumnType("bigint");
+
+                    b.ComplexProperty<Dictionary<string, object>>("DepositHeld", "Mova.Domain.Entities.CircleMember.DepositHeld#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("deposit_held_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("deposit_held_minor_units");
+                        });
+
+                    b.ComplexProperty<Dictionary<string, object>>("TotalContributed", "Mova.Domain.Entities.CircleMember.TotalContributed#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("total_contributed_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("total_contributed_minor_units");
+                        });
+
+                    b.ComplexProperty<Dictionary<string, object>>("TotalReceived", "Mova.Domain.Entities.CircleMember.TotalReceived#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("total_received_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("total_received_minor_units");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserPublicId");
+
+                    b.HasIndex("WalletId");
+
+                    b.HasIndex("SavingsCircleId", "Identifier")
+                        .IsUnique();
+
+                    b.HasIndex("SavingsCircleId", "RotationPosition")
+                        .IsUnique()
+                        .HasFilter("\"RotationPosition\" IS NOT NULL");
+
+                    b.HasIndex("SavingsCircleId", "Status");
+
+                    b.ToTable("circle_members", (string)null);
+                });
+
             modelBuilder.Entity("Mova.Domain.Entities.FeatureFlag", b =>
                 {
                     b.Property<long>("Id")
@@ -1269,6 +1396,158 @@ namespace Mova.Infrastructure.Migrations
                     b.ToTable("renewal_policies", (string)null);
                 });
 
+            modelBuilder.Entity("Mova.Domain.Entities.SavingsCircle", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("AllowPenalty")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FrequencyConfig")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("GracePeriodHours")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InviteCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("InviteOnly")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MemberCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTimeOffset?>("NextCollectionDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("NextPayoutDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OrganizerUserPublicId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("PenaltyAmountFrom")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("PoolBankAccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RotationStrategy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("StartPolicy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.ComplexProperty<Dictionary<string, object>>("ContributionAmount", "Mova.Domain.Entities.SavingsCircle.ContributionAmount#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("contribution_amount_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("contribution_amount_minor_units");
+                        });
+
+                    b.ComplexProperty<Dictionary<string, object>>("DepositAmount", "Mova.Domain.Entities.SavingsCircle.DepositAmount#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("deposit_amount_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("deposit_amount_minor_units");
+                        });
+
+                    b.ComplexProperty<Dictionary<string, object>>("PenaltyAmount", "Mova.Domain.Entities.SavingsCircle.PenaltyAmount#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("penalty_amount_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("penalty_amount_minor_units");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InviteCode")
+                        .IsUnique()
+                        .HasFilter("\"InviteCode\" IS NOT NULL");
+
+                    b.HasIndex("OrganizerUserPublicId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("OrganizerUserPublicId", "Status");
+
+                    b.HasIndex("Status", "StartDate");
+
+                    b.ToTable("savings_circles", (string)null);
+                });
+
             modelBuilder.Entity("Mova.Domain.Entities.ScheduledRelease", b =>
                 {
                     b.Property<long>("Id")
@@ -1594,6 +1873,9 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<int>("RestartCount")
                         .HasColumnType("integer");
 
+                    b.Property<long?>("SavingsCircleId")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -1712,6 +1994,8 @@ namespace Mova.Infrastructure.Migrations
                     b.HasIndex("BankAccountId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("SavingsCircleId");
 
                     b.HasIndex("UserPublicId");
 
@@ -2311,6 +2595,24 @@ namespace Mova.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Mova.Domain.Entities.CircleMember", b =>
+                {
+                    b.HasOne("Mova.Domain.Entities.SavingsCircle", "SavingsCircle")
+                        .WithMany("Members")
+                        .HasForeignKey("SavingsCircleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Mova.Domain.Entities.Wallet", "Wallet")
+                        .WithMany()
+                        .HasForeignKey("WalletId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("SavingsCircle");
+
+                    b.Navigation("Wallet");
+                });
+
             modelBuilder.Entity("Mova.Domain.Entities.LedgerEntry", b =>
                 {
                     b.HasOne("Mova.Domain.Entities.Transaction", null)
@@ -2437,6 +2739,11 @@ namespace Mova.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Mova.Domain.Entities.SavingsCircle", "SavingsCircle")
+                        .WithMany()
+                        .HasForeignKey("SavingsCircleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Mova.Domain.Entities.WalletTrustee", "Trustee")
                         .WithMany()
                         .HasForeignKey("WalletTrusteeId")
@@ -2445,6 +2752,8 @@ namespace Mova.Infrastructure.Migrations
                     b.Navigation("BankAccount");
 
                     b.Navigation("Category");
+
+                    b.Navigation("SavingsCircle");
 
                     b.Navigation("Trustee");
                 });
@@ -2472,6 +2781,11 @@ namespace Mova.Infrastructure.Migrations
             modelBuilder.Entity("Mova.Domain.Entities.RenewalPolicy", b =>
                 {
                     b.Navigation("Events");
+                });
+
+            modelBuilder.Entity("Mova.Domain.Entities.SavingsCircle", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("Mova.Domain.Entities.Wallet", b =>
