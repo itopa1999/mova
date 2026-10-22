@@ -11,12 +11,13 @@ public static class DefaultWalletTemplates
         // ─────────────────────────────────────────────────────────
         // 1. Lucky's daily transport money.
         //    ₦30k budget, ₦1k every weekday morning.
+        //    Category: 3 — Transportation (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Transport Allowance",
             Description = "Daily transport money, released every weekday morning.",
-            CategoryId = 2, // Transport
+            CategoryId = 3, // Transportation
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(30_000),
             DefaultReleaseAmount = Money.FromNaira(1_000),
@@ -31,13 +32,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 2. Ada's monthly rent release plan.
-        //    ₦120k controlled amount, ₦30k released on the 1st of each month.
+        //    Category: 4 — Rent & Housing (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Rent Release Plan",
             Description = "Keep rent money aside and release it at the start of each month.",
-            CategoryId = 3, // Rent & Housing
+            CategoryId = 4, // Rent & Housing
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(120_000),
             DefaultReleaseAmount = Money.FromNaira(30_000),
@@ -52,13 +53,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 3. Chidi's weekly grocery budget.
-        //    ₦20k for weekly shopping, released every Saturday.
+        //    Category: 2 — Groceries (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Weekly Groceries",
             Description = "Weekly food and grocery money, released every Saturday morning.",
-            CategoryId = 12, // Groceries
+            CategoryId = 2, // Groceries
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(20_000),
             DefaultReleaseAmount = Money.FromNaira(5_000),
@@ -73,13 +74,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 4. Ada's term-based school fees.
-        //    ₦150k per term, released 3 times a year to the school's bank.
+        //    Category: 8 — Education (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "School Fees",
             Description = "Term-based school fees, released at the start of each term.",
-            CategoryId = 7, // Education
+            CategoryId = 8, // Education
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(150_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
@@ -94,13 +95,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 5. Tunde's emergency fund.
-        //    ₦100k safety net, ₦20k set aside each month.
+        //    Category: 18 — Emergency Fund (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Emergency Fund",
             Description = "Keep emergency money aside and release it on your monthly rule.",
-            CategoryId = 17, // Controlled Access
+            CategoryId = 18, // Emergency Fund
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(100_000),
             DefaultReleaseAmount = Money.FromNaira(20_000),
@@ -115,13 +116,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 6. Ngozi's daily personal allowance.
-        //    ₦30k for the month, ₦1k per day to cover small spends.
+        //    Category: 11 — Personal Care (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Daily Allowance",
             Description = "A small amount every day to keep daily spending in check.",
-            CategoryId = 10, // Personal Care
+            CategoryId = 11, // Personal Care
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(30_000),
             DefaultReleaseAmount = Money.FromNaira(1_000),
@@ -136,7 +137,7 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 7. Chidi's monthly data and airtime.
-        //    ₦15k for the month, ₦5k released every 10 days.
+        //    Category: 13 — Mobile & Internet (Scheduled)  ✅ was already correct
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
@@ -157,13 +158,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 8. Ada's weekly baby essentials.
-        //    ₦40k baby budget, ₦10k every Monday for diapers, formula.
+        //    Category: 10 — Family & Children (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Baby Essentials",
             Description = "Weekly money for baby supplies — diapers, formula, and more.",
-            CategoryId = 9, // Family
+            CategoryId = 10, // Family & Children
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(40_000),
             DefaultReleaseAmount = Money.FromNaira(10_000),
@@ -178,13 +179,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 9. Tunde's daily fuel budget.
-        //    ₦45k fuel wallet, ₦1.5k every morning for petrol.
+        //    Category: 3 — Transportation (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Fuel Budget",
             Description = "Daily fuel money, released every morning.",
-            CategoryId = 2, // Transport
+            CategoryId = 3, // Transportation
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(45_000),
             DefaultReleaseAmount = Money.FromNaira(1_500),
@@ -199,13 +200,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 10. Ngozi's holiday fund.
-        //     ₦200k trip fund, ₦50k saved each month for 4 months.
+        //     Category: 12 — Travel & Holidays (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Holiday Fund",
             Description = "Keep travel money separate and release it on your monthly schedule.",
-            CategoryId = 11, // Travel
+            CategoryId = 12, // Travel & Holidays
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(200_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
@@ -220,13 +221,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 11. Ada's monthly utility bills.
-        //     ₦60k for electricity and water, ₦20k released each month.
+        //     Category: 5 — Bills & Utilities (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Utility Bills",
             Description = "Electricity and water bills — released at the start of each month.",
-            CategoryId = 4, // Bills & Utilities
+            CategoryId = 5, // Bills & Utilities
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(60_000),
             DefaultReleaseAmount = Money.FromNaira(20_000),
@@ -241,13 +242,14 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 12. Chidi's side hustle restocking.
-        //     ₦100k business capital, ₦25k every Monday for restock.
+        //     Category: 22 — Work & Career (Scheduled)
+        //     (no "Business" scheduled category; Work & Career fits best)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Side Hustle Capital",
             Description = "Weekly capital for small business restocking.",
-            CategoryId = 20, // Business
+            CategoryId = 22, // Work & Career
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(100_000),
             DefaultReleaseAmount = Money.FromNaira(25_000),
@@ -262,13 +264,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 13. Lucky's weekend entertainment.
-        //     ₦20k for fun, ₦5k released every Friday evening.
+        //     Category: 9 — Entertainment (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Entertainment",
             Description = "Weekly entertainment budget — movies, dining out, and fun.",
-            CategoryId = 8, // Entertainment
+            CategoryId = 9, // Entertainment
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(20_000),
             DefaultReleaseAmount = Money.FromNaira(5_000),
@@ -283,13 +285,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 14. Ngozi's health & fitness.
-        //     ₦30k for gym and supplements, ₦10k set aside monthly.
+        //     Category: 7 — Health & Medical (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Health & Fitness",
             Description = "Monthly gym, supplements, and health expenses.",
-            CategoryId = 6, // Health
+            CategoryId = 7, // Health & Medical
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(30_000),
             DefaultReleaseAmount = Money.FromNaira(10_000),
@@ -304,13 +306,14 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 15. Ada's wedding release plan.
-        //     ₦500k for the big day, ₦50k set aside every month.
+        //     Category: 10 — Family & Children (Scheduled)
+        //     (no "Wedding" scheduled category; Family & Children is closest)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Wedding Release Plan",
             Description = "Keep event money aside and release it when your schedule says so.",
-            CategoryId = 9, // Family
+            CategoryId = 10, // Family & Children
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(500_000),
             DefaultReleaseAmount = Money.FromNaira(50_000),
@@ -325,13 +328,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 16. Lucky's rent paid directly to the landlord.
-        //     ₦90k, ₦30k released monthly to the landlord's bank.
+        //     Category: 4 — Rent & Housing (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Landlord Rent",
             Description = "Monthly rent paid directly to your landlord's bank account.",
-            CategoryId = 3, // Rent & Housing
+            CategoryId = 4, // Rent & Housing
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(90_000),
             DefaultReleaseAmount = Money.FromNaira(30_000),
@@ -346,13 +349,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 17. Chidi's daily pocket money.
-        //     ₦15k, ₦500 per day for small everyday spends.
+        //     Category: 11 — Personal Care (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Pocket Money",
             Description = "Small daily pocket money for everyday expenses.",
-            CategoryId = 10, // Personal Care
+            CategoryId = 11, // Personal Care
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(15_000),
             DefaultReleaseAmount = Money.FromNaira(500),
@@ -367,7 +370,7 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 18. Ada's annual subscriptions.
-        //     ₦120k once a year — domains, software, insurance.
+        //     Category: 14 — Subscriptions (Scheduled)  ✅ was already correct
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
@@ -388,13 +391,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 19. Tunde's weekly release plan.
-        //     52-week challenge — ₦1k saved every week.
+        //     Category: 17 — Personal Savings (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Weekly Release Plan",
             Description = "Keep a set amount aside and make it available in weekly releases.",
-            CategoryId = 17, // Controlled Access
+            CategoryId = 17, // Personal Savings
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(52_000),
             DefaultReleaseAmount = Money.FromNaira(1_000),
@@ -408,14 +411,14 @@ public static class DefaultWalletTemplates
         },
 
         // ─────────────────────────────────────────────────────────
-        // 20. Ngozi's family support.
-        //     ₦60k for parents, ₦20k sent monthly to their bank.
+        // 20. Ngozi's family support (Scheduled side).
+        //     Category: 10 — Family & Children (Scheduled)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Family Support",
             Description = "Monthly support sent directly to a family member's bank account.",
-            CategoryId = 9, // Family
+            CategoryId = 10, // Family & Children
             WalletType = WalletType.Scheduled,
             DefaultTargetAmount = Money.FromNaira(60_000),
             DefaultReleaseAmount = Money.FromNaira(20_000),
@@ -430,12 +433,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 21. Family emergency fund with joint control.
+        //     Category: 25 — Family Support (Trustee)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Family Emergency Fund",
             Description = "Shared family money that needs another family member's approval to release.",
-            CategoryId = 9,
+            CategoryId = 25, // Family Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(200_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -450,12 +454,14 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 22. Joint wedding planning fund.
+        //     Category: 32 — General Support (Trustee)
+        //     (no wedding category in Trustee range)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Wedding Fund",
             Description = "Money for the big day, with a trusted family member co-signing every release.",
-            CategoryId = 9,
+            CategoryId = 32, // General Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(500_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -470,12 +476,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 23. Business partnership capital.
+        //     Category: 30 — Business Support (Trustee)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Business Partnership Fund",
             Description = "Capital held by the partnership — releases need sign-off from a partner.",
-            CategoryId = 20,
+            CategoryId = 30, // Business Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(1_000_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -490,12 +497,14 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 24. Elder care fund.
+        //     Category: 25 — Family Support (Trustee)
+        //     (Medical Support = 28 is also a valid alternative)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Elder Care Fund",
             Description = "Money set aside for parents' care, with a sibling approving every release.",
-            CategoryId = 9,
+            CategoryId = 25, // Family Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(300_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -510,12 +519,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 25. Children's school fees (co-signed).
+        //     Category: 27 — Education Support (Trustee)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "School Fees (Co-signed)",
             Description = "Fees that need another guardian's approval before money leaves the wallet.",
-            CategoryId = 7,
+            CategoryId = 27, // Education Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(300_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -530,12 +540,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 26. Couples' joint savings.
+        //     Category: 32 — General Support (Trustee)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Joint Savings",
             Description = "A shared goal — both of you decide when money leaves this wallet.",
-            CategoryId = 17,
+            CategoryId = 32, // General Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(400_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -550,12 +561,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 27. Group project fund.
+        //     Category: 32 — General Support (Trustee)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Group Project Fund",
             Description = "Shared money for a project — releases need a teammate's sign-off.",
-            CategoryId = 20,
+            CategoryId = 32, // General Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(250_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -570,12 +582,14 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 28. Debt repayment reserve.
+        //     Category: 32 — General Support (Trustee)
+        //     (no debt category in Trustee range)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Debt Repayment Reserve",
             Description = "Money ring-fenced for debt — a trustee approves before any payout.",
-            CategoryId = 17,
+            CategoryId = 32, // General Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(150_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -590,12 +604,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 29. Charity / Zakat fund.
+        //     Category: 32 — General Support (Trustee)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Charity Fund",
             Description = "Money set aside for giving — a trusted person approves each disbursement.",
-            CategoryId = 17,
+            CategoryId = 32, // General Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(100_000),
             DefaultReleaseAmount = Money.FromNaira(0),
@@ -610,12 +625,13 @@ public static class DefaultWalletTemplates
 
         // ─────────────────────────────────────────────────────────
         // 30. Friends' group trip fund.
+        //     Category: 32 — General Support (Trustee)
         // ─────────────────────────────────────────────────────────
         new WalletTemplate
         {
             Name = "Group Trip Fund",
             Description = "Friends' group trip money — one trusted member approves every release.",
-            CategoryId = 11,
+            CategoryId = 32, // General Support (Trustee)
             WalletType = WalletType.Trustee,
             DefaultTargetAmount = Money.FromNaira(400_000),
             DefaultReleaseAmount = Money.FromNaira(0),

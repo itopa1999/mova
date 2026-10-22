@@ -85,7 +85,7 @@ public sealed class ListWalletTemplatesQuery
 
             var search = string.IsNullOrWhiteSpace(request.Search)
                 ? null
-                : request.Search.Trim();
+                : request.Search.Trim().ToLowerInvariant();
 
             var walletType = request.WalletType;
 
@@ -106,7 +106,7 @@ public sealed class ListWalletTemplatesQuery
             return new BaseResult<ListWalletTemplatesResponseDto>(
                 HttpStatusCode.OK,
                 "Wallet templates retrieved successfully.",
-                response!);
+                response);
         }
 
         private async Task<ListWalletTemplatesResponseDto?> LoadTemplatesFromDbAsync(
@@ -121,9 +121,12 @@ public sealed class ListWalletTemplatesQuery
                 .AsNoTracking()
                 .Where(t => t.IsActive);
 
-            if (walletType.HasValue)
+            if (walletType is { } wt)
             {
-                query = query.Where(t => t.WalletType == walletType.Value);
+                query = wt == WalletType.Scheduled
+                    ? query.Where(t => t.WalletType == WalletType.Scheduled
+                                    || t.WalletType == null)
+                    : query.Where(t => t.WalletType == wt);
             }
 
             if (categoryId.HasValue)
@@ -133,7 +136,7 @@ public sealed class ListWalletTemplatesQuery
 
             if (search is not null)
             {
-                var term = search.ToLower();
+                var term = search;
 
                 query = query.Where(t =>
                     t.Name.ToLower().Contains(term) ||
@@ -165,7 +168,7 @@ public sealed class ListWalletTemplatesQuery
                 CategoryIcon = t.Category?.Icon ?? "FileText",
                 WalletType = t.WalletType.HasValue
                     ? t.WalletType.Value.ToString().ToLowerInvariant()
-                    : Domain.Enums.WalletType.Scheduled.ToString().ToLowerInvariant(),
+                    : WalletType.Scheduled.ToString().ToLowerInvariant(),
                 DefaultTargetAmount = t.DefaultTargetAmount.ToDecimal(),
                 DefaultReleaseAmount = t.DefaultReleaseAmount.ToDecimal(),
                 DefaultFrequency = t.DefaultFrequency.ToString(),
@@ -189,6 +192,5 @@ public sealed class ListWalletTemplatesQuery
         }
     }
 }
-
 
 // todo cache need invladidation

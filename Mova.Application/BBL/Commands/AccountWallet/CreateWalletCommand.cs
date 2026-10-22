@@ -292,7 +292,9 @@ public sealed class CreateWalletCommand
 
             var categoryExists = await _unitOfWork.Query<WalletCategory>()
                 .AsNoTracking()
-                .AnyAsync(x => x.Id == request.CategoryId, cancellationToken);
+                .AnyAsync(x => x.Id == request.CategoryId 
+                && x.WalletType == WalletType.Scheduled,
+                cancellationToken);
 
             if (!categoryExists)
             {
