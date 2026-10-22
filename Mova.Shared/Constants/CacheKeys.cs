@@ -62,8 +62,13 @@ public static class CacheKeys
 
 
     // ── Wallet Categories ─────────────────────────────────────────────────
-    public static string WalletCategories() => "wallet_categories:all";
     public const string WalletCategoriesPrefix = "wallet_categories:";
+
+    public static string WalletCategories()
+        => WalletCategories("All");
+
+    public static string WalletCategories(string walletType)
+        => $"{WalletCategoriesPrefix}{walletType.ToLowerInvariant()}";
 
 
     // ── Wallet Trustees ───────────────────────────────────────────────────

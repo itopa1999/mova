@@ -197,9 +197,13 @@ public class WalletController(
     [ProducesResponseType(typeof(BaseResult<List<GetWalletCategories.WalletCategoryDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetWalletCategories(
+        [FromQuery] WalletType? walletType,
         CancellationToken cancellationToken)
     {
-        var query = new GetWalletCategories.Query();
+        var query = new GetWalletCategories.Query
+        {
+            WalletType = walletType
+        };
 
         var result = await _mediator.Send(query, cancellationToken);
 

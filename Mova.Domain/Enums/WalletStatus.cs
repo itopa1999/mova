@@ -22,4 +22,5 @@ public enum WalletType
 {
     Scheduled = 1,
     Trustee = 2,
+    Circle = 3,
 }

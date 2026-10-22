@@ -4,7 +4,8 @@ using Mova.Domain.Entities;
 
 namespace Mova.Infrastructure.Persistence.Configurations;
 
-public sealed class WalletCategoryConfiguration : IEntityTypeConfiguration<WalletCategory>
+public sealed class WalletCategoryConfiguration
+    : IEntityTypeConfiguration<WalletCategory>
 {
     public void Configure(EntityTypeBuilder<WalletCategory> builder)
     {
@@ -18,5 +19,12 @@ public sealed class WalletCategoryConfiguration : IEntityTypeConfiguration<Walle
 
         builder.Property(x => x.Icon)
             .HasMaxLength(255);
+
+        builder.Property(x => x.WalletType)
+            .IsRequired();
+
+        builder.HasIndex(x => new { x.WalletType, x.Name })
+            .IsUnique()
+            .HasDatabaseName("IX_wallet_categories_WalletType_Name");
     }
 }

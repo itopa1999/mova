@@ -1765,7 +1765,14 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int>("WalletType")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("WalletType", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_wallet_categories_WalletType_Name");
 
                     b.ToTable("wallet_categories", (string)null);
                 });

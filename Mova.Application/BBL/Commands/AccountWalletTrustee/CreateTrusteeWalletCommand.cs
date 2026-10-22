@@ -176,8 +176,9 @@ public sealed class CreateTrusteeWalletCommand
             }
 
             var categoryExists = await _unitOfWork.Query<WalletCategory>()
-                .AsNoTracking()
-                .AnyAsync(x => x.Id == request.CategoryId, cancellationToken);
+                .AnyAsync(x => x.Id == request.CategoryId 
+                && x.WalletType == WalletType.Trustee,
+                cancellationToken);
 
             if (!categoryExists)
             {

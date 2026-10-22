@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 
@@ -14,6 +15,7 @@ public sealed class GetWalletCategories
 {
     public sealed class Query : IRequest<BaseResult<List<WalletCategoryDto>>>
     {
+        public WalletType? WalletType { get; init; }
     }
 
     public sealed class WalletCategoryDto
@@ -21,6 +23,7 @@ public sealed class GetWalletCategories
         public long Id { get; init; }
         public string Name { get; init; } = string.Empty;
         public string Icon { get; init; } = string.Empty;
+        public string WalletType { get; init; } = string.Empty;
     }
 
     public sealed class Handler
@@ -46,9 +49,14 @@ public sealed class GetWalletCategories
         {
             try
             {
+                var cacheKey = CacheKeys.WalletCategories(
+                    request.WalletType?.ToString() ?? "All");
+
                 var categories = await _cacheService.GetOrSetAsync(
-                    CacheKeys.WalletCategories(),
-                    LoadCategoriesFromDbAsync,
+                    cacheKey,
+                    ct => LoadCategoriesFromDbAsync(
+                        request.WalletType,
+                        ct),
                     timeout: CacheDuration,
                     cancellationToken: cancellationToken);
 
@@ -71,22 +79,31 @@ public sealed class GetWalletCategories
         }
 
         private async Task<List<WalletCategoryDto>> LoadCategoriesFromDbAsync(
+            WalletType? walletType,
             CancellationToken cancellationToken)
         {
-            return await _unitOfWork
+            var query = _unitOfWork
                 .Query<WalletCategory>()
-                .AsNoTracking()
+                .AsNoTracking();
+
+            if (walletType.HasValue)
+            {
+                query = query.Where(
+                    x => x.WalletType == walletType.Value);
+            }
+
+            return await query
                 .OrderBy(x => x.Id)
                 .Select(x => new WalletCategoryDto
                 {
                     Id = x.Id,
                     Name = x.Name,
                     Icon = x.Icon ?? string.Empty,
+                    WalletType = x.WalletType.ToString()
                 })
                 .ToListAsync(cancellationToken);
         }
     }
 }
-
 
 // invalidation cache key later
