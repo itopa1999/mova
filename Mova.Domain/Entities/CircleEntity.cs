@@ -1,71 +1,137 @@
-// using System.ComponentModel.DataAnnotations.Schema;
-// using Mova.Domain.Common;
-// using Mova.Domain.Enums;
-// using Mova.Domain.ValueObjects;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Mova.Domain.Common;
+using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 
-// namespace Mova.Domain.Entities;
+namespace Mova.Domain.Entities;
 
-// [Table("savings_circles")]
-// public class SavingsCircle : BaseEntity
-// {
-//     public string Name { get; set; } = string.Empty;
-//     public string? Description { get; set; }
+[Table("savings_circles")]
+public class SavingsCircle : BaseEntity
+{
+    // Display name shown in lists, invites, and notifications (e.g. "Lagos Rent 2026")
+    public string Name { get; set; } = string.Empty;
 
-//     public string OrganizerUserPublicId { get; set; } = string.Empty;
+    // Optional short description ("What is this circle saving for?")
+    public string? Description { get; set; }
 
-//     // Contribution settings
-//     public Money ContributionAmount { get; set; } = Money.FromNaira(0);
-//     public ContributionFrequency Frequency { get; set; }
-//     public int MemberCountROund { get; set; }              // == member count
-//     public bool AllowPenalty { get; set; } = true;
+    // Public ID of the organizer/moderator (created the circle)
+    public string OrganizerUserPublicId { get; set; } = string.Empty;
 
-//     // Risk controls
-//     public Money PenaltyAmount { get; set; } = Money.FromNaira(0);   // per missed contribution
-//     public PenaltyAmountFrom PenaltyAmountFrom { get; set; } = PenaltyAmountFrom.Deposit;
-//     public int GracePeriodHours { get; set; } = 24;
+    // Amount each member contributes per round
+    public Money ContributionAmount { get; set; } = Money.FromNaira(0);
 
-//     // Rotation & scheduling
-//     public RotationStrategy RotationStrategy { get; set; } = RotationStrategy.FixedOrder;
-//     public DateTimeOffset StartDate { get; set; }
-//     public DateTimeOffset? NextCollectionDate { get; set; }
-//     public DateTimeOffset? NextPayoutDate { get; set; }
+    // How often contributions are due (Daily / Weekly / Monthly)
+    public ContributionFrequency Frequency { get; set; }
 
-//     public SavingsCircleStatus Status { get; set; } = SavingsCircleStatus.Draft;
-//     public DateTimeOffset? CompletedAt { get; set; }
+    // JSON when contributions are due — e.g. {"type":"weekly","daysOfWeek":[1,4]}
+    public string FrequencyConfig { get; set; } = string.Empty;
 
-//     // Pool account where contributions land before payout
-//     public long? PoolBankAccountId { get; set; }
+    // Total member cap = total rounds (ROSCA: each member receives once)
+    public int MemberCount { get; set; }
 
-//     private readonly List<CircleMember> _members = new();
-//     public IReadOnlyCollection<CircleMember> Members => _members.AsReadOnly();
-// }
+    // Security deposit held per member, refunded on clean completion
+    public Money DepositAmount { get; set; } = Money.FromNaira(0);
+
+    // Whether missing a contribution triggers a penalty
+    public bool AllowPenalty { get; set; } = true;
+
+    // Penalty charged per missed contribution
+    public Money PenaltyAmount { get; set; } = Money.FromNaira(0);
+
+    // Where the penalty is taken from: Deposit (deducted) or Round (added)
+    public PenaltyAmountFrom PenaltyAmountFrom { get; set; } = PenaltyAmountFrom.Deposit;
+
+    // Hours after due time before a miss flips to Defaulted
+    public int GracePeriodHours { get; set; } = 24;
+
+    // How payout order is decided (FixedOrder / RandomDraw / ModeratorSet)
+    public RotationStrategy RotationStrategy { get; set; } = RotationStrategy.FixedOrder;
+
+    // Earliest start date — actual start also depends on StartPolicy + accepted invites
+    public DateTimeOffset StartDate { get; set; }
+
+    // What happens on StartDate if not everyone has joined
+    public StartPolicy StartPolicy { get; set; } = StartPolicy.WaitForAll;
+
+    // Next contribution collection due (set when circle is Active)
+    public DateTimeOffset? NextCollectionDate { get; set; }
+
+    // Next payout due (set when circle is Active)
+    public DateTimeOffset? NextPayoutDate { get; set; }
+
+    // true = only invited users join; false = anyone with the code
+    public bool InviteOnly { get; set; } = true;
+
+    // Shareable join code (MOVA-XXXXXX), unique across circles
+    [MaxLength(20)]
+    public string? InviteCode { get; set; }
+
+    // Draft → Active → Completed | Cancelled | Suspended
+    public SavingsCircleStatus Status { get; set; } = SavingsCircleStatus.Draft;
+
+    // Set when the circle reaches Completed
+    public DateTimeOffset? CompletedAt { get; set; }
+
+    // System pool bank account where contributions land before payout
+    public long? PoolBankAccountId { get; set; }
+
+    private readonly List<CircleMember> _members = new();
+
+    // All members (including pending invites); see RotationPosition for order
+    public IReadOnlyCollection<CircleMember> Members => _members.AsReadOnly();
+}
 
 
-// [Table("circle_members")]
-// public class CircleMember : BaseEntity
-// {
-//     public long SavingsCircleId { get; set; }
-//     public SavingsCircle SavingsCircle { get; set; } = null!;
+[Table("circle_members")]
+public class CircleMember : BaseEntity
+{
+    // FK to savings_circles.Id
+    public long SavingsCircleId { get; set; }
+    public SavingsCircle SavingsCircle { get; set; } = null!;
 
-//     public string UserPublicId { get; set; } = string.Empty;
-//     public long WalletId { get; set; }                 // the member's Circle-type wallet
-//     public Wallet Wallet { get; set; } = null!;
+    // Raw identifier typed at invite time (email / phone / public ID)
+    [MaxLength(320)]
+    public string Identifier { get; set; } = string.Empty;
 
-//     public int RotationPosition { get; set; }          // 1-based; who receives in round N
-//     public CircleMemberStatus Status { get; set; } = CircleMemberStatus.Invited;
+    // Resolved user's public ID
+    public string? UserPublicId { get; set; }
 
-//     public Money TotalContributed { get; set; } = Money.FromNaira(0);
-//     public Money TotalReceived { get; set; } = Money.FromNaira(0);
-//     public Money DepositHeld { get; set; } = Money.FromNaira(0);
-//     public int MissedContributions { get; set; } = 0;
+    // Friendly name shown on invite list; replaced by real name on accept
+    [MaxLength(120)]
+    public string DisplayName { get; set; } = string.Empty;
 
-//     // Direct debit mandate (Paystack / Flutterwave auth code)
-//     public string? MandateReference { get; set; }
-//     public bool MandateActive { get; set; }
+    // When the invite was issued
+    public DateTimeOffset InvitedAt { get; set; } = DateTimeOffset.UtcNow;
 
-//     public DateTimeOffset? PayoutReceivedAt { get; set; }
-// }
+    // When the invite was accepted (null while Invited)
+    public DateTimeOffset? AcceptedAt { get; set; }
 
+    // Member's circle wallet — created on accept, null while pending
+    public long? WalletId { get; set; }
+    public Wallet? Wallet { get; set; }
+
+    // 1-based rotation slot; null for RandomDraw until draw runs
+    public int? RotationPosition { get; set; }
+
+    // Invited → Active → Defaulted / Exited / Completed
+    public CircleMemberStatus Status { get; set; } = CircleMemberStatus.Invited;
+
+    // Running total the member has paid in
+    public Money TotalContributed { get; set; } = Money.FromNaira(0);
+
+    // Total the member has received as payout
+    public Money TotalReceived { get; set; } = Money.FromNaira(0);
+
+    // Security deposit currently held for this member
+    public Money DepositHeld { get; set; } = Money.FromNaira(0);
+
+    // Number of times this member has missed a contribution
+    public int MissedContributions { get; set; } = 0;
+
+    // When the member received their payout
+    public DateTimeOffset? PayoutReceivedAt { get; set; }
+}
 
 // [Table("circle_rounds")]
 // public class CircleRound : BaseEntity

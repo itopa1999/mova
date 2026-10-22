@@ -30,7 +30,13 @@ public enum ContributionFrequency
 {
     Daily = 1,
     Weekly = 2,
-    Monthly = 4,
+    Monthly = 3,
+}
+
+public enum StartPolicy
+{
+    WaitForAll = 1,
+    StartWithJoined = 2,
 }
 
 public enum PenaltyAmountFrom

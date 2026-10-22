@@ -44,6 +44,7 @@ public sealed class ListWalletTemplatesQuery
         public long CategoryId { get; init; }
         public string CategoryName { get; init; } = string.Empty;
         public string CategoryIcon { get; init; } = string.Empty;
+        public string CategoryType { get; init; } = string.Empty;
         public string WalletType { get; init; } = string.Empty;
         public decimal DefaultTargetAmount { get; init; }
         public decimal DefaultReleaseAmount { get; init; }
@@ -166,6 +167,7 @@ public sealed class ListWalletTemplatesQuery
                 CategoryId = t.CategoryId,
                 CategoryName = t.Category?.Name ?? "Other",
                 CategoryIcon = t.Category?.Icon ?? "FileText",
+                CategoryType = t.Category?.WalletType.ToString(),
                 WalletType = t.WalletType.HasValue
                     ? t.WalletType.Value.ToString().ToLowerInvariant()
                     : WalletType.Scheduled.ToString().ToLowerInvariant(),

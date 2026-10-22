@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -16,6 +17,7 @@ public sealed class DatabaseSeeder
     private readonly UserManager<User> _userManager;
     private readonly RoleManager<IdentityRole<long>> _roleManager;
     private readonly IBankService _bankService;
+    private readonly ICacheService _cache;
     private readonly ILogger<DatabaseSeeder> _logger;
 
     public DatabaseSeeder(
@@ -23,12 +25,14 @@ public sealed class DatabaseSeeder
         UserManager<User> userManager,
         RoleManager<IdentityRole<long>> roleManager,
         IBankService bankService,
+        ICacheService cache,
         ILogger<DatabaseSeeder> logger)
     {
         _dbContext = dbContext;
         _userManager = userManager;
         _roleManager = roleManager;
         _bankService = bankService;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -42,35 +46,64 @@ public sealed class DatabaseSeeder
         await SeedBanksIfMissingAsync(cancellationToken);
     }
 
-    private async Task SeedWalletCategoriesAsync(
-        CancellationToken cancellationToken)
+    private async Task SeedWalletCategoriesAsync(CancellationToken cancellationToken)
     {
         using var op = OperationLogger.Start(_logger, "SeedWalletCategories");
 
-        var existingCategoryIds = (await _dbContext.WalletCategories
-            .Select(x => x.Id)
-            .ToListAsync(cancellationToken))
-            .ToHashSet();
-
         var defaultCategories = DefaultWalletCategories.Create();
 
-        var categoriesToAdd = defaultCategories
-            .Where(x => !existingCategoryIds.Contains(x.Id))
-            .ToList();
+        var existingCategories = await _dbContext.WalletCategories
+            .ToListAsync(cancellationToken);
 
-        if (categoriesToAdd.Count == 0)
+        var existingById = existingCategories.ToDictionary(x => x.Id);
+
+        var hasTypeDrift = defaultCategories.Any(d =>
+            existingById.TryGetValue(d.Id, out var e) &&
+            e.WalletType != d.WalletType);
+
+        if (hasTypeDrift)
+        {
+            foreach (var defaultCategory in defaultCategories)
+            {
+                if (!existingById.TryGetValue(defaultCategory.Id, out var existing))
+                    continue;
+
+                existing.Name = defaultCategory.Name;
+                existing.Icon = defaultCategory.Icon;
+                existing.WalletType = defaultCategory.WalletType;
+            }
+        }
+
+        var added = 0;
+
+        foreach (var defaultCategory in defaultCategories)
+        {
+            if (existingById.ContainsKey(defaultCategory.Id))
+                continue;
+
+            await _dbContext.WalletCategories.AddAsync(
+                defaultCategory,
+                cancellationToken);
+
+            added++;
+        }
+
+        if (added == 0 && !hasTypeDrift)
         {
             op.Success("Wallet categories already seeded — nothing to do.");
             return;
         }
 
-        await _dbContext.WalletCategories.AddRangeAsync(
-            categoriesToAdd,
-            cancellationToken);
-
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        op.Success($"Seeded {categoriesToAdd.Count} wallet category(ies).");
+        await _cache.DeletePrefixAsync(CacheKeys.WalletTemplatesPrefix, cancellationToken);
+        await _cache.DeletePrefixAsync(CacheKeys.WalletTrusteesPrefix, cancellationToken);
+
+        var summary = hasTypeDrift
+            ? $"Type drift detected — all records re-synced. {added} added."
+            : $"{added} added.";
+
+        op.Success($"Seeded wallet categories — {summary}");
     }
 
     private async Task SeedFeatureFlagsAsync(
@@ -100,39 +133,79 @@ public sealed class DatabaseSeeder
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _cache.DeletePrefixAsync(CacheKeys.FeatureFlagsPrefix, cancellationToken);
 
         op.Success($"Seeded {flagsToAdd.Count} feature flag(s).");
     }
 
-    private async Task SeedWalletTemplatesAsync(
-        CancellationToken cancellationToken)
+    private async Task SeedWalletTemplatesAsync(CancellationToken cancellationToken)
     {
         using var op = OperationLogger.Start(_logger, "SeedWalletTemplates");
 
-        var existingNames = (await _dbContext.WalletTemplates
-            .Select(x => x.Name)
-            .ToListAsync(cancellationToken))
-            .ToHashSet();
-
         var defaultTemplates = DefaultWalletTemplates.Create();
 
-        var templatesToAdd = defaultTemplates
-            .Where(x => !existingNames.Contains(x.Name))
-            .ToList();
+        var existingTemplates = await _dbContext.WalletTemplates
+            .ToListAsync(cancellationToken);
 
-        if (templatesToAdd.Count == 0)
+        var existingByName = existingTemplates
+            .GroupBy(x => x.Name)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var hasDrift = defaultTemplates.Any(d =>
+            existingByName.TryGetValue(d.Name, out var e) &&
+            (e.CategoryId != d.CategoryId || e.WalletType != d.WalletType));
+
+        if (hasDrift)
+        {
+            foreach (var defaultTemplate in defaultTemplates)
+            {
+                if (!existingByName.TryGetValue(defaultTemplate.Name, out var existing))
+                    continue;
+
+                existing.Description = defaultTemplate.Description;
+                existing.CategoryId = defaultTemplate.CategoryId;
+                existing.WalletType = defaultTemplate.WalletType;
+                existing.DefaultTargetAmount = defaultTemplate.DefaultTargetAmount;
+                existing.DefaultReleaseAmount = defaultTemplate.DefaultReleaseAmount;
+                existing.DefaultFrequency = defaultTemplate.DefaultFrequency;
+                existing.DefaultFrequencyConfig = defaultTemplate.DefaultFrequencyConfig;
+                existing.DefaultPayoutDestination = defaultTemplate.DefaultPayoutDestination;
+                existing.IconName = defaultTemplate.IconName;
+                existing.Tags = defaultTemplate.Tags;
+                existing.SortOrder = defaultTemplate.SortOrder;
+                existing.IsActive = defaultTemplate.IsActive;
+            }
+        }
+
+        var added = 0;
+
+        foreach (var defaultTemplate in defaultTemplates)
+        {
+            if (existingByName.ContainsKey(defaultTemplate.Name))
+                continue;
+
+            await _dbContext.WalletTemplates.AddAsync(
+                defaultTemplate,
+                cancellationToken);
+
+            added++;
+        }
+
+        if (added == 0 && !hasDrift)
         {
             op.Success("Wallet templates already seeded — nothing to do.");
             return;
         }
 
-        await _dbContext.WalletTemplates.AddRangeAsync(
-            templatesToAdd,
-            cancellationToken);
-
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        op.Success($"Seeded {templatesToAdd.Count} wallet template(s).");
+        await _cache.DeletePrefixAsync(CacheKeys.WalletTemplatesPrefix, cancellationToken);
+
+        var summary = hasDrift
+            ? $"Drift detected — all templates re-synced. {added} added."
+            : $"{added} added.";
+
+        op.Success($"Seeded wallet templates — {summary}");
     }
 
     private async Task SeedAdminUserAsync(
@@ -285,5 +358,7 @@ public sealed class DatabaseSeeder
         }
 
         op.Success($"Bank refresh completed. Banks available: {bankCountAfter}.");
+        
+        await _cache.DeletePrefixAsync(CacheKeys.BanksPrefix, cancellationToken);
     }
 }
