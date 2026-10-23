@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<IBankService, BankService>();
         services.AddScoped<IRenewalService, RenewalService>();
         services.AddScoped<IPinChallenge, PinChallengeService>();
+        services.AddScoped<ISavingsCircleService, SavingsCircleService>();
         services.AddNotificationServices(configuration);
         services.AddSingleton<TemplateRenderer>();
 

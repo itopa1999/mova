@@ -43,6 +43,8 @@ public class ApplicationDbContext
     public DbSet<PinChallenge> PinChallenges => Set<PinChallenge>();
     public DbSet<WalletTrustee> WalletTrustees => Set<WalletTrustee>();
     public DbSet<ReleaseRequest> ReleaseRequests => Set<ReleaseRequest>();
+    public DbSet<SavingsCircle> SavingsCircles => Set<SavingsCircle>();
+    public DbSet<CircleMember> CircleMembers => Set<CircleMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

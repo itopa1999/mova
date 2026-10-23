@@ -1,4 +1,5 @@
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 
 namespace Mova.Application.Interfaces.Notification;
 
@@ -43,4 +44,12 @@ public interface INotificationQueue
         string email,
         string phoneNumber
     );
+
+    void QueueCreateCircleWalletAsync(
+        string UserPublicId,
+        long CategoryId,
+        long SavingsCircleId,
+        string Name,
+        string Description,
+        Money TargetAmount);
 }

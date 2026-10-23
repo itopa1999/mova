@@ -54,6 +54,11 @@ public class SavingsCircle : BaseEntity
     // What happens on StartDate if not everyone has joined
     public StartPolicy StartPolicy { get; set; } = StartPolicy.WaitForAll;
 
+    // When true, the circle only starts when the moderator explicitly triggers it
+    // (still bounded by StartDate and by StartPolicy member-count rules).
+    // When false, the circle auto-starts on StartDate per StartPolicy.
+    public bool ModeratorStartsCircle { get; set; } = false;
+
     // Next contribution collection due (set when circle is Active)
     public DateTimeOffset? NextCollectionDate { get; set; }
 
@@ -96,10 +101,11 @@ public class CircleMember : BaseEntity
 
     // Resolved user's public ID
     public string? UserPublicId { get; set; }
+    public string? Phone { get; set; } = string.Empty;
 
     // Friendly name shown on invite list; replaced by real name on accept
     [MaxLength(120)]
-    public string DisplayName { get; set; } = string.Empty;
+    public string? DisplayName { get; set; } = string.Empty;
 
     // When the invite was issued
     public DateTimeOffset InvitedAt { get; set; } = DateTimeOffset.UtcNow;

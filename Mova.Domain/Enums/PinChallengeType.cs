@@ -21,6 +21,7 @@ public enum PinChallengeType
     CreateTrustee = 14,
     RequestRelease = 15,
     CreateWalletTrustee = 16,
-    ChangeTransactionPin
+    ChangeTransactionPin = 17,
+    CreateCircle = 18
 
 }
