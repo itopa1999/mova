@@ -188,6 +188,8 @@ public class Startup(IConfiguration configuration)
             _configuration.GetSection(HangfireSettings.SectionName));
         services.Configure<TrusteeOptions>(
             _configuration.GetSection(TrusteeOptions.SectionName));
+        services.Configure<CircleOptions>(
+            _configuration.GetSection(CircleOptions.SectionName));
 
         services.AddDataProtection();
     }

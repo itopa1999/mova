@@ -2,6 +2,7 @@ using Hangfire;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 using Mova.Shared.Logging;
 
 namespace Mova.Infrastructure.Jobs;
@@ -115,6 +116,23 @@ public sealed class NotificationQueue : INotificationQueue
                     userPublicId, firstName, lastName, email, phoneNumber,
                     CancellationToken.None)),
             ("UserPublicId", userPublicId));
+    }
+
+    public void QueueCreateCircleWalletAsync(
+        string UserPublicId,
+        long CategoryId,
+        long SavingsCircleId,
+        string Name,
+        string Description,
+        Money TargetAmount)
+    {
+        TryEnqueue(
+            "QueueCreateVirtualAccount",
+            () => _backgroundJobClient.Enqueue<BackgroundTaskJob>(
+                job => job.CreateCircleWalletAsync(
+                    UserPublicId, CategoryId, SavingsCircleId, Name, Description, TargetAmount,
+                    CancellationToken.None)),
+            ("UserPublicId", UserPublicId));
     }
 
     private void TryEnqueue(

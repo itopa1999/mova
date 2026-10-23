@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 
 namespace Mova.Infrastructure.Jobs;
@@ -156,14 +157,106 @@ public sealed class BackgroundTaskJob
         }
     }
 
+    [AutomaticRetry(Attempts = 3)]
+    public async Task CreateCircleWalletAsync(
+        string UserPublicId,
+        long CategoryId,
+        long SavingsCircleId,
+        string Name,
+        string Description,
+        Money TargetAmount,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation(
+            "Starting circle wallet creation for user {UserPublicId} in circle {SavingsCircleId}.",
+            UserPublicId,
+            SavingsCircleId);
+
+        var existingWallet = await _context.Wallets
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                w => w.UserPublicId == UserPublicId &&
+                     w.SavingsCircleId == SavingsCircleId &&
+                     w.Type == WalletType.Circle,
+                cancellationToken);
+
+        if (existingWallet is not null)
+        {
+            _logger.LogInformation(
+                "Circle wallet already exists for user {UserPublicId} in circle {SavingsCircleId}. " +
+                "WalletId: {WalletId}. Skipping creation.",
+                UserPublicId,
+                SavingsCircleId,
+                existingWallet.Id);
+            return;
+        }
+
+        var circleExists = await _context.SavingsCircles
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == SavingsCircleId, cancellationToken);
+
+        if (!circleExists)
+        {
+            _logger.LogWarning(
+                "Savings circle {SavingsCircleId} not found. " +
+                "Cannot create wallet for user {UserPublicId}.",
+                SavingsCircleId,
+                UserPublicId);
+
+            throw new InvalidOperationException(
+                $"Savings circle {SavingsCircleId} not found. Wallet cannot be created.");
+        }
+
+        var wallet = new Wallet
+        {
+            UserPublicId = UserPublicId,
+            CategoryId = CategoryId,
+            SavingsCircleId = SavingsCircleId,
+            Name = Name,
+            Description = string.IsNullOrWhiteSpace(Description)
+                ? null
+                : Description.Trim(),
+            Type = WalletType.Circle,
+            Status = WalletStatus.Active,
+            TargetAmount = TargetAmount,
+            AvailableAmount = Money.FromNaira(0),
+            LockedAmount = Money.FromNaira(0),
+            ResetAmount = Money.FromNaira(0),
+            FundedAmount = Money.FromNaira(0),
+            TotalReleasedAmount = Money.FromNaira(0),
+            TotalWithdrawnAmount = Money.FromNaira(0),
+            PayoutDestination = PayoutDestination.Wallet,
+        };
+
+        try
+        {
+            _context.Wallets.Add(wallet);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Circle wallet created. WalletId: {WalletId}, " +
+                "User: {UserPublicId}, Circle: {SavingsCircleId}.",
+                wallet.Id,
+                UserPublicId,
+                SavingsCircleId);
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            _logger.LogInformation(
+                "Circle wallet for user {UserPublicId} in circle {SavingsCircleId} " +
+                "was created concurrently. Skipping.",
+                UserPublicId,
+                SavingsCircleId);
+        }
+    }
+
     private static bool IsUniqueViolation(DbUpdateException ex)
     {
-        // Npgsql: SqlState 23505 (unique_violation)
-        // SQL Server: error 2601 / 2627
-        // Adjust for whichever database provider you use.
         var message = ex.InnerException?.Message ?? string.Empty;
+
         return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
             || message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("unique_violation", StringComparison.OrdinalIgnoreCase)
             || message.Contains("23505", StringComparison.OrdinalIgnoreCase);
     }
 }

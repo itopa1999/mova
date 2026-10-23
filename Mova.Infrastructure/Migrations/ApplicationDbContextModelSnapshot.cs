@@ -476,6 +476,9 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("PayoutReceivedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Phone")
+                        .HasColumnType("text");
+
                     b.Property<int?>("RotationPosition")
                         .HasColumnType("integer");
 
@@ -1450,6 +1453,9 @@ namespace Mova.Infrastructure.Migrations
 
                     b.Property<int>("MemberCount")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("ModeratorStartsCircle")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset?>("ModifiedAt")
                         .HasColumnType("timestamp with time zone");
