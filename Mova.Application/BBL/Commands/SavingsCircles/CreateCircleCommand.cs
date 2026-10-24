@@ -550,7 +550,7 @@ public sealed class CreateCircleCommand
                 circle.Id,
                 name,
                 description ?? string.Empty,
-                targetAmountMoney);
+                targetAmountMoney.ToDecimal());
 
             op.Success($"Background wallet job queued for organizer {request.UserPublicId}.");
 

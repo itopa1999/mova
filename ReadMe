@@ -16,3 +16,4 @@
 5. please check that verifying money evrything is good about the money transaction, i don't wanna be in debt
 6. please add FK deletetion rules to where is neccessary so that we don't delete and have a stale data.
 7. please use include for FK where is neccessary please instead of re-query the db second time thanks. 
+8. some file has incorrect namespace please fix

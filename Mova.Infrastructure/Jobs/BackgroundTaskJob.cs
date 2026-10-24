@@ -164,7 +164,7 @@ public sealed class BackgroundTaskJob
         long SavingsCircleId,
         string Name,
         string Description,
-        Money TargetAmount,
+        decimal TargetAmount,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation(
@@ -218,7 +218,7 @@ public sealed class BackgroundTaskJob
                 : Description.Trim(),
             Type = WalletType.Circle,
             Status = WalletStatus.Active,
-            TargetAmount = TargetAmount,
+            TargetAmount = Money.FromNaira(TargetAmount),
             AvailableAmount = Money.FromNaira(0),
             LockedAmount = Money.FromNaira(0),
             ResetAmount = Money.FromNaira(0),

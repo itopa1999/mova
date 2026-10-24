@@ -13,8 +13,6 @@ using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Notification;
 using Mova.Infrastructure.Notification.Email;
 using Mova.Infrastructure.Payment;
-using Mova.Infrastructure.Payment.Flutterwave;
-using Mova.Infrastructure.Payment.Paystack;
 using Mova.Infrastructure.Persistence;
 using Mova.Infrastructure.Security;
 using Mova.Infrastructure.Service;
