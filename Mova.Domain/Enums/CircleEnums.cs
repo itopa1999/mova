@@ -49,7 +49,7 @@ public enum RotationStrategy
 {
     FixedOrder = 1,
     RandomDraw = 2,
-    BiddingBased = 3,
+    ModeratorSet = 3,
 }
 
 public enum CircleRoundStatus

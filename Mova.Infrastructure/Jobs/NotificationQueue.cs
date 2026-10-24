@@ -124,7 +124,7 @@ public sealed class NotificationQueue : INotificationQueue
         long SavingsCircleId,
         string Name,
         string Description,
-        Money TargetAmount)
+        decimal TargetAmount)
     {
         TryEnqueue(
             "QueueCreateVirtualAccount",
