@@ -51,5 +51,5 @@ public interface INotificationQueue
         long SavingsCircleId,
         string Name,
         string Description,
-        Money TargetAmount);
+        decimal TargetAmount);
 }
