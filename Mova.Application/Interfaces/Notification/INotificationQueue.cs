@@ -45,11 +45,15 @@ public interface INotificationQueue
         string phoneNumber
     );
 
-    void QueueCreateCircleWalletAsync(
-        string UserPublicId,
-        long CategoryId,
-        long SavingsCircleId,
-        string Name,
-        string Description,
-        decimal TargetAmount);
+void QueueCreateCircleWalletAsync(
+    string UserPublicId,
+    long CategoryId,
+    long SavingsCircleId,
+    string Name,
+    string Description,
+    decimal TargetAmount,
+    decimal TotalUpfrontCharge,
+    decimal TotalMovaFees,
+    decimal DepositAmount);
+
 }

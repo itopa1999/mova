@@ -8,5 +8,9 @@ public interface ISavingsCircleService
     Task<(bool Success, string Message)> ValidateFrequencyAsync(
         ContributionFrequency  frequency,
         string frequencyConfig,
-        CancellationToken cancellationToken);  
+        CancellationToken cancellationToken);
+
+    string HumanizeFrequency(
+        ContributionFrequency frequency,
+        string frequencyConfig);
 }
