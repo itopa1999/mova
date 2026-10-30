@@ -124,15 +124,27 @@ public sealed class NotificationQueue : INotificationQueue
         long SavingsCircleId,
         string Name,
         string Description,
-        decimal TargetAmount)
+        decimal TargetAmount,
+        decimal TotalUpfrontCharge,
+        decimal TotalMovaFees,
+        decimal DepositAmount)
     {
         TryEnqueue(
-            "QueueCreateVirtualAccount",
+            "QueueCreateCircleWallet",
             () => _backgroundJobClient.Enqueue<BackgroundTaskJob>(
                 job => job.CreateCircleWalletAsync(
-                    UserPublicId, CategoryId, SavingsCircleId, Name, Description, TargetAmount,
+                    UserPublicId, 
+                    CategoryId, 
+                    SavingsCircleId, 
+                    Name, 
+                    Description, 
+                    TargetAmount,
+                    TotalUpfrontCharge, 
+                    TotalMovaFees, 
+                    DepositAmount,
                     CancellationToken.None)),
-            ("UserPublicId", UserPublicId));
+            ("UserPublicId", UserPublicId),
+            ("CircleId", SavingsCircleId));
     }
 
     private void TryEnqueue(

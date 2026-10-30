@@ -141,9 +141,6 @@ public sealed class CreateCircleCommand
                 "CreateSavingsCircle",
                 ("UserId", request.UserPublicId));
 
-            // ─────────────────────────────────────────────
-            // Permissions
-            // ─────────────────────────────────────────────
             var permissions = await _identityService.GetPermissionsAsync(
                 request.UserPublicId, cancellationToken);
 
@@ -168,9 +165,6 @@ public sealed class CreateCircleCommand
                     HttpStatusCode.Locked);
             }
 
-            // ─────────────────────────────────────────────
-            // PIN challenge
-            // ─────────────────────────────────────────────
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId, PinChallengeType.CreateCircle, cancellationToken);
 
@@ -180,153 +174,157 @@ public sealed class CreateCircleCommand
                 return Bad(challengeMessage);
             }
 
-            // ─────────────────────────────────────────────
-            // Name
-            // ─────────────────────────────────────────────
+            var (validationError, validatedData) = await ValidateDataAsync(request, op, cancellationToken);
+            if (validationError != null) return validationError;
+
+            var fees = WalletFeeHelper.Calculate(
+                targetAmount: request.ContributionAmount * request.MemberCount,
+                releaseAmount: request.ContributionAmount * request.MemberCount,
+                payoutDestination: PayoutDestination.Circle.ToString(),
+                releases: 1);
+
+            var depositAmount = request.DepositAmount ?? 0m;
+            var totalUpfrontCharge = request.ContributionAmount + fees.TotalMovaCharges + depositAmount;
+
+            var user = await _identityService.GetByIdentifierAsync(request.UserPublicId, cancellationToken);
+            if (user is null)
+            {
+                op.Error("User not found.");
+                return Bad("User account not found.", HttpStatusCode.NotFound);
+            }
+
+            var userBalance = user.Balance.ToDecimal();
+            if (userBalance < totalUpfrontCharge)
+            {
+                op.Warning(
+                    $"Insufficient balance for user {request.UserPublicId}. " +
+                    $"Required: {totalUpfrontCharge}, Available: {userBalance}.");
+
+                return Bad(
+                    $"You do not have enough balance to create this circle. " +
+                    $"You need {totalUpfrontCharge:N0} but you only have {userBalance:N0}. " +
+                    $"Please add funds and try again.");
+            }
+
+            var inviteCode = await GenerateUniqueInviteCodeAsync(cancellationToken);
+            if (inviteCode is null)
+            {
+                op.Error("Could not generate unique invite code after multiple attempts.");
+                return Bad("Could not create a unique invite code. Please try again.", HttpStatusCode.InternalServerError);
+            }
+
+            var inviteLink = $"{_circleOptions.InviteBaseUrl.TrimEnd('/')}/{inviteCode}";
+
+            var (circle, memberRowsCreated) = await SaveCircleToDatabaseAsync(
+                request, validatedData!, inviteCode, cancellationToken);
+
+            var movaInviteCount = validatedData!.ValidatedInvites.Count(i => i.IsMovaUser);
+            var emailOnlyInviteCount = validatedData.ValidatedInvites.Count - movaInviteCount;
+            var reservedPositionCount = validatedData.ValidatedInvites.Count(i => i.PayoutPosition.HasValue);
+
+            op.Success(
+                $"Circle persisted. CircleId: {circle.Id}, InviteCode: {inviteCode}, " +
+                $"MemberRows: 1 organizer + {memberRowsCreated} MOVA invites " +
+                $"(cap: {circle.MemberCount}), EmailOnlyInvites: {emailOnlyInviteCount}");
+
+            SendNotifications(
+                request,
+                validatedData,
+                circle,
+                inviteCode,
+                inviteLink,
+                totalUpfrontCharge,
+                fees.TotalMovaCharges,
+                depositAmount);
+
+            op.Success(
+                $"Circle '{validatedData.Name}' created. CircleId: {circle.Id}, " +
+                $"InviteCode: {inviteCode}, Invites: {validatedData.ValidatedInvites.Count} " +
+                $"(MOVA: {movaInviteCount}, email-only: {emailOnlyInviteCount}, " +
+                $"reserved positions: {reservedPositionCount}), WalletJob: queued.");
+
+            return new BaseResult<CreateCircleResponseDto>(
+                HttpStatusCode.Created,
+                "Circle created successfully. " +
+                (request.Invites.Count > 0
+                    ? $"Invitations sent to {validatedData.ValidatedInvites.Count} invitee(s)."
+                    : "Share the invite link to bring members in."),
+                new CreateCircleResponseDto
+                {
+                    CircleId = circle.Id,
+                    TotalRounds = circle.MemberCount,
+                    InviteCode = inviteCode,
+                    InviteLink = inviteLink,
+                });
+        }
+
+        private async Task<(BaseResult<CreateCircleResponseDto>? Error, ValidatedCircleData? Data)> ValidateDataAsync(
+            Command request,
+            OperationLogger op,
+            CancellationToken cancellationToken)
+        {
             var name = (request.Name ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(name)) return (Bad("Circle name is required."), null);
+            if (name.Length < 3) return (Bad("Circle name must be at least 3 characters."), null);
+            if (name.Length > 50) return (Bad("Circle name cannot exceed 50 characters."), null);
 
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                op.Warning("Circle name is required.");
-                return Bad("Circle name is required.");
-            }
+            var description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+            if (description is { Length: > 200 }) return (Bad("Description cannot exceed 200 characters."), null);
 
-            if (name.Length < 3)
-            {
-                op.Warning("Circle name is too short.");
-                return Bad("Circle name must be at least 3 characters.");
-            }
-
-            if (name.Length > 50)
-            {
-                op.Warning("Circle name is too long.");
-                return Bad("Circle name cannot exceed 50 characters.");
-            }
-
-            // ─────────────────────────────────────────────
-            // Description
-            // ─────────────────────────────────────────────
-            var description = string.IsNullOrWhiteSpace(request.Description)
-                ? null
-                : request.Description.Trim();
-
-            if (description is { Length: > 200 })
-            {
-                op.Warning("Description is too long.");
-                return Bad("Description cannot exceed 200 characters.");
-            }
-
-            // ─────────────────────────────────────────────
-            // Start date
-            // ─────────────────────────────────────────────
             var startDateOnly = DateOnly.FromDateTime(request.StartDate.UtcDateTime);
             var todayOnly = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (startDateOnly < todayOnly) return (Bad("Start date cannot be in the past."), null);
 
-            if (startDateOnly < todayOnly)
-            {
-                op.Warning($"Start date is in the past: {startDateOnly:yyyy-MM-dd}.");
-                return Bad("Start date cannot be in the past.");
-            }
+            if (request.ContributionAmount < 500m) return (Bad("Minimum contribution is ₦500."), null);
+            if (request.MemberCount < 3 || request.MemberCount > 50) return (Bad("Member count must be between 3 and 50."), null);
 
-            // ─────────────────────────────────────────────
-            // Contribution
-            // ─────────────────────────────────────────────
-            if (request.ContributionAmount < 500m)
-            {
-                op.Warning($"Contribution below minimum: {request.ContributionAmount}.");
-                return Bad("Minimum contribution is ₦500.");
-            }
-
-            // ─────────────────────────────────────────────
-            // Member count (caps ACTIVE members, not invites)
-            // ─────────────────────────────────────────────
-            if (request.MemberCount < 3 || request.MemberCount > 50)
-            {
-                op.Warning($"Invalid member count: {request.MemberCount}.");
-                return Bad("Member count must be between 3 and 50.");
-            }
-
-            // ─────────────────────────────────────────────
-            // Penalty + deposit
-            // ─────────────────────────────────────────────
             var penaltySource = request.PenaltySource ?? PenaltyAmountFrom.Deposit;
             var penaltyAmount = request.PenaltyAmount ?? 0m;
             var depositAmount = request.DepositAmount ?? 0m;
 
             if (request.EnablePenalty)
             {
-                if (penaltyAmount <= 0m)
-                {
-                    op.Warning("Penalty is enabled but amount is missing or zero.");
-                    return Bad("Penalty amount is required when penalty is enabled.");
-                }
-
-                if (penaltySource == PenaltyAmountFrom.Round &&
-                    penaltyAmount > request.ContributionAmount)
-                {
-                    op.Warning(
-                        $"Penalty ({penaltyAmount}) exceeds contribution " +
-                        $"({request.ContributionAmount}) for Round source.");
-                    return Bad("Penalty cannot exceed the base contribution.");
-                }
+                if (penaltyAmount <= 0m) return (Bad("Penalty amount is required when penalty is enabled."), null);
+                if (penaltySource == PenaltyAmountFrom.Round && penaltyAmount > request.ContributionAmount)
+                    return (Bad("Penalty cannot exceed the base contribution."), null);
             }
 
-            if (depositAmount < 0m)
-            {
-                op.Warning($"Negative deposit: {depositAmount}.");
-                return Bad("Security deposit cannot be negative.");
-            }
+            if (depositAmount < 0m) return (Bad("Security deposit cannot be negative."), null);
 
-            // ─────────────────────────────────────────────
-            // Category
-            // ─────────────────────────────────────────────
             var category = await _unitOfWork.Query<WalletCategory>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.Id == request.CategoryId &&
-                         x.WalletType == WalletType.Circle,
-                    cancellationToken);
+                .FirstOrDefaultAsync(x => x.Id == request.CategoryId && x.WalletType == WalletType.Circle, cancellationToken);
 
-            if (category is null)
-            {
-                op.Warning($"Invalid circle category: {request.CategoryId}.");
-                return Bad("The selected category does not exist or is not available for circles.");
-            }
+            if (category is null) return (Bad("The selected category does not exist or is not available for circles."), null);
 
-            // ─────────────────────────────────────────────
-            // Frequency (only service call)
-            // ─────────────────────────────────────────────
-            var (frequencyValid, frequencyMessage) = await _savingsCircleService
-                .ValidateFrequencyAsync(
-                    request.Frequency,
-                    request.FrequencyConfig,
-                    cancellationToken);
+            var (frequencyValid, frequencyMessage) = await _savingsCircleService.ValidateFrequencyAsync(
+                request.Frequency, request.FrequencyConfig, cancellationToken);
 
-            if (!frequencyValid)
-            {
-                op.Warning($"Frequency validation failed: {frequencyMessage}");
-                return Bad(frequencyMessage);
-            }
+            if (!frequencyValid) return (Bad(frequencyMessage), null);
 
-            // ─────────────────────────────────────────────
-            // Invites — count cap (safety, not membership)
-            // ─────────────────────────────────────────────
+            var validatedInvites = new List<ValidatedInvite>();
+            var inviteError = ValidateInvites(request, validatedInvites, op);
+            if (inviteError != null) return (inviteError, null);
+
+            return (null, new ValidatedCircleData(
+                name, description, startDateOnly, penaltySource,
+                penaltyAmount, depositAmount, category, validatedInvites));
+        }
+
+        private BaseResult<CreateCircleResponseDto>? ValidateInvites(
+            Command request,
+            List<ValidatedInvite> validatedInvites,
+            OperationLogger op)
+        {
             if (request.Invites.Count > _circleOptions.MaxInvitesPerCircle)
             {
-                op.Warning(
-                    $"Too many invites: {request.Invites.Count} > " +
-                    $"{_circleOptions.MaxInvitesPerCircle}.");
-                return Bad(
-                    $"You can invite at most {_circleOptions.MaxInvitesPerCircle} " +
-                    $"people at once.");
+                op.Warning($"Too many invites: {request.Invites.Count} > {_circleOptions.MaxInvitesPerCircle}.");
+                return Bad($"You can invite at most {_circleOptions.MaxInvitesPerCircle} people at once.");
             }
 
             var seenIdentifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var seenPositions = new HashSet<int>();
-            var requiresExplicitPositions =
-                request.RotationStrategy != RotationStrategy.RandomDraw;
-
-            var validatedInvites = new List<ValidatedInvite>(request.Invites.Count);
+            var requiresExplicitPositions = request.RotationStrategy != RotationStrategy.RandomDraw;
 
             foreach (var invite in request.Invites)
             {
@@ -361,38 +359,25 @@ public sealed class CreateCircleCommand
                     !string.IsNullOrWhiteSpace(invite.Phone) ||
                     !string.IsNullOrWhiteSpace(invite.DisplayName);
 
-                if (isMovaUser &&
-                    string.IsNullOrWhiteSpace(invite.UserPublicId) &&
-                    string.IsNullOrWhiteSpace(invite.DisplayName))
+                if (isMovaUser && string.IsNullOrWhiteSpace(invite.UserPublicId) && string.IsNullOrWhiteSpace(invite.DisplayName))
                 {
-                    op.Warning(
-                        $"MOVA invite needs UserPublicId or DisplayName: {invite.Identifier}");
-                    return Bad(
-                        $"Provide UserPublicId or DisplayName for MOVA invite " +
-                        $"'{invite.Identifier}'.");
+                    op.Warning($"MOVA invite needs UserPublicId or DisplayName: {invite.Identifier}");
+                    return Bad($"Provide UserPublicId or DisplayName for MOVA invite '{invite.Identifier}'.");
                 }
 
                 if (requiresExplicitPositions && invite.PayoutPosition.HasValue)
                 {
                     var position = invite.PayoutPosition.Value;
-
                     if (position < 2 || position > request.MemberCount)
                     {
-                        op.Warning(
-                            $"Payout position out of range for '{invite.Identifier}': {position}.");
-                        return Bad(
-                            $"Payout position for '{invite.DisplayName ?? invite.Identifier}' " +
-                            $"must be between 2 and {request.MemberCount}.");
+                        op.Warning($"Payout position out of range for '{invite.Identifier}': {position}.");
+                        return Bad($"Payout position for '{invite.DisplayName ?? invite.Identifier}' must be between 2 and {request.MemberCount}.");
                     }
 
                     if (!seenPositions.Add(position))
                     {
-                        op.Warning(
-                            $"Duplicate payout position {position} " +
-                            $"for '{invite.Identifier}'.");
-                        return Bad(
-                            $"Duplicate payout position {position} " +
-                            $"for '{invite.DisplayName ?? invite.Identifier}'.");
+                        op.Warning($"Duplicate payout position {position} for '{invite.Identifier}'.");
+                        return Bad($"Duplicate payout position {position} for '{invite.DisplayName ?? invite.Identifier}'.");
                     }
                 }
 
@@ -409,39 +394,17 @@ public sealed class CreateCircleCommand
                     requiresExplicitPositions ? invite.PayoutPosition : null));
             }
 
-            // ─────────────────────────────────────────────
-            // Validation passed
-            // ─────────────────────────────────────────────
-            var movaInviteCount = validatedInvites.Count(i => i.IsMovaUser);
-            var emailOnlyInviteCount = validatedInvites.Count - movaInviteCount;
-            var reservedPositionCount = validatedInvites.Count(i => i.PayoutPosition.HasValue);
+            return null;
+        }
 
-            op.Success(
-                $"Circle validation passed. User: {request.UserPublicId}, " +
-                $"Name: '{name}', Category: {category.Id} ({category.Name}), " +
-                $"Contribution: {request.ContributionAmount:N0}, MemberCap: {request.MemberCount}, " +
-                $"Frequency: {request.Frequency}, " +
-                $"StartPolicy: {request.StartPolicy}, " +
-                $"ModeratorStartsCircle: {request.ModeratorStartsCircle}, " +
-                $"Invites: {validatedInvites.Count} " +
-                $"(MOVA: {movaInviteCount}, email-only: {emailOnlyInviteCount}, " +
-                $"reserved positions: {reservedPositionCount}), " +
-                $"StartDate: {startDateOnly:yyyy-MM-dd}");
-
-            var inviteCode = await GenerateUniqueInviteCodeAsync(cancellationToken);
-            if (inviteCode is null)
-            {
-                op.Error("Could not generate unique invite code after multiple attempts.");
-                return Bad("Could not create a unique invite code. Please try again.",
-                    HttpStatusCode.InternalServerError);
-            }
-
-            var inviteLink = $"{_circleOptions.InviteBaseUrl.TrimEnd('/')}/{inviteCode}";
-
+        private async Task<(SavingsCircle Circle, int MemberRowsCreated)> SaveCircleToDatabaseAsync(
+            Command request,
+            ValidatedCircleData data,
+            string inviteCode,
+            CancellationToken cancellationToken)
+        {
             var now = DateTimeOffset.UtcNow;
             var contributionMoney = Money.FromNaira(request.ContributionAmount);
-            var targetAmountMoney = Money.FromNaira(
-                request.ContributionAmount * request.MemberCount);
 
             var organizerFirstName = (request.FirstName ?? string.Empty).Trim();
             var organizerLastName = (request.LastName ?? string.Empty).Trim();
@@ -453,9 +416,6 @@ public sealed class CreateCircleCommand
                     ? request.UserPublicId
                     : request.Email.Split('@')[0];
 
-            // ─────────────────────────────────────────────
-            // Persist (atomic)
-            // ─────────────────────────────────────────────
             SavingsCircle circle;
             var memberRowsCreated = 0;
 
@@ -463,17 +423,17 @@ public sealed class CreateCircleCommand
             {
                 circle = new SavingsCircle
                 {
-                    Name = name,
-                    Description = description,
+                    Name = data.Name,
+                    Description = data.Description,
                     OrganizerUserPublicId = request.UserPublicId,
                     ContributionAmount = contributionMoney,
                     Frequency = request.Frequency,
                     FrequencyConfig = request.FrequencyConfig,
                     MemberCount = request.MemberCount,
-                    DepositAmount = Money.FromNaira(depositAmount),
+                    DepositAmount = Money.FromNaira(data.DepositAmount),
                     AllowPenalty = request.EnablePenalty,
-                    PenaltyAmount = Money.FromNaira(penaltyAmount),
-                    PenaltyAmountFrom = penaltySource,
+                    PenaltyAmount = Money.FromNaira(data.PenaltyAmount),
+                    PenaltyAmountFrom = data.PenaltySource,
                     GracePeriodHours = request.GracePeriodHours,
                     RotationStrategy = request.RotationStrategy,
                     StartDate = request.StartDate,
@@ -496,21 +456,17 @@ public sealed class CreateCircleCommand
                     DisplayName = organizerDisplayName,
                     InvitedAt = now,
                     AcceptedAt = now,
-                    RotationPosition = request.RotationStrategy == RotationStrategy.RandomDraw
-                        ? null
-                        : 1,
+                    RotationPosition = request.RotationStrategy == RotationStrategy.RandomDraw ? null : 1,
                     Status = CircleMemberStatus.Active,
                     TotalContributed = Money.FromNaira(0),
                     TotalReceived = Money.FromNaira(0),
-                    DepositHeld = Money.FromNaira(0),
+                    DepositHeld = contributionMoney + Money.FromNaira(data.DepositAmount),
                 };
 
                 await _unitOfWork.AddAsync(organizerMember, cancellationToken);
 
-                foreach (var invite in validatedInvites)
+                foreach (var invite in data.ValidatedInvites.Where(i => i.IsMovaUser))
                 {
-                    if (!invite.IsMovaUser) continue;
-
                     var inviteMember = new CircleMember
                     {
                         SavingsCircleId = circle.Id,
@@ -535,36 +491,50 @@ public sealed class CreateCircleCommand
                 await tx.CommitAsync(cancellationToken);
             }
 
-            op.Success(
-                $"Circle persisted. CircleId: {circle.Id}, InviteCode: {inviteCode}, " +
-                $"MemberRows: 1 organizer + {memberRowsCreated} MOVA invites " +
-                $"(cap: {circle.MemberCount}), EmailOnlyInvites: {emailOnlyInviteCount}");
+            return (circle, memberRowsCreated);
+        }
 
-            // ─────────────────────────────────────────────
-            // Post-commit: queue background job + notifications
-            // ─────────────────────────────────────────────
-
+        private void SendNotifications(
+            Command request,
+            ValidatedCircleData data,
+            SavingsCircle circle,
+            string inviteCode,
+            string inviteLink,
+            decimal totalUpfrontCharge,
+            decimal totalMovaFees,
+            decimal depositAmount)
+        {
             _notificationQueue.QueueCreateCircleWalletAsync(
                 request.UserPublicId,
                 request.CategoryId,
                 circle.Id,
-                name,
-                description ?? string.Empty,
-                targetAmountMoney.ToDecimal());
-
-            op.Success($"Background wallet job queued for organizer {request.UserPublicId}.");
+                data.Name,
+                data.Description ?? string.Empty,
+                circle.ContributionAmount.ToDecimal(),
+                totalUpfrontCharge,
+                totalMovaFees,
+                depositAmount);
 
             var inviteBasePath = _circleOptions.InviteBaseUrl.Contains("://")
                 ? new Uri(_circleOptions.InviteBaseUrl).AbsolutePath
                 : _circleOptions.InviteBaseUrl;
-            var inviteeActionPath = $"{inviteBasePath.TrimEnd('/')}/{inviteCode}";
 
-            // Organizer — in-app
+            var inviteeActionPath = $"{inviteBasePath.TrimEnd('/')}/{inviteCode}";
+            var organizerFirstName = (request.FirstName ?? string.Empty).Trim();
+            var organizerLastName = (request.LastName ?? string.Empty).Trim();
+            var organizerFullName = $"{organizerFirstName} {organizerLastName}".Trim();
+
+            var organizerDisplayName = !string.IsNullOrWhiteSpace(organizerFullName)
+                ? organizerFullName
+                : string.IsNullOrWhiteSpace(request.Email)
+                    ? request.UserPublicId
+                    : request.Email.Split('@')[0];
+
             _notificationQueue.InAppNotificationAsync(
                 request.UserPublicId,
                 NotificationType.Wallet,
-                $"{name} circle created",
-                $"You're member #1 of {circle.MemberCount} members in '{name}'. " +
+                $"{data.Name} circle created",
+                $"You're member #1 of {circle.MemberCount} members in '{data.Name}'. " +
                 (request.ModeratorStartsCircle
                     ? "You control when the circle starts — you'll be able to start it once the roster is set."
                     : "Share the invite link with your invited members so they can join."),
@@ -572,14 +542,13 @@ public sealed class CreateCircleCommand
                 null,
                 CancellationToken.None);
 
-            // Organizer — email
             if (!string.IsNullOrWhiteSpace(request.Email))
             {
                 _notificationQueue.QueueNotificationEmail(
                     organizerDisplayName,
                     request.Email,
                     BuildOrganizerEmail(
-                        name,
+                        data.Name,
                         circle.MemberCount,
                         request.ContributionAmount,
                         request.ContributionAmount * request.MemberCount,
@@ -589,31 +558,25 @@ public sealed class CreateCircleCommand
                         request.ModeratorStartsCircle,
                         inviteCode,
                         inviteLink,
-                        validatedInvites.Count),
-                    $"Your {name} circle is ready");
+                        data.ValidatedInvites.Count),
+                    $"Your {data.Name} circle is ready");
             }
 
-            // Invitees — in-app for MOVA users, email for everyone
-            var emailedInvites = 0;
-            var inAppInvites = 0;
-
-            foreach (var invite in validatedInvites)
+            foreach (var invite in data.ValidatedInvites)
             {
                 if (invite.IsMovaUser && !string.IsNullOrWhiteSpace(invite.UserPublicId))
                 {
                     _notificationQueue.InAppNotificationAsync(
                         invite.UserPublicId,
                         NotificationType.Wallet,
-                        $"You've been invited to {name}",
-                        $"{organizerDisplayName} invited you to join '{name}' — " +
+                        $"You've been invited to {data.Name}",
+                        $"{organizerDisplayName} invited you to join '{data.Name}' — " +
                         $"{circle.MemberCount} members, ₦{request.ContributionAmount:N0} / " +
                         $"{request.Frequency.ToString().ToLowerInvariant()}. " +
                         $"Tap to accept the invitation.",
                         inviteeActionPath,
                         null,
                         CancellationToken.None);
-
-                    inAppInvites++;
                 }
 
                 _notificationQueue.QueueNotificationEmail(
@@ -621,7 +584,7 @@ public sealed class CreateCircleCommand
                     invite.NormalizedIdentifier,
                     BuildInviteeEmail(
                         organizerDisplayName,
-                        name,
+                        data.Name,
                         circle.MemberCount,
                         request.ContributionAmount,
                         request.Frequency,
@@ -629,35 +592,9 @@ public sealed class CreateCircleCommand
                         request.ModeratorStartsCircle,
                         inviteLink,
                         request.InviteOnly),
-                    $"{organizerDisplayName} invited you to join {name}");
-
-                emailedInvites++;
+                    $"{organizerDisplayName} invited you to join {data.Name}");
             }
-
-            op.Success(
-                $"Circle '{name}' created. CircleId: {circle.Id}, " +
-                $"InviteCode: {inviteCode}, Invites: {validatedInvites.Count} " +
-                $"(MOVA: {movaInviteCount}, email-only: {emailOnlyInviteCount}, " +
-                $"in-app: {inAppInvites}, emails: {emailedInvites}), WalletJob: queued.");
-
-            return new BaseResult<CreateCircleResponseDto>(
-                HttpStatusCode.Created,
-                "Circle created successfully. " +
-                (request.Invites.Count > 0
-                    ? $"Invitations sent to {validatedInvites.Count} invitee(s)."
-                    : "Share the invite link to bring members in."),
-                new CreateCircleResponseDto
-                {
-                    CircleId = circle.Id,
-                    TotalRounds = circle.MemberCount,
-                    InviteCode = inviteCode,
-                    InviteLink = inviteLink,
-                });
         }
-
-        // ─────────────────────────────────────────────
-        // Helpers
-        // ─────────────────────────────────────────────
 
         private static BaseResult<CreateCircleResponseDto> Bad(
             string message,
@@ -775,6 +712,16 @@ public sealed class CreateCircleCommand
                 "— MOVA";
         }
     }
+
+    private sealed record ValidatedCircleData(
+        string Name,
+        string? Description,
+        DateOnly StartDateOnly,
+        PenaltyAmountFrom PenaltySource,
+        decimal PenaltyAmount,
+        decimal DepositAmount,
+        WalletCategory Category,
+        List<ValidatedInvite> ValidatedInvites);
 
     private sealed record ValidatedInvite(
         string NormalizedIdentifier,

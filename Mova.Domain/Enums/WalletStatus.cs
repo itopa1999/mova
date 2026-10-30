@@ -15,7 +15,8 @@ public enum PayoutDestination
     Wallet = 2,
     Main = 3,
     Utilities = 4,
-    Trustee = 5
+    Trustee = 5,
+    Circle = 6
 }
 
 public enum WalletType

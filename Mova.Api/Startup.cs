@@ -296,16 +296,16 @@ public class Startup(IConfiguration configuration)
         // ─────────────────────────────────────────────────────────────
         app.UseMiddleware<HangfireAuthMiddleware>();
 
-        app.UseHangfireDashboard("/hangfire", new DashboardOptions
-        {
-            Authorization = new[]
-            {
-                new HangfireDashboardAuthorizationFilter()
-            },
-            // Optional: make the dashboard read-only in production
-            // (no Requeue / Delete / Trigger buttons — safer for fintech)
-            // IsReadOnlyFunc = _ => !app.Environment.IsDevelopment()
-        });
+        app.UseHangfireDashboard("/hangfire"); // new DashboardOptions
+        // {
+        //     Authorization = new[]
+        //     {
+        //         new HangfireDashboardAuthorizationFilter()
+        //     },
+        //     // Optional: make the dashboard read-only in production
+        //     // (no Requeue / Delete / Trigger buttons — safer for fintech)
+        //     // IsReadOnlyFunc = _ => !app.Environment.IsDevelopment()
+        // });
 
         // ─────────────────────────────────────────────────────────────
         // 7. Static files and controllers.

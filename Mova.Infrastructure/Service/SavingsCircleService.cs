@@ -9,6 +9,11 @@ public sealed class SavingsCircleService : ISavingsCircleService
     private static readonly JsonSerializerOptions JsonOptions =
         new() { PropertyNameCaseInsensitive = true };
 
+    private static readonly string[] DayLabels =
+    {
+        "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
+    };
+
     public Task<(bool Success, string Message)> ValidateFrequencyAsync(
         ContributionFrequency frequency,
         string frequencyConfig,
@@ -68,7 +73,7 @@ public sealed class SavingsCircleService : ISavingsCircleService
 
             case ContributionFrequency.Monthly:
                 var hasDates = config.DatesOfMonth is { Count: > 0 };
-                var hasLastDay = config.IsLastDayOfMonth == true;
+                var hasLastDay = config.IsLastDayOfMonth;
 
                 if (!hasDates && !hasLastDay)
                     return (false, "Monthly frequency requires datesOfMonth or isLastDayOfMonth.");
@@ -84,14 +89,104 @@ public sealed class SavingsCircleService : ISavingsCircleService
         return (true, string.Empty);
     }
 
+    public string HumanizeFrequency(
+        ContributionFrequency frequency,
+        string frequencyConfig)
+    {
+        if (string.IsNullOrWhiteSpace(frequencyConfig))
+            return frequency.ToString();
 
-    
+        FrequencyConfigDto? config;
+        try
+        {
+            config = JsonSerializer.Deserialize<FrequencyConfigDto>(
+                frequencyConfig, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return frequency.ToString();
+        }
+
+        if (config is null)
+            return frequency.ToString();
+
+        return frequency switch
+        {
+            ContributionFrequency.Daily => HumanizeDaily(config),
+            ContributionFrequency.Weekly => HumanizeWeekly(config),
+            ContributionFrequency.Monthly => HumanizeMonthly(config),
+            _ => frequency.ToString()
+        };
+    }
+
+    private static string HumanizeDaily(FrequencyConfigDto config)
+    {
+        if (config.DaysOfWeek is { Count: 7 })
+            return "every day";
+
+        if (config.DaysOfWeek is { Count: > 0 })
+            return $"every day on {FormatDays(config.DaysOfWeek)}";
+
+        return "every day";
+    }
+
+    private static string HumanizeWeekly(FrequencyConfigDto config)
+    {
+        if (config.DaysOfWeek is { Count: > 0 })
+            return $"weekly on {FormatDays(config.DaysOfWeek)}";
+
+        return "weekly";
+    }
+
+    private static string HumanizeMonthly(FrequencyConfigDto config)
+    {
+        var dates = (config.DatesOfMonth ?? new List<int>())
+            .Where(d => d is >= 1 and <= 31)
+            .OrderBy(d => d)
+            .Select(FormatOrdinal)
+            .ToList();
+
+        if (dates.Count > 0 && config.IsLastDayOfMonth)
+            return $"monthly on {string.Join(", ", dates)}, and the last day of the month";
+
+        if (dates.Count > 0)
+            return $"monthly on {string.Join(", ", dates)}";
+
+        if (config.IsLastDayOfMonth)
+            return "monthly on the last day of the month";
+
+        return "monthly";
+    }
+
+    private static string FormatDays(IEnumerable<int> daysOfWeek)
+    {
+        return string.Join(", ", daysOfWeek
+            .Where(d => d is >= 1 and <= 7)
+            .OrderBy(d => d)
+            .Select(d => DayLabels[d - 1]));
+    }
+
+    private static string FormatOrdinal(int day)
+    {
+        var suffix = (day % 100) switch
+        {
+            11 or 12 or 13 => "th",
+            _ => (day % 10) switch
+            {
+                1 => "st",
+                2 => "nd",
+                3 => "rd",
+                _ => "th"
+            }
+        };
+        return $"the {day}{suffix}";
+    }
 
     private sealed class FrequencyConfigDto
     {
         public string? Type { get; set; }
         public List<int>? DaysOfWeek { get; set; }
         public List<int>? DatesOfMonth { get; set; }
-        public bool? IsLastDayOfMonth { get; set; }
+        public bool IsLastDayOfMonth { get; set; }
     }
 }
