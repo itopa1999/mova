@@ -287,7 +287,7 @@ public sealed class AcceptCircleInvitationCommand
                 $"{circle.Frequency.ToString().ToLowerInvariant()}, " +
                 $"round pool ₦{contributionAmount * circle.MemberCount:N0}. " +
                 $"A dedicated circle wallet is being set up for you.",
-                $"/dashboard/circles/detail/{circle.Id}",
+                $"/dashboard/circles/details/{circle.Id}",
                 null,
                 CancellationToken.None);
 

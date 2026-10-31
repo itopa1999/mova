@@ -643,5 +643,215 @@ public static class DefaultWalletTemplates
             SortOrder = 30,
             IsActive = true,
         },
+
+                // ─────────────────────────────────────────────────────────
+        // 31. Classic weekly Ajo/Esusu circle.
+        //     Category: 33 — AJo Contributions (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Weekly Ajo Circle",
+            Description = "Classic rotating savings — contribute every Monday, one member takes the pot each round.",
+            CategoryId = 33, // AJo Contributions
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(100_000),   // round pool
+            DefaultReleaseAmount = Money.FromNaira(10_000),   // per-round contribution
+            DefaultFrequency = ReleaseFrequency.Weekly,
+            DefaultFrequencyConfig = "{\"type\":\"weekly\",\"daysOfWeek\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "Users",
+            Tags = new[] { "ajo", "esusu", "rotating", "weekly", "group", "savings" },
+            SortOrder = 31,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 32. Traditional monthly Esusu circle.
+        //     Category: 34 — Rotating Savings (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Monthly Esusu Circle",
+            Description = "Traditional monthly rotating savings — everyone pays once a month, one member takes the pot.",
+            CategoryId = 34, // Rotating Savings
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(250_000),
+            DefaultReleaseAmount = Money.FromNaira(25_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "RefreshCw",
+            Tags = new[] { "esusu", "rotating", "monthly", "group", "savings", "traditional" },
+            SortOrder = 32,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 33. Group emergency fund circle.
+        //     Category: 35 — Group Emergency Fund (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Family Emergency Circle",
+            Description = "Pool money with family for emergencies — every member contributes monthly into a shared pot.",
+            CategoryId = 35, // Group Emergency Fund
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(400_000),
+            DefaultReleaseAmount = Money.FromNaira(20_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "ShieldPlus",
+            Tags = new[] { "emergency", "family", "group", "safety", "pool", "circle" },
+            SortOrder = 33,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 34. Group investment circle.
+        //     Category: 36 — Group Investment (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Group Investment Circle",
+            Description = "Pool capital with people you trust to fund a joint investment opportunity.",
+            CategoryId = 36, // Group Investment
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(1_000_000),
+            DefaultReleaseAmount = Money.FromNaira(100_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Bank,
+            IconName = "TrendingUp",
+            Tags = new[] { "investment", "group", "capital", "growth", "joint", "circle" },
+            SortOrder = 34,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 35. Project contributions circle.
+        //     Category: 37 — Project Contributions (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Project Contributions",
+            Description = "Fund a shared project — each member contributes a set amount every round.",
+            CategoryId = 37, // Project Contributions
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(200_000),
+            DefaultReleaseAmount = Money.FromNaira(20_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "FolderKanban",
+            Tags = new[] { "project", "contribution", "team", "group", "funding", "circle" },
+            SortOrder = 35,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 36. Wedding contribution circle.
+        //     Category: 38 — Wedding & Events (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Wedding Contribution Circle",
+            Description = "Friends and family contribute monthly toward a wedding or big celebration.",
+            CategoryId = 38, // Wedding & Events
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(500_000),
+            DefaultReleaseAmount = Money.FromNaira(50_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "PartyPopper",
+            Tags = new[] { "wedding", "event", "celebration", "group", "circle", "asoebi" },
+            SortOrder = 36,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 37. Community development circle.
+        //     Category: 39 — Community Development (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Community Development Circle",
+            Description = "Pool money with your community to fund shared infrastructure or development.",
+            CategoryId = 39, // Community Development
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(2_000_000),
+            DefaultReleaseAmount = Money.FromNaira(50_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Bank,
+            IconName = "Building2",
+            Tags = new[] { "community", "development", "town", "group", "circle", "infrastructure" },
+            SortOrder = 37,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 38. Group purchase circle.
+        //     Category: 40 — Group Purchases (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Group Purchase Circle",
+            Description = "Buy something together — pool funds to unlock bulk discounts or shared assets.",
+            CategoryId = 40, // Group Purchases
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(300_000),
+            DefaultReleaseAmount = Money.FromNaira(30_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "ShoppingCart",
+            Tags = new[] { "purchase", "bulk", "group", "circle", "shopping", "shared" },
+            SortOrder = 38,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 39. Group travel circle.
+        //     Category: 41 — Group Travel (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Group Travel Circle",
+            Description = "Friends saving together for a shared trip — each round one member takes the pot.",
+            CategoryId = 41, // Group Travel
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(800_000),
+            DefaultReleaseAmount = Money.FromNaira(40_000),
+            DefaultFrequency = ReleaseFrequency.Monthly,
+            DefaultFrequencyConfig = "{\"type\":\"monthly\",\"datesOfMonth\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "Plane",
+            Tags = new[] { "travel", "trip", "group", "circle", "vacation", "friends" },
+            SortOrder = 39,
+            IsActive = true,
+        },
+
+        // ─────────────────────────────────────────────────────────
+        // 40. Flexible group savings — catch-all.
+        //     Category: 42 — Other Group Savings (Circle)
+        // ─────────────────────────────────────────────────────────
+        new WalletTemplate
+        {
+            Name = "Flexible Group Savings",
+            Description = "A flexible rotating savings circle for any group goal that doesn't fit the other categories.",
+            CategoryId = 42, // Other Group Savings
+            WalletType = WalletType.Circle,
+            DefaultTargetAmount = Money.FromNaira(150_000),
+            DefaultReleaseAmount = Money.FromNaira(15_000),
+            DefaultFrequency = ReleaseFrequency.Weekly,
+            DefaultFrequencyConfig = "{\"type\":\"weekly\",\"daysOfWeek\":[1],\"time\":\"09:00\"}",
+            DefaultPayoutDestination = PayoutDestination.Wallet,
+            IconName = "CircleDollarSign",
+            Tags = new[] { "group", "circle", "flexible", "savings", "rotating", "misc" },
+            SortOrder = 40,
+            IsActive = true,
+        },
     };
 }
