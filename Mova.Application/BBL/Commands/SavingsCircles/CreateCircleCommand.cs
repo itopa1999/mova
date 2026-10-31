@@ -538,7 +538,7 @@ public sealed class CreateCircleCommand
                 (request.ModeratorStartsCircle
                     ? "You control when the circle starts — you'll be able to start it once the roster is set."
                     : "Share the invite link with your invited members so they can join."),
-                $"/dashboard/circles/{circle.Id}",
+                $"/dashboard/wallets",
                 null,
                 CancellationToken.None);
 

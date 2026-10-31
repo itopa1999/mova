@@ -125,4 +125,48 @@ public class CircleController(
 
         return StatusCode((int)result.StatusCode, result);
     }
+
+    [HttpGet("details/{walletId:long}/rounds")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<CircleRoundListResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    public async Task<IActionResult> GetCircleRounds(
+        [FromRoute] long walletId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetCircleRoundsQuery.Query
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            WalletId = walletId
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("details/{walletId:long}/members")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<CircleMembersResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    public async Task<IActionResult> GetCircleMembers(
+        [FromRoute] long walletId,
+        [FromQuery] string? status,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetCircleMembersQuery.Query
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            WalletId = walletId,
+            StatusFilter = status
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
 }
