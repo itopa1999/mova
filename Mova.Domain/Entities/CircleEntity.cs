@@ -99,8 +99,10 @@ public class CircleMember : BaseEntity
     [MaxLength(320)]
     public string Identifier { get; set; } = string.Empty;
 
-    // Resolved user's public ID
+    // Resolved user's public ID — null while invite is pending (no MOVA account yet)
     public string? UserPublicId { get; set; }
+
+    // Optional phone number captured at invite time
     public string? Phone { get; set; } = string.Empty;
 
     // Friendly name shown on invite list; replaced by real name on accept
@@ -123,10 +125,10 @@ public class CircleMember : BaseEntity
     // Invited → Active → Defaulted / Exited / Completed
     public CircleMemberStatus Status { get; set; } = CircleMemberStatus.Invited;
 
-    // Running total the member has paid in
+    // Running total the member has paid in (across all rounds)
     public Money TotalContributed { get; set; } = Money.FromNaira(0);
 
-    // Total the member has received as payout
+    // Total the member has received as payout (0 until their round comes)
     public Money TotalReceived { get; set; } = Money.FromNaira(0);
 
     // Security deposit currently held for this member
@@ -135,47 +137,81 @@ public class CircleMember : BaseEntity
     // Number of times this member has missed a contribution
     public int MissedContributions { get; set; } = 0;
 
-    // When the member received their payout
+    // When the member received their payout (null until their round)
     public DateTimeOffset? PayoutReceivedAt { get; set; }
 }
 
-// [Table("circle_rounds")]
-// public class CircleRound : BaseEntity
-// {
-//     public long SavingsCircleId { get; set; }
-//     public SavingsCircle SavingsCircle { get; set; } = null!;
 
-//     public int RoundNumber { get; set; }                   // 1..TotalRounds
-//     public DateTimeOffset CollectionDate { get; set; }
-//     public DateTimeOffset PayoutDate { get; set; }
+[Table("circle_rounds")]
+public class CircleRound : BaseEntity
+{
+    // FK to savings_circles.Id
+    public long SavingsCircleId { get; set; }
+    public SavingsCircle SavingsCircle { get; set; } = null!;
 
-//     public string? RecipientUserPublicId { get; set; }     // whose turn this round
-//     public Money PooledAmount { get; set; } = Money.FromNaira(0);
-//     public Money PaidOutAmount { get; set; } = Money.FromNaira(0);
+    // 1-based round number (1..MemberCount); one round per member
+    public int RoundNumber { get; set; }
 
-//     public CircleRoundStatus Status { get; set; } = CircleRoundStatus.Pending;
-//     public DateTimeOffset? PaidOutAt { get; set; }
-//     public string? PayoutTransactionReference { get; set; }
-//     public bool RequiresManualReview { get; set; }
+    // When contributions for this round are due
+    public DateTimeOffset CollectionDate { get; set; }
 
-//     private readonly List<Contribution> _contributions = new();
-//     public IReadOnlyCollection<Contribution> Contributions => _contributions.AsReadOnly();
-// }
+    // When the round's payout should be sent to the recipient
+    public DateTimeOffset PayoutDate { get; set; }
 
-// [Table("contributions")]
-// public class Contribution : BaseEntity
-// {
-//     public long CircleRoundId { get; set; }                // FIX: was missing
-//     public CircleRound CircleRound { get; set; } = null!;
+    // Public ID of the member receiving this round's pot
+    public string? RecipientUserPublicId { get; set; }
 
-//     public long CircleMemberId { get; set; }
-//     public CircleMember CircleMember { get; set; } = null!;
+    // Total collected from all members for this round
+    public Money PooledAmount { get; set; } = Money.FromNaira(0);
 
-//     public Money Amount { get; set; } = Money.FromNaira(0);
-//     public Money PenaltyApplied { get; set; } = Money.FromNaira(0);
+    // Total actually paid out to the recipient (after penalties/fees if any)
+    public Money PaidOutAmount { get; set; } = Money.FromNaira(0);
 
-//     public ContributionStatus Status { get; set; } = ContributionStatus.Pending;
-//     public DateTimeOffset? CollectedAt { get; set; }
-//     public string? PaymentReference { get; set; }
-//     public string? FailureReason { get; set; }
-// }
+    // Pending → Collecting → PaidOut | Failed | RequiresReview
+    public CircleRoundStatus Status { get; set; } = CircleRoundStatus.Pending;
+
+    // When the payout transaction completed
+    public DateTimeOffset? PaidOutAt { get; set; }
+
+    // External payment provider reference for the payout transfer
+    public string? PayoutTransactionReference { get; set; }
+
+    // True when the round needs manual review (e.g. member defaulted mid-round)
+    public bool RequiresManualReview { get; set; }
+
+    private readonly List<Contribution> _contributions = new();
+
+    // Every member's contribution attempt for this round
+    public IReadOnlyCollection<Contribution> Contributions => _contributions.AsReadOnly();
+}
+
+
+[Table("contributions")]
+public class Contribution : BaseEntity
+{
+    // FK to circle_rounds.Id — which round this contribution belongs to
+    public long CircleRoundId { get; set; }
+    public CircleRound CircleRound { get; set; } = null!;
+
+    // FK to circle_members.Id — the member who paid
+    public long CircleMemberId { get; set; }
+    public CircleMember CircleMember { get; set; } = null!;
+
+    // Amount the member paid in (contribution + penalty if applicable)
+    public Money Amount { get; set; } = Money.FromNaira(0);
+
+    // Extra amount charged as penalty for a late/missed payment
+    public Money PenaltyApplied { get; set; } = Money.FromNaira(0);
+
+    // Pending → Paid | Missed | Defaulted | Refunded
+    public ContributionStatus Status { get; set; } = ContributionStatus.Pending;
+
+    // When the money actually arrived (null if not yet paid)
+    public DateTimeOffset? CollectedAt { get; set; }
+
+    // Provider transaction reference for the collection
+    public string? PaymentReference { get; set; }
+
+    // Reason the collection failed (for Missed/Defaulted states)
+    public string? FailureReason { get; set; }
+}

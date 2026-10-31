@@ -45,6 +45,8 @@ public class ApplicationDbContext
     public DbSet<ReleaseRequest> ReleaseRequests => Set<ReleaseRequest>();
     public DbSet<SavingsCircle> SavingsCircles => Set<SavingsCircle>();
     public DbSet<CircleMember> CircleMembers => Set<CircleMember>();
+    public DbSet<CircleRound> CircleRounds => Set<CircleRound>();
+    public DbSet<Contribution> Contributions => Set<Contribution>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

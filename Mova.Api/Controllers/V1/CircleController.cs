@@ -105,4 +105,24 @@ public class CircleController(
     {
         public long CategoryId { get; set; }
     }
+
+    [HttpGet("details/{walletId:long}")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<CircleDetailsResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    public async Task<IActionResult> GetCircleDetails(
+        [FromRoute] long walletId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetCircleDetailsQuery.Query
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            WalletId = walletId
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
 }

@@ -103,6 +103,15 @@ public sealed class GetCircleConsentQuery
             if (string.IsNullOrWhiteSpace(organizerName))
                 organizerName = "Organizer";
 
+            var categoryId = await _unitOfWork.Query<Wallet>()
+                .AsNoTracking()
+                .Where(w =>
+                    w.SavingsCircleId == circle.Id &&
+                    w.UserPublicId == circle.OrganizerUserPublicId &&
+                    w.Type == WalletType.Circle)
+                .Select(w => (long?)w.CategoryId)
+                .FirstOrDefaultAsync(cancellationToken);
+
             var frequencyDisplay = _savingsCircleService.HumanizeFrequency(
                 circle.Frequency,
                 circle.FrequencyConfig ?? string.Empty);
@@ -121,7 +130,8 @@ public sealed class GetCircleConsentQuery
                     Name = circle.Name,
                     Description = circle.Description ?? string.Empty,
                     OrganizerName = organizerName,
-                    Status = circle.Status.ToString()
+                    Status = circle.Status.ToString(),
+                    CategoryId = categoryId
                 },
                 FinancialStats = new FinancialStatsDto
                 {
@@ -169,8 +179,6 @@ public sealed class GetCircleConsentQuery
         }
     }
 }
-
-/* ───────────── DTOs ───────────── */
 
 public sealed class CircleConsentDto
 {
