@@ -460,7 +460,7 @@ public sealed class CreateCircleCommand
                     Status = CircleMemberStatus.Active,
                     TotalContributed = Money.FromNaira(0),
                     TotalReceived = Money.FromNaira(0),
-                    DepositHeld = contributionMoney + Money.FromNaira(data.DepositAmount),
+                    DepositHeld = Money.FromNaira(0)
                 };
 
                 await _unitOfWork.AddAsync(organizerMember, cancellationToken);

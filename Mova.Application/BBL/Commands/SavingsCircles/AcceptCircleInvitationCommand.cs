@@ -9,6 +9,7 @@ using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 
@@ -245,7 +246,10 @@ public sealed class AcceptCircleInvitationCommand
                     InvitedAt = DateTimeOffset.UtcNow,
                     AcceptedAt = DateTimeOffset.UtcNow,
                     RotationPosition = rotationPosition,
-                    Status = CircleMemberStatus.Active
+                    Status = CircleMemberStatus.Active,
+                    TotalContributed = Money.FromNaira(0),
+                    TotalReceived = Money.FromNaira(0),
+                    DepositHeld = Money.FromNaira(0)
                 };
 
                 await _unitOfWork.AddAsync(existingMember, cancellationToken);

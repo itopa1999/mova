@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
+using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -17,17 +18,20 @@ public sealed class BackgroundTaskJob
     private readonly ApplicationDbContext _context;
     private readonly IPaystackService _paystackService;
     private readonly IIdentityService _identityService;
+    private readonly ISavingsCircleService _savingsCircleService;
     private readonly ILogger<BackgroundTaskJob> _logger;
 
     public BackgroundTaskJob(
         ApplicationDbContext context,
         IPaystackService paystackService,
         IIdentityService identityService,
+        ISavingsCircleService savingsCircleService,
         ILogger<BackgroundTaskJob> logger)
     {
         _context = context;
         _paystackService = paystackService;
         _identityService = identityService;
+        _savingsCircleService = savingsCircleService;
         _logger = logger;
     }
 
@@ -218,7 +222,6 @@ public sealed class BackgroundTaskJob
                 $"Savings circle {SavingsCircleId} not found. Wallet cannot be created.");
         }
 
-        // ── 1. Debit the user's main balance ─────────────────────────────
         var balanceDebited = await _identityService.DebitBalanceAsync(
             UserPublicId,
             TotalUpfrontCharge,
@@ -260,7 +263,6 @@ public sealed class BackgroundTaskJob
                     cancellationToken);
             }
 
-            // ── 3. Create the circle wallet ──────────────────────────────
             var wallet = new Wallet
             {
                 UserPublicId = UserPublicId,
@@ -285,7 +287,6 @@ public sealed class BackgroundTaskJob
             _context.Wallets.Add(wallet);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // ── 4. Attach the wallet id to the member row ────────────────
             var member = await _context.CircleMembers
                 .FirstOrDefaultAsync(
                     m => m.SavingsCircleId == SavingsCircleId &&
@@ -295,7 +296,16 @@ public sealed class BackgroundTaskJob
             if (member is not null)
             {
                 member.WalletId = wallet.Id;
+                member.DepositHeld = Money.FromNaira(TargetAmount + DepositAmount);
                 await _context.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "Member {MemberId} DepositHeld set to {DepositHeld} " +
+                    "(TargetAmount {TargetAmount} + DepositAmount {DepositAmount}).",
+                    member.Id,
+                    TargetAmount + DepositAmount,
+                    TargetAmount,
+                    DepositAmount);
             }
 
             _logger.LogInformation(
@@ -361,7 +371,6 @@ public sealed class BackgroundTaskJob
 
         await TryStartCircleIfReadySafeAsync(SavingsCircleId, cancellationToken);
     }
-
 
     private async Task TryStartCircleIfReadySafeAsync(
         long savingsCircleId,
@@ -458,11 +467,24 @@ public sealed class BackgroundTaskJob
             return;
         }
 
-        circle.Status = SavingsCircleStatus.Active;
+        var frequencyValidation = await _savingsCircleService.ValidateFrequencyAsync(
+            circle.Frequency,
+            circle.FrequencyConfig,
+            cancellationToken);
 
-        var firstCollectionDate = circle.StartDate > now ? circle.StartDate : now;
-        circle.NextCollectionDate = firstCollectionDate;
-        circle.NextPayoutDate = firstCollectionDate;
+        if (!frequencyValidation.Success)
+        {
+            _logger.LogError(
+                "Circle {SavingsCircleId} cannot start: invalid frequency config. {Message}",
+                savingsCircleId,
+                frequencyValidation.Message);
+
+            throw new InvalidOperationException(
+                $"Circle {savingsCircleId} has an invalid frequency config: " +
+                $"{frequencyValidation.Message}");
+        }
+
+        circle.Status = SavingsCircleStatus.Active;
 
         if (circle.RotationStrategy == RotationStrategy.RandomDraw)
         {
@@ -486,21 +508,120 @@ public sealed class BackgroundTaskJob
                 activeMembers.Count);
         }
 
+        var orderedMembers = activeMembers
+            .OrderBy(m => m.RotationPosition ?? int.MaxValue)
+            .ThenBy(m => m.AcceptedAt ?? m.InvitedAt)
+            .ToList();
+
+        if (orderedMembers.Count == 0)
+        {
+            _logger.LogWarning(
+                "Circle {SavingsCircleId} is ready to start but no active " +
+                "members have rotation positions. Aborting auto-start.",
+                savingsCircleId);
+            return;
+        }
+
+        if (circle.MemberCount != orderedMembers.Count)
+        {
+            _logger.LogInformation(
+                "Circle {SavingsCircleId} starting with {Active} members " +
+                "(configured for {Configured}). Aligning MemberCount.",
+                savingsCircleId,
+                orderedMembers.Count,
+                circle.MemberCount);
+
+            circle.MemberCount = orderedMembers.Count;
+        }
+
+        var firstCollectionDate = _savingsCircleService.GetNextCollectionDate(
+            circle.Frequency,
+            circle.FrequencyConfig,
+            now);
+
+        circle.NextCollectionDate = firstCollectionDate;
+        circle.NextPayoutDate = firstCollectionDate;
+
+        var roundOneRecipient = orderedMembers[0];
+
+        var firstRound = new CircleRound
+        {
+            SavingsCircleId = savingsCircleId,
+            RoundNumber = 1,
+            CollectionDate = firstCollectionDate,
+            PayoutDate = firstCollectionDate,
+            RecipientUserPublicId = roundOneRecipient.UserPublicId,
+            PooledAmount = Money.FromNaira(0),
+            PaidOutAmount = Money.FromNaira(0),
+            Status = CircleRoundStatus.Collecting,
+            RequiresManualReview = false
+        };
+
+        _context.CircleRounds.Add(firstRound);
         await _context.SaveChangesAsync(cancellationToken);
 
+        var alreadySeeded = await _context.Contributions
+            .AnyAsync(c => c.CircleRoundId == firstRound.Id, cancellationToken);
+
+        if (!alreadySeeded)
+        {
+            var collectedAt = DateTimeOffset.UtcNow;
+            var contributionAmount = circle.ContributionAmount.ToDecimal();
+            var totalPooled = 0m;
+
+            foreach (var member in orderedMembers)
+            {
+                _context.Contributions.Add(new Contribution
+                {
+                    CircleRoundId = firstRound.Id,
+                    CircleMemberId = member.Id,
+                    Amount = circle.ContributionAmount,
+                    PenaltyApplied = Money.FromNaira(0),
+                    Status = ContributionStatus.Collected,
+                    CollectedAt = collectedAt,
+                    PaymentReference =
+                        $"circle-start-{savingsCircleId}-{member.UserPublicId}",
+                    FailureReason = null
+                });
+
+                var previousDepositHeld = member.DepositHeld.ToDecimal();
+                var newDepositHeld = Math.Max(0m, previousDepositHeld - contributionAmount);
+
+                member.DepositHeld = Money.FromNaira(newDepositHeld);
+                member.TotalContributed = Money.FromNaira(
+                    member.TotalContributed.ToDecimal() + contributionAmount);
+
+                totalPooled += contributionAmount;
+
+                _logger.LogInformation(
+                    "Member {MemberId} first-round contribution debited from " +
+                    "DepositHeld. Previous: {PreviousDepositHeld}, Debit: " +
+                    "{DebitedAmount}, Remaining: {NewDepositHeld}.",
+                    member.Id,
+                    previousDepositHeld,
+                    contributionAmount,
+                    newDepositHeld);
+            }
+
+            firstRound.PooledAmount = Money.FromNaira(totalPooled);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Round 1 seeded for circle {SavingsCircleId}. " +
+                "{Count} contributions marked Collected (total {Pooled}).",
+                savingsCircleId,
+                orderedMembers.Count,
+                totalPooled);
+        }
+
         _logger.LogInformation(
-            "Circle {SavingsCircleId} started automatically. " +
-            "Members: {Active}/{Total}, Policy: {Policy}, " +
-            "Rotation: {Rotation}, First collection: {CollectionDate:O}.",
+            "Circle {SavingsCircleId} started. Round 1 (Collecting) created " +
+            "for {Recipient}. Collection date: {CollectionDate:O}.",
             savingsCircleId,
-            activeMemberCount,
-            circle.MemberCount,
-            circle.StartPolicy,
-            circle.RotationStrategy,
+            roundOneRecipient.DisplayName ?? roundOneRecipient.UserPublicId,
             firstCollectionDate);
     }
-
-    /* ───────────── Ledger helpers ───────────── */
 
     private async Task RecordDebitAsync(
         string userPublicId,
