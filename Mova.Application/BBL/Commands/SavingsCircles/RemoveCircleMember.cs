@@ -133,6 +133,9 @@ public sealed class RemoveCircleMemberCommand
 
             var refundAmount = member.DepositHeld.ToDecimal();
 
+            await using var tx = await _unitOfWork.BeginAtomicSerializableAsync(
+                cancellationToken);
+
             if (refundAmount > 0)
             {
                 var credited = await _identityService.CreditBalanceAsync(
@@ -142,7 +145,9 @@ public sealed class RemoveCircleMemberCommand
 
                 if (!credited)
                 {
-                    op.Error($"Failed to credit refund of {refundAmount} to {request.TargetUserPublicId}.");
+                    op.Error(
+                        $"Failed to credit refund of {refundAmount} to " +
+                        $"{request.TargetUserPublicId}.");
                     return Bad("Failed to refund the member's deposit. Please try again.");
                 }
             }
@@ -178,12 +183,8 @@ public sealed class RemoveCircleMemberCommand
                 contribution.FailureReason = "Member removed from circle";
             }
 
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
             if (refundAmount > 0)
             {
-                var now = DateTimeOffset.UtcNow;
-
                 var refund = new Transaction
                 {
                     UserPublicId = request.TargetUserPublicId,
@@ -196,11 +197,10 @@ public sealed class RemoveCircleMemberCommand
                     Reference =
                         $"circle-member-removal-refund-{circle.Id}-" +
                         $"{request.TargetUserPublicId}-{Guid.NewGuid():N}",
-                    CompletedAt = now
+                    CompletedAt = DateTimeOffset.UtcNow
                 };
 
                 await _unitOfWork.AddAsync(refund, cancellationToken);
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await _unitOfWork.AddAsync(new LedgerEntry
                 {
@@ -209,9 +209,11 @@ public sealed class RemoveCircleMemberCommand
                     Amount = Money.FromNaira(refundAmount),
                     IsCredit = true
                 }, cancellationToken);
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
 
             _notificationQueue.InAppNotificationAsync(
                 request.TargetUserPublicId,

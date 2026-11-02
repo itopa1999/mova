@@ -122,46 +122,71 @@ public sealed class UpdateCircleRotationCommand
             var updatesByUser = request.Positions
                 .ToDictionary(p => p.UserPublicId, p => p.Position);
 
-            foreach (var member in activeMembers)
-            {
-                if (member.UserPublicId is null) continue;
-
-                if (updatesByUser.TryGetValue(member.UserPublicId, out var newPos))
+            var projectedPositions = activeMembers
+                .Select(m =>
                 {
-                    member.RotationPosition = newPos;
-                }
-            }
+                    if (m.UserPublicId != null &&
+                        updatesByUser.TryGetValue(m.UserPublicId, out var newPos))
+                        return (int?)newPos;
+                    return m.RotationPosition;
+                })
+                .ToList();
 
-            var positionValues = activeMembers
-                .Select(m => m.RotationPosition)
+            if (projectedPositions.Any(p => p is null))
+                return Bad("One or more active members have no rotation position. " +
+                    "Assign all positions before swapping.");
+
+            var finalValues = projectedPositions
                 .Where(p => p.HasValue)
                 .Select(p => p!.Value)
                 .ToList();
 
-            if (positionValues.Count != activeMembers.Count)
-                return Bad("One or more active members have no rotation position. " +
-                    "Assign all positions before swapping.");
-
-            var finalDuplicates = positionValues
-                .GroupBy(p => p)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToList();
-
-            if (finalDuplicates.Count > 0)
-                return Bad($"Positions must be unique. Conflicts: {string.Join(", ", finalDuplicates)}.");
-
             var expected = Enumerable.Range(1, activeMembers.Count).ToHashSet();
-            var actual = positionValues.ToHashSet();
+            var actual = finalValues.ToHashSet();
 
             if (!expected.SetEquals(actual))
                 return Bad($"Positions must form a complete sequence from 1 to {activeMembers.Count}.");
 
+            var changes = new List<(CircleMember Member, int NewPos)>();
+            foreach (var update in request.Positions)
+            {
+                var member = activeMembers.First(m => m.UserPublicId == update.UserPublicId);
+                if (member.RotationPosition != update.Position)
+                    changes.Add((member, update.Position));
+            }
+
+            if (changes.Count == 0)
+            {
+                op.Success("No position changes needed.");
+                return new BaseResult<UpdateCircleRotationResponse>(
+                    HttpStatusCode.OK,
+                    "Rotation order updated.",
+                    new UpdateCircleRotationResponse { Updated = true });
+            }
+
+            await using var tx = await _unitOfWork.BeginAtomicSerializableAsync(
+                cancellationToken);
+
+            var tempPos = -changes.Count;
+            foreach (var (member, _) in changes)
+            {
+                member.RotationPosition = tempPos++;
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            foreach (var (member, newPos) in changes)
+            {
+                member.RotationPosition = newPos;
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await tx.CommitAsync(cancellationToken);
 
             op.Success(
                 $"Rotation updated for circle {circle.Id} by {request.UserPublicId}. " +
-                $"Applied {request.Positions.Count} position updates.");
+                $"Applied {changes.Count} position change(s).");
 
             return new BaseResult<UpdateCircleRotationResponse>(
                 HttpStatusCode.OK,
