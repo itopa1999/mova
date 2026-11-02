@@ -13,4 +13,9 @@ public interface ISavingsCircleService
     string HumanizeFrequency(
         ContributionFrequency frequency,
         string frequencyConfig);
+
+    DateTimeOffset GetNextCollectionDate(
+        ContributionFrequency frequency,
+        string frequencyConfig,
+        DateTimeOffset from);
 }

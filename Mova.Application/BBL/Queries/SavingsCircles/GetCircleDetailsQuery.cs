@@ -58,7 +58,8 @@ public sealed class GetCircleDetailsQuery
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
                     w => w.Id == request.WalletId &&
-                         w.UserPublicId == request.UserPublicId,
+                         w.UserPublicId == request.UserPublicId
+                         && w.Type == WalletType.Circle,
                     cancellationToken);
 
             if (wallet is null)

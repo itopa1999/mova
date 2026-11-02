@@ -9,7 +9,6 @@ using Mova.Application.BBL.Commands.SavingsCircles;
 using Mova.Application.BBL.Queries.SavingsCircles;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
-using static Mova.Application.BBL.Commands.SavingsCircles.AcceptCircleInvitationCommand;
 using static Mova.Application.BBL.Commands.SavingsCircles.CreateCircleCommand;
 using static Mova.Application.BBL.Queries.SavingsCircles.SearchCircleInviteeQuery;
 
@@ -166,6 +165,75 @@ public class CircleController(
         };
 
         var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpPatch("details/{walletId:long}/rotation")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<UpdateCircleRotationResponse>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> UpdateCircleRotation(
+        [FromRoute] long walletId,
+        [FromBody] UpdateRotationBody body,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateCircleRotationCommand.Command
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            WalletId = walletId,
+            Positions = body.Positions
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpDelete("details/{walletId:long}/members/{userPublicId}")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<RemoveCircleMemberResponse>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    public async Task<IActionResult> RemoveCircleMember(
+        [FromRoute] long walletId,
+        [FromRoute] string userPublicId,
+        CancellationToken cancellationToken)
+    {
+        var command = new RemoveCircleMemberCommand.Command
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            WalletId = walletId,
+            TargetUserPublicId = userPublicId
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    public sealed class UpdateRotationBody
+    {
+        public List<RotationPositionItem> Positions { get; set; } = new();
+    }
+
+    [HttpPut("details/{walletId:long}")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<UpdateCircleDetailsResponse>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    public async Task<IActionResult> UpdateCircleDetails(
+        [FromRoute] long walletId,
+        [FromBody] UpdateCircleDetailsCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.WalletId = walletId;
+
+        var result = await _mediator.Send(command, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
     }

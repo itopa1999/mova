@@ -6,6 +6,8 @@ namespace Mova.Infrastructure.Services;
 
 public sealed class SavingsCircleService : ISavingsCircleService
 {
+    private const int DefaultHourOfDay = 9;
+
     private static readonly JsonSerializerOptions JsonOptions =
         new() { PropertyNameCaseInsensitive = true };
 
@@ -119,6 +121,144 @@ public sealed class SavingsCircleService : ISavingsCircleService
         };
     }
 
+    public DateTimeOffset GetNextCollectionDate(
+        ContributionFrequency frequency,
+        string frequencyConfig,
+        DateTimeOffset from)
+    {
+        if (!Enum.IsDefined(typeof(ContributionFrequency), frequency))
+            throw new InvalidOperationException(
+                $"Invalid frequency: {frequency}.");
+
+        if (string.IsNullOrWhiteSpace(frequencyConfig))
+            throw new InvalidOperationException(
+                "Frequency config is required.");
+
+        FrequencyConfigDto? config;
+        try
+        {
+            config = JsonSerializer.Deserialize<FrequencyConfigDto>(
+                frequencyConfig, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                "Frequency config is not valid JSON.", ex);
+        }
+
+        if (config is null)
+            throw new InvalidOperationException(
+                "Frequency config is required.");
+
+        var expectedType = frequency.ToString().ToLowerInvariant();
+        var actualType = config.Type?.Trim().ToLowerInvariant();
+
+        if (!string.Equals(actualType, expectedType, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"Frequency config type '{config.Type}' does not match " +
+                $"frequency '{frequency}'.");
+
+        return frequency switch
+        {
+            ContributionFrequency.Daily => GetNextDailyDate(config, from),
+            ContributionFrequency.Weekly => GetNextWeeklyDate(config, from),
+            ContributionFrequency.Monthly => GetNextMonthlyDate(config, from),
+            _ => throw new InvalidOperationException(
+                $"Unsupported frequency: {frequency}.")
+        };
+    }
+
+    private static DateTimeOffset GetNextDailyDate(
+        FrequencyConfigDto config,
+        DateTimeOffset from)
+    {
+        var daysOfWeek = SanitizeDaysOfWeek(config.DaysOfWeek);
+
+        if (daysOfWeek.Count == 0 || daysOfWeek.Count == 7)
+        {
+            var todayAtHour = new DateTimeOffset(
+                from.Year, from.Month, from.Day,
+                DefaultHourOfDay, 0, 0, from.Offset);
+
+            return todayAtHour > from
+                ? todayAtHour
+                : todayAtHour.AddDays(1);
+        }
+
+        return GetNextMatchingDayOfWeek(daysOfWeek, from);
+    }
+
+    private static DateTimeOffset GetNextWeeklyDate(
+        FrequencyConfigDto config,
+        DateTimeOffset from)
+    {
+        var daysOfWeek = SanitizeDaysOfWeek(config.DaysOfWeek);
+
+        if (daysOfWeek.Count == 0)
+            throw new InvalidOperationException(
+                "Weekly frequency requires at least one day in daysOfWeek.");
+
+        return GetNextMatchingDayOfWeek(daysOfWeek, from);
+    }
+
+    private static DateTimeOffset GetNextMonthlyDate(
+        FrequencyConfigDto config,
+        DateTimeOffset from)
+    {
+        var datesOfMonth = SanitizeDatesOfMonth(config.DatesOfMonth);
+        var isLastDay = config.IsLastDayOfMonth;
+
+        if (datesOfMonth.Count == 0 && !isLastDay)
+            throw new InvalidOperationException(
+                "Monthly frequency requires datesOfMonth or isLastDayOfMonth.");
+
+        var thisMonthCandidates = BuildMonthlyCandidates(
+            from.Year, from.Month, datesOfMonth, isLastDay, from.Offset);
+
+        var nextThisMonth = thisMonthCandidates
+            .Where(c => c > from)
+            .OrderBy(c => c)
+            .Cast<DateTimeOffset?>()
+            .FirstOrDefault();
+
+        if (nextThisMonth.HasValue)
+            return nextThisMonth.Value;
+
+        var next = from.AddMonths(1);
+        var nextMonthCandidates = BuildMonthlyCandidates(
+            next.Year, next.Month, datesOfMonth, isLastDay, from.Offset);
+
+        return nextMonthCandidates.Min();
+    }
+
+    private static List<DateTimeOffset> BuildMonthlyCandidates(
+        int year,
+        int month,
+        List<int> datesOfMonth,
+        bool isLastDay,
+        TimeSpan offset)
+    {
+        var daysInMonth = DateTime.DaysInMonth(year, month);
+        var result = new List<DateTimeOffset>(datesOfMonth.Count + 1);
+
+        foreach (var day in datesOfMonth)
+        {
+            var validDay = Math.Min(day, daysInMonth);
+            result.Add(new DateTimeOffset(
+                year, month, validDay,
+                DefaultHourOfDay, 0, 0, offset));
+        }
+
+        if (isLastDay)
+        {
+            result.Add(new DateTimeOffset(
+                year, month, daysInMonth,
+                DefaultHourOfDay, 0, 0, offset));
+        }
+
+        return result;
+    }
+
     private static string HumanizeDaily(FrequencyConfigDto config)
     {
         if (config.DaysOfWeek is { Count: 7 })
@@ -180,6 +320,48 @@ public sealed class SavingsCircleService : ISavingsCircleService
             }
         };
         return $"the {day}{suffix}";
+    }
+
+    private static List<int> SanitizeDaysOfWeek(List<int>? days)
+    {
+        if (days is null || days.Count == 0)
+            return new List<int>();
+
+        return days.Where(d => d is >= 1 and <= 7).Distinct().ToList();
+    }
+
+    private static List<int> SanitizeDatesOfMonth(List<int>? dates)
+    {
+        if (dates is null || dates.Count == 0)
+            return new List<int>();
+
+        return dates.Where(d => d is >= 1 and <= 31).Distinct().ToList();
+    }
+
+    private static DateTimeOffset GetNextMatchingDayOfWeek(
+        List<int> daysOfWeek,
+        DateTimeOffset from)
+    {
+        var targetDow = daysOfWeek
+            .Select(d => d == 7 ? DayOfWeek.Sunday : (DayOfWeek)d)
+            .ToHashSet();
+
+        for (var i = 0; i <= 8; i++)
+        {
+            var candidateDay = from.Date.AddDays(i);
+
+            if (!targetDow.Contains(candidateDay.DayOfWeek))
+                continue;
+
+            var candidate = new DateTimeOffset(
+                candidateDay.Year, candidateDay.Month, candidateDay.Day,
+                DefaultHourOfDay, 0, 0, from.Offset);
+
+            if (candidate > from)
+                return candidate;
+        }
+
+        return from.AddDays(7);
     }
 
     private sealed class FrequencyConfigDto
