@@ -33,7 +33,10 @@ public sealed class VerifyPinCommand
         PinChallengeType.RequestRelease,
         PinChallengeType.CreateWalletTrustee,
         PinChallengeType.ChangeTransactionPin,
-        PinChallengeType.CreateCircle
+        PinChallengeType.CreateCircle,
+        PinChallengeType.UpdateCircle,
+        PinChallengeType.StartCircle,
+        PinChallengeType.DeleteCircle
     };
 
     public sealed class Command : IRequest<BaseResult>

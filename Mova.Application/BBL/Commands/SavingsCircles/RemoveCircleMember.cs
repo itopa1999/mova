@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
@@ -20,15 +21,11 @@ public sealed class RemoveCircleMemberCommand
     public sealed class Command : IRequest<BaseResult<RemoveCircleMemberResponse>>
     {
         [JsonIgnore] public string UserPublicId { get; set; } = string.Empty;
-
         public long WalletId { get; set; }
-
-        [Required]
-        public string TargetUserPublicId { get; set; } = string.Empty;
+        [Required] public string TargetUserPublicId { get; set; } = string.Empty;
     }
 
-    public sealed class Handler
-        : IRequestHandler<Command, BaseResult<RemoveCircleMemberResponse>>
+    public sealed class Handler : IRequestHandler<Command, BaseResult<RemoveCircleMemberResponse>>
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
@@ -68,7 +65,6 @@ public sealed class RemoveCircleMemberCommand
                 return Bad("Target member is required.");
 
             var wallet = await _unitOfWork.Query<Wallet>()
-                .AsNoTracking()
                 .FirstOrDefaultAsync(
                     w => w.Id == request.WalletId && w.Type == WalletType.Circle,
                     cancellationToken);
@@ -152,6 +148,8 @@ public sealed class RemoveCircleMemberCommand
                 }
             }
 
+            wallet.Status = WalletStatus.Broken;
+            wallet.ClosedAt = DateTimeOffset.Now;
             member.Status = CircleMemberStatus.Exited;
             member.DepositHeld = Money.FromNaira(0);
             member.RotationPosition = null;
@@ -202,15 +200,19 @@ public sealed class RemoveCircleMemberCommand
 
                 await _unitOfWork.AddAsync(refund, cancellationToken);
 
+                // ─── FIX: Save the transaction first to generate the Id ───
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+
                 await _unitOfWork.AddAsync(new LedgerEntry
                 {
                     WalletId = null,
-                    TransactionId = refund.Id,
+                    TransactionId = refund.Id, // Now we have the Id!
                     Amount = Money.FromNaira(refundAmount),
                     IsCredit = true
                 }, cancellationToken);
             }
 
+            // Final save for the LedgerEntry and the member updates
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             await tx.CommitAsync(cancellationToken);
