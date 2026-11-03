@@ -66,7 +66,6 @@ public sealed class UpdateCircleDetailsCommand
                 return Bad("You must be signed in.", HttpStatusCode.Unauthorized);
 
             var wallet = await _unitOfWork.Query<Wallet>()
-                .AsNoTracking()
                 .FirstOrDefaultAsync(w => w.Id == request.WalletId && w.Type == WalletType.Circle, cancellationToken);
 
             if (wallet is null || wallet.SavingsCircleId is null)
@@ -88,6 +87,7 @@ public sealed class UpdateCircleDetailsCommand
             if (circle.Status == SavingsCircleStatus.Active)
             {
                 circle.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+                wallet.Description = circle.Description;
                 _unitOfWork.Update(circle);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -136,6 +136,9 @@ public sealed class UpdateCircleDetailsCommand
                 circle.PenaltyAmountFrom = parsedPenaltySource;
                 circle.GracePeriodHours = request.GracePeriodHours;
                 circle.MemberCount = request.MemberCount;
+
+                wallet.Name = circle.Name;
+                wallet.Description = circle.Description;
 
                 // Handle Penalty amount logic
                 if (request.AllowPenalty)

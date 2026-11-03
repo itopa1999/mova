@@ -237,4 +237,31 @@ public class CircleController(
 
         return StatusCode((int)result.StatusCode, result);
     }
+
+    [HttpPatch("details/{walletId:long}/status")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<UpdateCircleStatusResponse>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    public async Task<IActionResult> UpdateCircleStatus(
+        [FromRoute] long walletId,
+        [FromBody] UpdateCircleStatusBody body,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateCircleStatusCommand.Command
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            WalletId = walletId,
+            TargetStatus = body.Status
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    public sealed class UpdateCircleStatusBody
+    {
+        public string Status { get; set; } = string.Empty;
+    }
 }
