@@ -47,9 +47,6 @@ public class SavingsCircleConfiguration : IEntityTypeConfiguration<SavingsCircle
             .HasConversion<int>()
             .IsRequired();
 
-        builder.Property(x => x.StartDate)
-            .IsRequired();
-
         builder.Property(x => x.StartPolicy)
             .HasConversion<int>()
             .IsRequired();

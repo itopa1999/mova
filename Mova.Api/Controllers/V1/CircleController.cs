@@ -169,6 +169,29 @@ public class CircleController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    [HttpGet("details/{walletId:long}/contributions")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<GetCircleContributionsResponse>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
+    public async Task<IActionResult> GetCircleContributions(
+        [FromRoute] long walletId,
+        [FromQuery] string? targetMemberUserPublicId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetCircleContributionsQuery.Query
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            WalletId = walletId,
+            TargetMemberUserPublicId = targetMemberUserPublicId
+        };
+
+        var result = await _mediator.Send(query, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpPatch("details/{walletId:long}/rotation")]
     [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult<UpdateCircleRotationResponse>), (int)HttpStatusCode.OK)]

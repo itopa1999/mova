@@ -94,7 +94,7 @@ public sealed class UpdateCircleStatusCommand
                     var contributionAmount = circle.ContributionAmount.ToDecimal();
                     var depositPerMember = circle.DepositAmount.ToDecimal();
 
-                    if (depositPerMember < contributionAmount)
+                    if (depositPerMember > 0 && depositPerMember < contributionAmount)
                     {
                         op.Warning(
                             $"Circle deposit ({depositPerMember:N0}) is less than the " +
@@ -141,8 +141,11 @@ public sealed class UpdateCircleStatusCommand
                         .ThenBy(m => m.AcceptedAt ?? m.InvitedAt)
                         .ToList();
 
+                    var startedAt = DateTimeOffset.UtcNow;
+
                     circle.MemberCount = orderedMembers.Count;
                     circle.Status = SavingsCircleStatus.Active;
+                    circle.StartDate = startedAt;
 
                     var firstCollectionDate = _savingsCircleService.GetNextCollectionDate(
                         circle.Frequency,

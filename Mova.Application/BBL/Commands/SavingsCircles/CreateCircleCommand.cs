@@ -68,9 +68,6 @@ public sealed class CreateCircleCommand
 
         public RotationStrategy RotationStrategy { get; set; } = RotationStrategy.FixedOrder;
 
-        [Required]
-        public DateTimeOffset StartDate { get; set; }
-
         public bool InviteOnly { get; set; } = true;
 
         public List<InviteDto> Invites { get; set; } = new();
@@ -269,10 +266,6 @@ public sealed class CreateCircleCommand
             var description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
             if (description is { Length: > 200 }) return (Bad("Description cannot exceed 200 characters."), null);
 
-            var startDateOnly = DateOnly.FromDateTime(request.StartDate.UtcDateTime);
-            var todayOnly = DateOnly.FromDateTime(DateTime.UtcNow);
-            if (startDateOnly < todayOnly) return (Bad("Start date cannot be in the past."), null);
-
             if (request.ContributionAmount < 500m) return (Bad("Minimum contribution is ₦500."), null);
             if (request.MemberCount < 3 || request.MemberCount > 50) return (Bad("Member count must be between 3 and 50."), null);
 
@@ -305,7 +298,7 @@ public sealed class CreateCircleCommand
             if (inviteError != null) return (inviteError, null);
 
             return (null, new ValidatedCircleData(
-                name, description, startDateOnly, penaltySource,
+                name, description, penaltySource,
                 penaltyAmount, depositAmount, category, validatedInvites));
         }
 
@@ -432,9 +425,9 @@ public sealed class CreateCircleCommand
                     AllowPenalty = request.EnablePenalty,
                     PenaltyAmount = Money.FromNaira(data.PenaltyAmount),
                     PenaltyAmountFrom = data.PenaltySource,
+                    StartDate = null,
                     GracePeriodHours = request.GracePeriodHours,
                     RotationStrategy = request.RotationStrategy,
-                    StartDate = request.StartDate,
                     StartPolicy = request.StartPolicy,
                     ModeratorStartsCircle = true,
                     InviteOnly = request.InviteOnly,
@@ -549,7 +542,6 @@ public sealed class CreateCircleCommand
                         request.ContributionAmount,
                         request.ContributionAmount * request.MemberCount,
                         request.Frequency,
-                        request.StartDate,
                         request.InviteOnly,
                         inviteCode,
                         inviteLink,
@@ -583,7 +575,6 @@ public sealed class CreateCircleCommand
                         circle.MemberCount,
                         request.ContributionAmount,
                         request.Frequency,
-                        request.StartDate,
                         inviteLink,
                         request.InviteOnly),
                     $"{organizerDisplayName} invited you to join {data.Name}");
@@ -628,27 +619,24 @@ public sealed class CreateCircleCommand
             decimal contributionAmount,
             decimal roundPool,
             ContributionFrequency frequency,
-            DateTimeOffset startDate,
             bool inviteOnly,
             string inviteCode,
             string inviteLink,
             int invitesSent)
         {
             var frequencyLabel = frequency.ToString().ToLowerInvariant();
-            var startLabel = startDate.UtcDateTime.ToString("MMMM d, yyyy");
 
             var startMessage =
-                $"You control when the circle starts. Once the roster is set " +
-                $"(on or after {startLabel}), you'll see a Start button on the " +
-                $"circle page — pressing it kicks off the first round.";
+                $"You control when the circle starts. Once the roster is set, " +
+                $"you'll see a Start button on the circle page — pressing it " +
+                $"kicks off the first round.";
 
             return
                 $"Your \"{name}\" circle has been created as a draft on MOVA.\n\n" +
                 $"Here are the details:\n" +
                 $"• Members: {memberCount}\n" +
                 $"• Contribution: ₦{contributionAmount:N0} / {frequencyLabel}\n" +
-                $"• Round pool: ₦{roundPool:N0}\n" +
-                $"• Start date: {startLabel}\n\n" +
+                $"• Round pool: ₦{roundPool:N0}\n\n" +
                 $"You're member #1 of this circle. A dedicated circle wallet is being " +
                 $"set up for you — your contributions and payouts flow through it, " +
                 $"separate from your main MOVA balance.\n\n" +
@@ -671,24 +659,20 @@ public sealed class CreateCircleCommand
             int memberCount,
             decimal contributionAmount,
             ContributionFrequency frequency,
-            DateTimeOffset startDate,
             string inviteLink,
             bool inviteOnly)
         {
             var frequencyLabel = frequency.ToString().ToLowerInvariant();
-            var startLabel = startDate.UtcDateTime.ToString("MMMM d, yyyy");
             var roundPool = contributionAmount * memberCount;
 
             var startMessage =
-                $"The organizer will manually start the circle on or after " +
-                $"{startLabel}.";
+                $"The organizer will manually start the circle when the roster is ready.";
 
             return
                 $"{organizerName} has invited you to join the \"{circleName}\" circle on MOVA.\n\n" +
                 $"About the circle:\n" +
                 $"• {memberCount} members · ₦{contributionAmount:N0} / {frequencyLabel}\n" +
-                $"• Round pool: ₦{roundPool:N0} · Each member receives the pot once\n" +
-                $"• Start date: {startLabel}\n\n" +
+                $"• Round pool: ₦{roundPool:N0} · Each member receives the pot once\n\n" +
                 $"⚠ Membership is first-come, first-served. The first " +
                 $"{memberCount - 1} invitees (after the organizer) to accept will " +
                 $"secure a slot — so accept early to guarantee yours.\n\n" +
@@ -705,7 +689,6 @@ public sealed class CreateCircleCommand
     private sealed record ValidatedCircleData(
         string Name,
         string? Description,
-        DateOnly StartDateOnly,
         PenaltyAmountFrom PenaltySource,
         decimal PenaltyAmount,
         decimal DepositAmount,

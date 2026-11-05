@@ -49,7 +49,7 @@ public class SavingsCircle : BaseEntity
     public RotationStrategy RotationStrategy { get; set; } = RotationStrategy.FixedOrder;
 
     // Earliest start date — actual start also depends on StartPolicy + accepted invites
-    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset? StartDate { get; set; }
 
     // What happens on StartDate if not everyone has joined
     public StartPolicy StartPolicy { get; set; } = StartPolicy.WaitForAll;
