@@ -1699,7 +1699,7 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<int>("RotationStrategy")
                         .HasColumnType("integer");
 
-                    b.Property<DateTimeOffset>("StartDate")
+                    b.Property<DateTimeOffset?>("StartDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("StartPolicy")

@@ -49,15 +49,14 @@ public class SavingsCircle : BaseEntity
     public RotationStrategy RotationStrategy { get; set; } = RotationStrategy.FixedOrder;
 
     // Earliest start date — actual start also depends on StartPolicy + accepted invites
-    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset? StartDate { get; set; }
 
     // What happens on StartDate if not everyone has joined
     public StartPolicy StartPolicy { get; set; } = StartPolicy.WaitForAll;
 
-    // When true, the circle only starts when the moderator explicitly triggers it
-    // (still bounded by StartDate and by StartPolicy member-count rules).
-    // When false, the circle auto-starts on StartDate per StartPolicy.
-    public bool ModeratorStartsCircle { get; set; } = false;
+    // Moderator is the only actor allowed to start a draft circle.
+    // This is a manual trigger flag used by the organizer-driven flow.
+    public bool ModeratorStartsCircle { get; set; } = true;
 
     // Next contribution collection due (set when circle is Active)
     public DateTimeOffset? NextCollectionDate { get; set; }

@@ -20,9 +20,9 @@ public sealed class UpdateCircleStatusCommand
     {
         [JsonIgnore] public string UserPublicId { get; set; } = string.Empty;
         public long WalletId { get; set; }
-        
+
         [Required]
-        public string TargetStatus { get; set; } = string.Empty; // "Active" or "Suspended"
+        public string TargetStatus { get; set; } = string.Empty;
     }
 
     public sealed class Handler : IRequestHandler<Command, BaseResult<UpdateCircleStatusResponse>>
@@ -32,7 +32,7 @@ public sealed class UpdateCircleStatusCommand
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IUnitOfWork unitOfWork, 
+            IUnitOfWork unitOfWork,
             ISavingsCircleService savingsCircleService,
             ILogger<Handler> logger)
         {
@@ -72,31 +72,56 @@ public sealed class UpdateCircleStatusCommand
             if (circle.OrganizerUserPublicId != request.UserPublicId)
                 return Bad("Only the organizer can change the circle status.", HttpStatusCode.Forbidden);
 
-            // 2. Parse Target Status
             if (!Enum.TryParse<SavingsCircleStatus>(request.TargetStatus, true, out var targetStatus))
                 return Bad("Invalid target status.");
 
-            // 3. Enforce Transition Rules
             var currentStatus = circle.Status;
-            
+
             if (targetStatus == SavingsCircleStatus.Active)
             {
                 if (currentStatus == SavingsCircleStatus.Draft)
                 {
-                    // ─── DRAFT TO ACTIVE (START) ───
                     var activeMembers = circle.Members
                         .Where(m => m.Status == CircleMemberStatus.Active)
                         .ToList();
 
                     if (activeMembers.Count < 3)
                         return Bad($"You need at least 3 active members to start. Currently: {activeMembers.Count}.");
-                    
+
                     if (circle.ContributionAmount.ToDecimal() <= 0)
                         return Bad("Contribution amount must be greater than zero to start the circle.");
-                    if (!circle.ModeratorStartsCircle)
-                        return Bad("Settings not available for this type of circle. Please contact support.");
 
-                    // Assign Rotation if needed
+                    var contributionAmount = circle.ContributionAmount.ToDecimal();
+                    var depositPerMember = circle.DepositAmount.ToDecimal();
+
+                    if (depositPerMember > 0 && depositPerMember < contributionAmount)
+                    {
+                        op.Warning(
+                            $"Circle deposit ({depositPerMember:N0}) is less than the " +
+                            $"contribution ({contributionAmount:N0}).");
+
+                        return Bad(
+                            $"The security deposit per member ({depositPerMember:N0}) must be " +
+                            $"at least the contribution amount ({contributionAmount:N0}) to " +
+                            $"start the circle. Please update the circle rules first.");
+                    }
+
+                    var shortMembers = activeMembers
+                        .Where(m => m.DepositHeld.ToDecimal() < contributionAmount)
+                        .ToList();
+
+                    if (shortMembers.Count > 0)
+                    {
+                        op.Warning(
+                            $"{shortMembers.Count} member(s) have insufficient deposit " +
+                            $"to cover the first contribution of {contributionAmount}.");
+
+                        return Bad(
+                            $"{shortMembers.Count} active member(s) don't have enough deposit " +
+                            $"to cover the first round contribution ({contributionAmount:N0}). " +
+                            $"Ask them to top up their deposit before starting the circle.");
+                    }
+
                     if (circle.RotationStrategy == RotationStrategy.RandomDraw)
                     {
                         var random = Random.Shared;
@@ -116,8 +141,11 @@ public sealed class UpdateCircleStatusCommand
                         .ThenBy(m => m.AcceptedAt ?? m.InvitedAt)
                         .ToList();
 
+                    var startedAt = DateTimeOffset.UtcNow;
+
                     circle.MemberCount = orderedMembers.Count;
                     circle.Status = SavingsCircleStatus.Active;
+                    circle.StartDate = startedAt;
 
                     var firstCollectionDate = _savingsCircleService.GetNextCollectionDate(
                         circle.Frequency,
@@ -127,7 +155,6 @@ public sealed class UpdateCircleStatusCommand
                     circle.NextCollectionDate = firstCollectionDate;
                     circle.NextPayoutDate = firstCollectionDate;
 
-                    // Create Round 1
                     var roundOneRecipient = orderedMembers[0];
                     var firstRound = new CircleRound
                     {
@@ -142,10 +169,9 @@ public sealed class UpdateCircleStatusCommand
                         RequiresManualReview = false
                     };
                     await _unitOfWork.AddAsync(firstRound, cancellationToken);
-                    
+
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-                    var contributionAmount = circle.ContributionAmount.ToDecimal();
                     var totalPooled = 0m;
                     var now = DateTimeOffset.UtcNow;
 
@@ -163,13 +189,12 @@ public sealed class UpdateCircleStatusCommand
                             FailureReason = null
                         }, cancellationToken);
 
-                        // Deduct from DepositHeld (TargetAmount)
                         var previousDeposit = member.DepositHeld.ToDecimal();
                         member.DepositHeld = Money.FromNaira(Math.Max(0, previousDeposit - contributionAmount));
                         member.TotalContributed = Money.FromNaira(member.TotalContributed.ToDecimal() + contributionAmount);
-                        
+
                         totalPooled += contributionAmount;
-                        
+
                         _unitOfWork.Update(member);
                     }
 
@@ -178,13 +203,12 @@ public sealed class UpdateCircleStatusCommand
 
                     _unitOfWork.Update(circle);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
-                    
+
                     op.Success("Circle started successfully.");
                     return Ok("Circle started successfully. Round 1 is now collecting.");
                 }
                 else if (currentStatus == SavingsCircleStatus.Suspended)
                 {
-                    // ─── SUSPENDED TO ACTIVE (RESUME) ───
                     circle.Status = SavingsCircleStatus.Active;
                     _unitOfWork.Update(circle);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);

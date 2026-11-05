@@ -227,6 +227,11 @@ public class Startup(IConfiguration configuration)
         //     job => job.ExecuteAsync(CancellationToken.None),
         //     Cron.MinuteInterval(5));
 
+        // recurringJobManager.AddOrUpdate<CirclePayoutJob>(
+        //     "process-circle-payouts",
+        //     job => job.ProcessDuePayoutsAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(1));
+
         // ─────────────────────────────────────────────────────────────
         // 1. Exception handler FIRST — catches exceptions from every
         //    middleware registered below it.

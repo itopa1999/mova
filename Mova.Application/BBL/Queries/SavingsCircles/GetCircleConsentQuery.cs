@@ -225,7 +225,7 @@ public sealed class RulesAndScheduleDto
     public string PenaltySource { get; set; } = string.Empty;
     public int GracePeriodHours { get; set; }
     public string RotationStrategy { get; set; } = string.Empty;
-    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset? StartDate { get; set; }
     public string StartPolicy { get; set; } = string.Empty;
 }
 

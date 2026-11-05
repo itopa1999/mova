@@ -28,16 +28,14 @@ public sealed class UpdateCircleDetailsCommand
         [MaxLength(500)]
         public string Description { get; set; } = string.Empty;
 
-        public string StartDate { get; set; } = string.Empty;
         public string StartPolicy { get; set; } = string.Empty;
-        public bool ModeratorStartsCircle { get; set; }
         public string RotationStrategy { get; set; } = string.Empty;
-        
+
         public bool AllowPenalty { get; set; }
         public decimal PenaltyAmount { get; set; }
         public string PenaltySource { get; set; } = string.Empty;
         public int GracePeriodHours { get; set; }
-        
+
         public int MemberCount { get; set; }
     }
 
@@ -109,13 +107,6 @@ public sealed class UpdateCircleDetailsCommand
                                $"(Minimum 3, and you already have {activeMemberCount} active members).");
                 }
 
-                if (!DateTimeOffset.TryParse(request.StartDate, out var parsedStartDate))
-                    return Bad("Invalid Start Date format.");
-
-                // ─── START DATE IN THE PAST CHECK ───
-                if (parsedStartDate.Date < DateTimeOffset.UtcNow.Date)
-                    return Bad("The start date cannot be in the past.");
-
                 if (!Enum.TryParse<StartPolicy>(request.StartPolicy, true, out var parsedStartPolicy))
                     return Bad("Invalid Start Policy.");
 
@@ -127,11 +118,9 @@ public sealed class UpdateCircleDetailsCommand
 
                 circle.Name = request.Name.Trim();
                 circle.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
-                circle.StartDate = parsedStartDate;
                 circle.StartPolicy = parsedStartPolicy;
-                circle.ModeratorStartsCircle = request.ModeratorStartsCircle;
                 circle.RotationStrategy = parsedRotationStrategy;
-                
+
                 circle.AllowPenalty = request.AllowPenalty;
                 circle.PenaltyAmountFrom = parsedPenaltySource;
                 circle.GracePeriodHours = request.GracePeriodHours;

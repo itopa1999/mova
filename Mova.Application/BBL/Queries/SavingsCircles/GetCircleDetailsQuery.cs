@@ -283,16 +283,12 @@ public sealed class GetCircleDetailsQuery
                 currentMember.Status == CircleMemberStatus.Active &&
                 !hasPaidThisRound;
 
-            var requiredMembersToStart = circle.StartPolicy == StartPolicy.WaitForAll
-                ? circle.MemberCount
-                : 3;
+            var requiredMembersToStart = 3;
 
             var canStartCircle =
                 isOrganizer &&
                 circle.Status == SavingsCircleStatus.Draft &&
-                circle.ModeratorStartsCircle &&
-                activeCount >= requiredMembersToStart &&
-                DateTimeOffset.UtcNow >= circle.StartDate;
+                activeCount >= requiredMembersToStart;
 
             var canManageMembers =
                 isOrganizer &&
@@ -556,7 +552,7 @@ public sealed class CircleRulesDto
     public string PenaltySource { get; set; } = string.Empty;
     public int GracePeriodHours { get; set; }
     public string RotationStrategy { get; set; } = string.Empty;
-    public DateTimeOffset StartDate { get; set; }
+    public DateTimeOffset? StartDate { get; set; }
     public string StartPolicy { get; set; } = string.Empty;
     public bool ModeratorStartsCircle { get; set; }
 }
