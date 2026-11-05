@@ -66,8 +66,6 @@ public sealed class CreateCircleCommand
 
         public StartPolicy StartPolicy { get; set; } = StartPolicy.WaitForAll;
 
-        public bool ModeratorStartsCircle { get; set; } = false;
-
         public RotationStrategy RotationStrategy { get; set; } = RotationStrategy.FixedOrder;
 
         [Required]
@@ -438,7 +436,7 @@ public sealed class CreateCircleCommand
                     RotationStrategy = request.RotationStrategy,
                     StartDate = request.StartDate,
                     StartPolicy = request.StartPolicy,
-                    ModeratorStartsCircle = request.ModeratorStartsCircle,
+                    ModeratorStartsCircle = true,
                     InviteOnly = request.InviteOnly,
                     InviteCode = inviteCode,
                     Status = SavingsCircleStatus.Draft,
@@ -535,9 +533,7 @@ public sealed class CreateCircleCommand
                 NotificationType.Wallet,
                 $"{data.Name} circle created",
                 $"You're member #1 of {circle.MemberCount} members in '{data.Name}'. " +
-                (request.ModeratorStartsCircle
-                    ? "You control when the circle starts — you'll be able to start it once the roster is set."
-                    : "Share the invite link with your invited members so they can join."),
+                "You control when the circle starts — once the roster is set, the organizer can start it manually.",
                 $"/dashboard/wallets",
                 null,
                 CancellationToken.None);
@@ -555,7 +551,6 @@ public sealed class CreateCircleCommand
                         request.Frequency,
                         request.StartDate,
                         request.InviteOnly,
-                        request.ModeratorStartsCircle,
                         inviteCode,
                         inviteLink,
                         data.ValidatedInvites.Count),
@@ -589,7 +584,6 @@ public sealed class CreateCircleCommand
                         request.ContributionAmount,
                         request.Frequency,
                         request.StartDate,
-                        request.ModeratorStartsCircle,
                         inviteLink,
                         request.InviteOnly),
                     $"{organizerDisplayName} invited you to join {data.Name}");
@@ -636,7 +630,6 @@ public sealed class CreateCircleCommand
             ContributionFrequency frequency,
             DateTimeOffset startDate,
             bool inviteOnly,
-            bool moderatorStartsCircle,
             string inviteCode,
             string inviteLink,
             int invitesSent)
@@ -644,12 +637,10 @@ public sealed class CreateCircleCommand
             var frequencyLabel = frequency.ToString().ToLowerInvariant();
             var startLabel = startDate.UtcDateTime.ToString("MMMM d, yyyy");
 
-            var startMessage = moderatorStartsCircle
-                ? $"You control when the circle starts. Once the roster is set " +
-                  $"(on or after {startLabel}), you'll see a Start button on the " +
-                  $"circle page — pressing it kicks off the first round."
-                : $"The circle starts automatically on {startLabel}, subject to " +
-                  $"the roster requirements you selected.";
+            var startMessage =
+                $"You control when the circle starts. Once the roster is set " +
+                $"(on or after {startLabel}), you'll see a Start button on the " +
+                $"circle page — pressing it kicks off the first round.";
 
             return
                 $"Your \"{name}\" circle has been created as a draft on MOVA.\n\n" +
@@ -681,7 +672,6 @@ public sealed class CreateCircleCommand
             decimal contributionAmount,
             ContributionFrequency frequency,
             DateTimeOffset startDate,
-            bool moderatorStartsCircle,
             string inviteLink,
             bool inviteOnly)
         {
@@ -689,10 +679,9 @@ public sealed class CreateCircleCommand
             var startLabel = startDate.UtcDateTime.ToString("MMMM d, yyyy");
             var roundPool = contributionAmount * memberCount;
 
-            var startMessage = moderatorStartsCircle
-                ? $"The organizer will manually start the circle on or after " +
-                  $"{startLabel}."
-                : $"The circle starts on {startLabel} once the roster is set.";
+            var startMessage =
+                $"The organizer will manually start the circle on or after " +
+                $"{startLabel}.";
 
             return
                 $"{organizerName} has invited you to join the \"{circleName}\" circle on MOVA.\n\n" +

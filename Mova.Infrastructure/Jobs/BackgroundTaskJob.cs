@@ -13,8 +13,6 @@ namespace Mova.Infrastructure.Jobs;
 
 public sealed class BackgroundTaskJob
 {
-    private const int MinMembersToStart = 3;
-
     private readonly ApplicationDbContext _context;
     private readonly IPaystackService _paystackService;
     private readonly IIdentityService _identityService;
@@ -174,7 +172,7 @@ public sealed class BackgroundTaskJob
         long SavingsCircleId,
         string Name,
         string Description,
-        decimal TargetAmount,
+        decimal FirstContributionAmount,
         decimal TotalUpfrontCharge,
         decimal TotalMovaFees,
         decimal DepositAmount,
@@ -184,27 +182,6 @@ public sealed class BackgroundTaskJob
             "Starting circle wallet creation for user {UserPublicId} in circle {SavingsCircleId}.",
             UserPublicId,
             SavingsCircleId);
-
-        var existingWallet = await _context.Wallets
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                w => w.UserPublicId == UserPublicId &&
-                    w.SavingsCircleId == SavingsCircleId &&
-                    w.Type == WalletType.Circle,
-                cancellationToken);
-
-        if (existingWallet is not null)
-        {
-            _logger.LogInformation(
-                "Circle wallet already exists for user {UserPublicId} in circle {SavingsCircleId}. " +
-                "WalletId: {WalletId}. Skipping creation.",
-                UserPublicId,
-                SavingsCircleId,
-                existingWallet.Id);
-
-            await TryStartCircleIfReadySafeAsync(SavingsCircleId, cancellationToken);
-            return;
-        }
 
         var circleExists = await _context.SavingsCircles
             .AsNoTracking()
@@ -222,45 +199,110 @@ public sealed class BackgroundTaskJob
                 $"Savings circle {SavingsCircleId} not found. Wallet cannot be created.");
         }
 
-        var balanceDebited = await _identityService.DebitBalanceAsync(
-            UserPublicId,
-            TotalUpfrontCharge,
-            cancellationToken);
+        var existingWallet = await _context.Wallets
+            .FirstOrDefaultAsync(
+                w => w.UserPublicId == UserPublicId &&
+                     w.SavingsCircleId == SavingsCircleId &&
+                     w.Type == WalletType.Circle,
+                cancellationToken);
 
-        if (!balanceDebited)
+        if (existingWallet is not null)
         {
-            _logger.LogWarning(
-                "Insufficient balance for user {UserPublicId} to join circle {SavingsCircleId}. " +
-                "Required: {TotalUpfrontCharge}.",
+            _logger.LogInformation(
+                "Circle wallet already exists for user {UserPublicId} in circle {SavingsCircleId}. " +
+                "WalletId: {WalletId}.",
                 UserPublicId,
                 SavingsCircleId,
-                TotalUpfrontCharge);
+                existingWallet.Id);
 
-            throw new InvalidOperationException(
-                $"Insufficient balance for user {UserPublicId}. Required: {TotalUpfrontCharge}.");
+            await HealMemberLinkAsync(
+                UserPublicId,
+                SavingsCircleId,
+                existingWallet.Id,
+                FirstContributionAmount + DepositAmount,
+                cancellationToken);
+
+            return;
         }
 
-        var nonFeeAmount = TotalUpfrontCharge - TotalMovaFees;
+        await using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
-            await RecordDebitAsync(
+            var balanceDebited = await _identityService.DebitBalanceAsync(
                 UserPublicId,
-                nonFeeAmount,
-                SavingsCircleId,
-                Name,
-                isFee: false,
+                TotalUpfrontCharge,
                 cancellationToken);
+
+            if (!balanceDebited)
+            {
+                await tx.RollbackAsync(cancellationToken);
+
+                _logger.LogWarning(
+                    "Insufficient balance for user {UserPublicId} to join circle {SavingsCircleId}. " +
+                    "Required: {TotalUpfrontCharge}.",
+                    UserPublicId,
+                    SavingsCircleId,
+                    TotalUpfrontCharge);
+
+                throw new InvalidOperationException(
+                    $"Insufficient balance for user {UserPublicId}. Required: {TotalUpfrontCharge}.");
+            }
+
+            var nonFeeAmount = TotalUpfrontCharge - TotalMovaFees;
+            var debitTransactions = new List<Transaction>();
+
+            if (nonFeeAmount > 0)
+            {
+                debitTransactions.Add(new Transaction
+                {
+                    UserPublicId = UserPublicId,
+                    WalletId = null,
+                    Title = $"Join circle: {Name}",
+                    Provider = null,
+                    Amount = Money.FromNaira(nonFeeAmount),
+                    Type = TransactionType.Debit,
+                    Status = TransactionStatus.Completed,
+                    Reference = $"circle-debit-{SavingsCircleId}-{UserPublicId}-{Guid.NewGuid():N}",
+                    CompletedAt = DateTimeOffset.UtcNow
+                });
+            }
 
             if (TotalMovaFees > 0)
             {
-                await RecordDebitAsync(
-                    UserPublicId,
-                    TotalMovaFees,
-                    SavingsCircleId,
-                    Name,
-                    isFee: true,
-                    cancellationToken);
+                debitTransactions.Add(new Transaction
+                {
+                    UserPublicId = UserPublicId,
+                    WalletId = null,
+                    Title = "MOVA circle fee",
+                    Provider = null,
+                    Amount = Money.FromNaira(TotalMovaFees),
+                    Type = TransactionType.Fee,
+                    Status = TransactionStatus.Completed,
+                    Reference = $"circle-fee-{SavingsCircleId}-{UserPublicId}-{Guid.NewGuid():N}",
+                    CompletedAt = DateTimeOffset.UtcNow
+                });
+            }
+
+            foreach (var transaction in debitTransactions)
+            {
+                _context.Transactions.Add(transaction);
+            }
+
+            if (debitTransactions.Count > 0)
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            foreach (var transaction in debitTransactions)
+            {
+                _context.LedgerEntries.Add(new LedgerEntry
+                {
+                    WalletId = null,
+                    TransactionId = transaction.Id,
+                    Amount = transaction.Amount,
+                    IsCredit = false
+                });
             }
 
             var wallet = new Wallet
@@ -274,7 +316,7 @@ public sealed class BackgroundTaskJob
                     : Description.Trim(),
                 Type = WalletType.Circle,
                 Status = WalletStatus.Active,
-                TargetAmount = Money.FromNaira(TargetAmount),
+                TargetAmount = Money.FromNaira(FirstContributionAmount),
                 AvailableAmount = Money.FromNaira(0),
                 LockedAmount = Money.FromNaira(DepositAmount),
                 ResetAmount = Money.FromNaira(0),
@@ -285,28 +327,21 @@ public sealed class BackgroundTaskJob
             };
 
             _context.Wallets.Add(wallet);
-            await _context.SaveChangesAsync(cancellationToken);
 
             var member = await _context.CircleMembers
                 .FirstOrDefaultAsync(
                     m => m.SavingsCircleId == SavingsCircleId &&
-                        m.UserPublicId == UserPublicId,
+                         m.UserPublicId == UserPublicId,
                     cancellationToken);
 
             if (member is not null)
             {
-                member.WalletId = wallet.Id;
-                member.DepositHeld = Money.FromNaira(TargetAmount + DepositAmount);
-                await _context.SaveChangesAsync(cancellationToken);
-
-                _logger.LogInformation(
-                    "Member {MemberId} DepositHeld set to {DepositHeld} " +
-                    "(TargetAmount {TargetAmount} + DepositAmount {DepositAmount}).",
-                    member.Id,
-                    TargetAmount + DepositAmount,
-                    TargetAmount,
-                    DepositAmount);
+                member.Wallet = wallet;
+                member.DepositHeld = Money.FromNaira(FirstContributionAmount + DepositAmount);
             }
+
+            await _context.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
             _logger.LogInformation(
                 "Circle wallet created. WalletId: {WalletId}, " +
@@ -321,415 +356,79 @@ public sealed class BackgroundTaskJob
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
+            await tx.RollbackAsync(cancellationToken);
+
             _logger.LogInformation(
                 "Circle wallet for user {UserPublicId} in circle {SavingsCircleId} " +
-                "was created concurrently. Refunding the debit to avoid double-charge.",
+                "was created concurrently. Debit rolled back with the transaction.",
                 UserPublicId,
                 SavingsCircleId);
 
-            await _identityService.CreditBalanceAsync(
-                UserPublicId,
-                TotalUpfrontCharge,
-                CancellationToken.None);
+            var concurrentWallet = await _context.Wallets
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    w => w.UserPublicId == UserPublicId &&
+                         w.SavingsCircleId == SavingsCircleId &&
+                         w.Type == WalletType.Circle,
+                    cancellationToken);
 
-            await RecordRefundAsync(
-                UserPublicId,
-                nonFeeAmount,
-                TotalMovaFees,
-                SavingsCircleId,
-                Name,
-                CancellationToken.None);
-
-            await TryStartCircleIfReadySafeAsync(SavingsCircleId, CancellationToken.None);
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Failed to create circle wallet for user {UserPublicId} in circle {SavingsCircleId}. " +
-                "Initiating refund of {TotalUpfrontCharge}.",
-                UserPublicId,
-                SavingsCircleId,
-                TotalUpfrontCharge);
-
-            await _identityService.CreditBalanceAsync(
-                UserPublicId,
-                TotalUpfrontCharge,
-                CancellationToken.None);
-
-            await RecordRefundAsync(
-                UserPublicId,
-                nonFeeAmount,
-                TotalMovaFees,
-                SavingsCircleId,
-                Name,
-                CancellationToken.None);
-
-            throw;
-        }
-
-        await TryStartCircleIfReadySafeAsync(SavingsCircleId, cancellationToken);
-    }
-
-    private async Task TryStartCircleIfReadySafeAsync(
-        long savingsCircleId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await TryStartCircleIfReadyAsync(savingsCircleId, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Auto-start check failed for circle {SavingsCircleId}. " +
-                "Circle remains in Draft status and can be started manually.",
-                savingsCircleId);
+            if (concurrentWallet is not null)
+            {
+                await HealMemberLinkAsync(
+                    UserPublicId,
+                    SavingsCircleId,
+                    concurrentWallet.Id,
+                    FirstContributionAmount + DepositAmount,
+                    cancellationToken);
+            }
         }
     }
 
-    private async Task TryStartCircleIfReadyAsync(
+    private async Task HealMemberLinkAsync(
+        string userPublicId,
         long savingsCircleId,
+        long walletId,
+        decimal expectedDepositHeld,
         CancellationToken cancellationToken)
     {
-        var circle = await _context.SavingsCircles
-            .Include(c => c.Members)
-            .FirstOrDefaultAsync(c => c.Id == savingsCircleId, cancellationToken);
+        var member = await _context.CircleMembers
+            .FirstOrDefaultAsync(
+                m => m.SavingsCircleId == savingsCircleId &&
+                     m.UserPublicId == userPublicId,
+                cancellationToken);
 
-        if (circle is null)
+        if (member is null)
         {
             _logger.LogWarning(
-                "Circle {SavingsCircleId} not found for auto-start check.",
+                "Member {UserPublicId} not found in circle {SavingsCircleId} while healing wallet link.",
+                userPublicId,
                 savingsCircleId);
             return;
         }
 
-        if (circle.Status != SavingsCircleStatus.Draft)
+        var needsHeal = false;
+
+        if (member.WalletId is null)
         {
-            _logger.LogDebug(
-                "Circle {SavingsCircleId} is {Status}; not Draft. Skipping auto-start.",
-                savingsCircleId,
-                circle.Status);
-            return;
+            member.WalletId = walletId;
+            needsHeal = true;
         }
 
-        if (circle.ModeratorStartsCircle)
+        if (member.DepositHeld.ToDecimal() == 0)
         {
-            _logger.LogInformation(
-                "Circle {SavingsCircleId} is set for manual start by moderator. " +
-                "Skipping auto-start.",
-                savingsCircleId);
-            return;
+            member.DepositHeld = Money.FromNaira(expectedDepositHeld);
+            needsHeal = true;
         }
 
-        var now = DateTimeOffset.UtcNow;
+        if (!needsHeal) return;
 
-        if (circle.StartDate > now)
-        {
-            _logger.LogInformation(
-                "Circle {SavingsCircleId} start date {StartDate:O} not yet reached. Waiting.",
-                savingsCircleId,
-                circle.StartDate);
-            return;
-        }
-
-        var activeMembers = circle.Members
-            .Where(m => m.Status == CircleMemberStatus.Active)
-            .ToList();
-
-        var activeMemberCount = activeMembers.Count;
-        var pendingInviteCount = circle.Members
-            .Count(m => m.Status == CircleMemberStatus.Invited);
-
-        var requiredMemberCount = circle.StartPolicy == StartPolicy.WaitForAll
-            ? circle.MemberCount
-            : MinMembersToStart;
-
-        var readyToStart = circle.StartPolicy switch
-        {
-            StartPolicy.WaitForAll => activeMemberCount >= circle.MemberCount,
-            StartPolicy.StartWithJoined => activeMemberCount >= MinMembersToStart,
-            _ => false
-        };
-
-        if (!readyToStart)
-        {
-            _logger.LogInformation(
-                "Circle {SavingsCircleId} not ready to start. " +
-                "Policy: {Policy}, Active: {Active}/{Required}, PendingInvites: {Pending}.",
-                savingsCircleId,
-                circle.StartPolicy,
-                activeMemberCount,
-                requiredMemberCount,
-                pendingInviteCount);
-            return;
-        }
-
-        var frequencyValidation = await _savingsCircleService.ValidateFrequencyAsync(
-            circle.Frequency,
-            circle.FrequencyConfig,
-            cancellationToken);
-
-        if (!frequencyValidation.Success)
-        {
-            _logger.LogError(
-                "Circle {SavingsCircleId} cannot start: invalid frequency config. {Message}",
-                savingsCircleId,
-                frequencyValidation.Message);
-
-            throw new InvalidOperationException(
-                $"Circle {savingsCircleId} has an invalid frequency config: " +
-                $"{frequencyValidation.Message}");
-        }
-
-        circle.Status = SavingsCircleStatus.Active;
-
-        if (circle.RotationStrategy == RotationStrategy.RandomDraw)
-        {
-            var random = Random.Shared;
-            for (var i = activeMembers.Count - 1; i > 0; i--)
-            {
-                var j = random.Next(i + 1);
-                (activeMembers[i], activeMembers[j]) =
-                    (activeMembers[j], activeMembers[i]);
-            }
-
-            for (var i = 0; i < activeMembers.Count; i++)
-            {
-                activeMembers[i].RotationPosition = i + 1;
-            }
-
-            _logger.LogInformation(
-                "RandomDraw rotation assigned for circle {SavingsCircleId} " +
-                "across {Count} members.",
-                savingsCircleId,
-                activeMembers.Count);
-        }
-
-        var orderedMembers = activeMembers
-            .OrderBy(m => m.RotationPosition ?? int.MaxValue)
-            .ThenBy(m => m.AcceptedAt ?? m.InvitedAt)
-            .ToList();
-
-        if (orderedMembers.Count == 0)
-        {
-            _logger.LogWarning(
-                "Circle {SavingsCircleId} is ready to start but no active " +
-                "members have rotation positions. Aborting auto-start.",
-                savingsCircleId);
-            return;
-        }
-
-        if (circle.MemberCount != orderedMembers.Count)
-        {
-            _logger.LogInformation(
-                "Circle {SavingsCircleId} starting with {Active} members " +
-                "(configured for {Configured}). Aligning MemberCount.",
-                savingsCircleId,
-                orderedMembers.Count,
-                circle.MemberCount);
-
-            circle.MemberCount = orderedMembers.Count;
-        }
-
-        var firstCollectionDate = _savingsCircleService.GetNextCollectionDate(
-            circle.Frequency,
-            circle.FrequencyConfig,
-            now);
-
-        circle.NextCollectionDate = firstCollectionDate;
-        circle.NextPayoutDate = firstCollectionDate;
-
-        var roundOneRecipient = orderedMembers[0];
-
-        var firstRound = new CircleRound
-        {
-            SavingsCircleId = savingsCircleId,
-            RoundNumber = 1,
-            CollectionDate = firstCollectionDate,
-            PayoutDate = firstCollectionDate,
-            RecipientUserPublicId = roundOneRecipient.UserPublicId,
-            PooledAmount = Money.FromNaira(0),
-            PaidOutAmount = Money.FromNaira(0),
-            Status = CircleRoundStatus.Collecting,
-            RequiresManualReview = false
-        };
-
-        _context.CircleRounds.Add(firstRound);
         await _context.SaveChangesAsync(cancellationToken);
-
-        var alreadySeeded = await _context.Contributions
-            .AnyAsync(c => c.CircleRoundId == firstRound.Id, cancellationToken);
-
-        if (!alreadySeeded)
-        {
-            var collectedAt = DateTimeOffset.UtcNow;
-            var contributionAmount = circle.ContributionAmount.ToDecimal();
-            var totalPooled = 0m;
-
-            foreach (var member in orderedMembers)
-            {
-                _context.Contributions.Add(new Contribution
-                {
-                    CircleRoundId = firstRound.Id,
-                    CircleMemberId = member.Id,
-                    Amount = circle.ContributionAmount,
-                    PenaltyApplied = Money.FromNaira(0),
-                    Status = ContributionStatus.Collected,
-                    CollectedAt = collectedAt,
-                    PaymentReference =
-                        $"circle-start-{savingsCircleId}-{member.UserPublicId}",
-                    FailureReason = null
-                });
-
-                var previousDepositHeld = member.DepositHeld.ToDecimal();
-                var newDepositHeld = Math.Max(0m, previousDepositHeld - contributionAmount);
-
-                member.DepositHeld = Money.FromNaira(newDepositHeld);
-                member.TotalContributed = Money.FromNaira(
-                    member.TotalContributed.ToDecimal() + contributionAmount);
-
-                totalPooled += contributionAmount;
-
-                _logger.LogInformation(
-                    "Member {MemberId} first-round contribution debited from " +
-                    "DepositHeld. Previous: {PreviousDepositHeld}, Debit: " +
-                    "{DebitedAmount}, Remaining: {NewDepositHeld}.",
-                    member.Id,
-                    previousDepositHeld,
-                    contributionAmount,
-                    newDepositHeld);
-            }
-
-            firstRound.PooledAmount = Money.FromNaira(totalPooled);
-
-            await _context.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation(
-                "Round 1 seeded for circle {SavingsCircleId}. " +
-                "{Count} contributions marked Collected (total {Pooled}).",
-                savingsCircleId,
-                orderedMembers.Count,
-                totalPooled);
-        }
 
         _logger.LogInformation(
-            "Circle {SavingsCircleId} started. Round 1 (Collecting) created " +
-            "for {Recipient}. Collection date: {CollectionDate:O}.",
-            savingsCircleId,
-            roundOneRecipient.DisplayName ?? roundOneRecipient.UserPublicId,
-            firstCollectionDate);
-    }
-
-    private async Task RecordDebitAsync(
-        string userPublicId,
-        decimal amount,
-        long savingsCircleId,
-        string circleName,
-        bool isFee,
-        CancellationToken cancellationToken)
-    {
-        if (amount <= 0) return;
-
-        var transaction = new Transaction
-        {
-            UserPublicId = userPublicId,
-            WalletId = null,
-            Title = isFee
-                ? "MOVA circle fee"
-                : $"Join circle: {circleName}",
-            Provider = null,
-            Amount = Money.FromNaira(amount),
-            Type = isFee ? TransactionType.Fee : TransactionType.Fee,
-            Status = TransactionStatus.Completed,
-            Reference = $"circle-{(isFee ? "fee" : "debit")}-" +
-                        $"{savingsCircleId}-{userPublicId}-{Guid.NewGuid():N}",
-            CompletedAt = DateTimeOffset.UtcNow
-        };
-
-        _context.Transactions.Add(transaction);
-        await _context.SaveChangesAsync(cancellationToken);
-
-        _context.LedgerEntries.Add(new LedgerEntry
-        {
-            WalletId = null,
-            TransactionId = transaction.Id,
-            Amount = Money.FromNaira(amount),
-            IsCredit = false
-        });
-
-        await _context.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task RecordRefundAsync(
-        string userPublicId,
-        decimal nonFeeAmount,
-        decimal totalMovaFees,
-        long savingsCircleId,
-        string circleName,
-        CancellationToken cancellationToken)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        if (nonFeeAmount > 0)
-        {
-            var refund = new Transaction
-            {
-                UserPublicId = userPublicId,
-                WalletId = null,
-                Title = $"Refund: Join circle failed ({circleName})",
-                Provider = null,
-                Amount = Money.FromNaira(nonFeeAmount),
-                Type = TransactionType.Refund,
-                Status = TransactionStatus.Completed,
-                Reference = $"circle-refund-{savingsCircleId}-{userPublicId}-{Guid.NewGuid():N}",
-                CompletedAt = now
-            };
-
-            _context.Transactions.Add(refund);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            _context.LedgerEntries.Add(new LedgerEntry
-            {
-                WalletId = null,
-                TransactionId = refund.Id,
-                Amount = Money.FromNaira(nonFeeAmount),
-                IsCredit = true
-            });
-
-            await _context.SaveChangesAsync(cancellationToken);
-        }
-
-        if (totalMovaFees > 0)
-        {
-            var feeRefund = new Transaction
-            {
-                UserPublicId = userPublicId,
-                WalletId = null,
-                Title = "Refund: MOVA circle fee",
-                Provider = null,
-                Amount = Money.FromNaira(totalMovaFees),
-                Type = TransactionType.Refund,
-                Status = TransactionStatus.Completed,
-                Reference = $"circle-fee-refund-{savingsCircleId}-{userPublicId}-{Guid.NewGuid():N}",
-                CompletedAt = now
-            };
-
-            _context.Transactions.Add(feeRefund);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            _context.LedgerEntries.Add(new LedgerEntry
-            {
-                WalletId = null,
-                TransactionId = feeRefund.Id,
-                Amount = Money.FromNaira(totalMovaFees),
-                IsCredit = true
-            });
-
-            await _context.SaveChangesAsync(cancellationToken);
-        }
+            "Healed member {MemberId} link to wallet {WalletId} in circle {SavingsCircleId}.",
+            member.Id,
+            walletId,
+            savingsCircleId);
     }
 
     private static bool IsUniqueViolation(DbUpdateException ex)

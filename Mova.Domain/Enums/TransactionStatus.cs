@@ -9,6 +9,7 @@ public enum TransactionType
     Reversal = 5,
     Fee = 6,
     Refill = 7,
+    Debit = 8
 }
 
 public enum TransactionStatus
