@@ -89,7 +89,8 @@ public sealed class GetNotificationsQuery
         {
             var query = _unitOfWork.Query<AppNotification>()
                 .AsNoTracking()
-                .Where(x => x.UserPublicId == userPublicId);
+                .Where(x => x.UserPublicId == userPublicId)
+                .Where(x => !x.IsDeleted);
 
             if (unreadOnly)
             {

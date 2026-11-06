@@ -281,7 +281,7 @@ public sealed class CirclePayoutJob
                     Title = $"Circle Payout: {circle.Name} (Round {currentRound.RoundNumber})",
                     Provider = null,
                     Amount = Money.FromNaira(currentPooled),
-                    Type = TransactionType.Credit,
+                    Type = TransactionType.Deposit,
                     Status = TransactionStatus.Completed,
                     Reference = $"circle-payout-{circle.Id}-{currentRound.RoundNumber}-{Guid.NewGuid():N}",
                     CompletedAt = now

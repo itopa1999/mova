@@ -10,7 +10,6 @@ public enum TransactionType
     Fee = 6,
     Refill = 7,
     Debit = 8,
-    Credit = 9
 }
 
 public enum TransactionStatus
