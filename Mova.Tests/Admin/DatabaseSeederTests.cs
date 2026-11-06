@@ -10,9 +10,8 @@ using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
 using Mova.Infrastructure.Persistence.Seeding;
 using Mova.Shared.Constants;
-using Xunit;
 
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.Admin;
 
 public sealed class DatabaseSeederTests : BaseTest
 {

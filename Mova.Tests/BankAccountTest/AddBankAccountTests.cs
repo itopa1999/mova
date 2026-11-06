@@ -10,7 +10,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
 
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.BankAccountTest;
 
 public sealed class AddBankAccountTests : BaseTestWithPinChallenge
 {

@@ -67,8 +67,9 @@ public sealed class RequestReleaseCommandTests : BaseTest
         decimal lockedAmount = 500m,
         WalletStatus walletStatus = WalletStatus.Active)
     {
-        var cat = new WalletCategory { Name = "Test", Icon = "Test" };
+        var cat = new WalletCategory { Name = "Test", Icon = "Test", WalletType = WalletType.Trustee };
         await UnitOfWork.AddAsync(cat);
+        await UnitOfWork.SaveChangesAsync();
 
         var trustee = new WalletTrusteeEntity
         {

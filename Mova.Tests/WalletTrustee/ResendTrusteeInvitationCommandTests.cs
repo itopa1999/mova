@@ -13,7 +13,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Xunit;
 
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.WalletTrustee;
 
 public sealed class ResendTrusteeInvitationCommandTests : BaseTest
 {
@@ -65,11 +65,11 @@ public sealed class ResendTrusteeInvitationCommandTests : BaseTest
         };
     }
 
-    private async Task<WalletTrustee> SeedTrusteeAsync(
+    private async Task<Mova.Domain.Entities.WalletTrustee> SeedTrusteeAsync(
         WalletTrusteeStatus status,
         string owner = OwnerPublicId)
     {
-        var trustee = new WalletTrustee
+        var trustee = new Mova.Domain.Entities.WalletTrustee
         {
             OwnerPublicId = owner,
             Name = "Jane Doe",

@@ -7,7 +7,7 @@ using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.BankAccountTest;
 
 public sealed class VerifyBankAccountTests : BaseTest
 {
