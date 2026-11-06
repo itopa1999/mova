@@ -9,7 +9,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.SavingsCircles;
@@ -56,6 +55,7 @@ public sealed class GetCircleDetailsQuery
             // ── 1. Load wallet, verify ownership + type ────────────────
             var wallet = await _unitOfWork.Query<Wallet>()
                 .AsNoTracking()
+                .Include(w => w.Category)
                 .FirstOrDefaultAsync(
                     w => w.Id == request.WalletId &&
                          w.UserPublicId == request.UserPublicId
@@ -94,14 +94,7 @@ public sealed class GetCircleDetailsQuery
                     "The circle linked to this wallet no longer exists.");
             }
 
-            // ── 3. Load category ───────────────────────────────────────
-            var category = await _unitOfWork.Query<WalletCategory>()
-                .AsNoTracking()
-                .Where(c => c.Id == wallet.CategoryId)
-                .Select(c => new { c.Id, c.Name, c.Icon })
-                .FirstOrDefaultAsync(cancellationToken);
-
-            // ── 4. Load rounds (source of truth for payout history) ───
+            // ── 3. Load rounds (source of truth for payout history) ───
             var rounds = await _unitOfWork.Query<CircleRound>()
                 .AsNoTracking()
                 .Where(r => r.SavingsCircleId == circle.Id)
@@ -340,9 +333,9 @@ public sealed class GetCircleDetailsQuery
                     Status = circle.Status.ToString(),
                     OrganizerPublicId = circle.OrganizerUserPublicId,
                     OrganizerName = organizerName,
-                    CategoryId = category?.Id,
-                    CategoryName = category?.Name,
-                    CategoryIcon = category?.Icon,
+                    CategoryId = wallet.Category?.Id,
+                    CategoryName = wallet.Category?.Name,
+                    CategoryIcon = wallet.Category?.Icon,
                     CreatedAt = circle.CreatedAt,
                     StartedAt = circle.Status != SavingsCircleStatus.Draft
                         ? circle.StartDate
