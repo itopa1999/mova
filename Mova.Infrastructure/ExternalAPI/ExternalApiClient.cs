@@ -2,8 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Interfaces.ExternalAPI;
-
+using Mova.Application.ExternalAPI;
 namespace Mova.Infrastructure.ExternalAPI;
 
 public sealed class ExternalApiClient : IExternalApiClient

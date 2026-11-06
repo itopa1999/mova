@@ -6,8 +6,8 @@ using Mova.Application.Interfaces.Service;
 using Mova.Application.Validation;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
-
-namespace Mova.Application.BBL.Queries.SchedulePreview;
+using Mova.Shared.Common.Results;
+namespace Mova.Application.BBL.Queries.AccountWallet;
 
 public sealed class SchedulePreviewQuery
 {

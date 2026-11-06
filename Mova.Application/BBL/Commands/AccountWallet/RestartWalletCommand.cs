@@ -14,7 +14,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class RestartWalletCommand
@@ -335,10 +335,11 @@ public sealed class RestartWalletCommand
                 _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
                     request.Email,
-                    $"Your {wallet.Name} wallet has been restarted successfully. " +
-                    $"A fresh cycle has begun and the first release is scheduled " +
-                    $"for {firstReleaseDate:MMM d, yyyy}. " +
-                    BuildDestinationClause(wallet.PayoutDestination),
+                    $"# {wallet.Name} wallet restarted\n\n" +
+                    "**Your wallet has been restarted successfully.**\n\n" +
+                    $"- A fresh cycle has begun.\n" +
+                    $"- The first release is scheduled for **{firstReleaseDate:MMM d, yyyy}**.\n" +
+                    $"- {BuildDestinationClause(wallet.PayoutDestination)}",
                     $"{wallet.Name} wallet restarted");
             }
 

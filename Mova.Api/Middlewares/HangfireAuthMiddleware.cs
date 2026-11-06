@@ -4,7 +4,6 @@ using Mova.Api.Configurations;
 using Mova.Shared.Logging;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
-
 namespace Mova.Api.Middlewares;
 
 public class HangfireAuthMiddleware

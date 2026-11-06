@@ -1,5 +1,4 @@
 using Mova.Domain.Enums;
-
 namespace Mova.Application.Interfaces.Identity;
 
 /// <summary>

@@ -3,7 +3,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.AspNetCore.Identity;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Infrastructure.Identity;
 
 [Table("users")]

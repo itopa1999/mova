@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Http;
-
 namespace Mova.Application.Interfaces.Storage;
 
 public interface IFileStorageService

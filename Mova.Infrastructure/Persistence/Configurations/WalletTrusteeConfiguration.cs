@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mova.Domain.Entities;
-
 namespace Mova.Infrastructure.Persistence.Configurations;
 
 public class WalletTrusteeConfiguration : IEntityTypeConfiguration<WalletTrustee>

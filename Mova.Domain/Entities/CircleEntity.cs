@@ -3,7 +3,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 using Mova.Domain.Common;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Domain.Entities;
 
 [Table("savings_circles")]
@@ -48,7 +47,6 @@ public class SavingsCircle : BaseEntity
     // How payout order is decided (FixedOrder / RandomDraw / ModeratorSet)
     public RotationStrategy RotationStrategy { get; set; } = RotationStrategy.FixedOrder;
 
-    // Earliest start date — actual start also depends on StartPolicy + accepted invites
     public DateTimeOffset? StartDate { get; set; }
 
     // What happens on StartDate if not everyone has joined

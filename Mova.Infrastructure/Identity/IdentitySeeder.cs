@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Identity;
 using Mova.Shared.Constants;
-
 namespace Mova.Infrastructure.Identity;
 
 public static class IdentitySeeder

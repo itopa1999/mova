@@ -3,7 +3,7 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Api.Middlewares;
 
 public class ExceptionHandlingMiddleware

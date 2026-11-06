@@ -12,7 +12,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class RejectReleaseRequestCommand
@@ -152,10 +152,10 @@ public sealed class RejectReleaseRequestCommand
                 _notificationQueue.QueueNotificationEmail(
                     owner.FirstName ?? string.Empty,
                     owner.Email,
-                    $"Your trustee rejected the release request of " +
-                    $"₦{releaseRequest.Amount.ToDecimal():N0} from your " +
-                    $"\"{wallet.Name}\" wallet.{reasonClause}\n\n" +
-                    $"The funds are back in your wallet.",
+                    "# Release rejected\n\n" +
+                    $"**Your trustee rejected the release request of ₦{releaseRequest.Amount.ToDecimal():N0} from your \"{wallet.Name}\" wallet.**\n\n" +
+                    $"- {reasonClause.Trim()}\n" +
+                    "- The funds are back in your wallet.",
                     "Release rejected");
             }
 

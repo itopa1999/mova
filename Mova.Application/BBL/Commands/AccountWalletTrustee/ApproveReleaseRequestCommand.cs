@@ -13,7 +13,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class ApproveReleaseRequestCommand
@@ -220,11 +220,10 @@ public sealed class ApproveReleaseRequestCommand
                 _notificationQueue.QueueNotificationEmail(
                     owner.FirstName ?? string.Empty,
                     owner.Email,
-                    $"Your trustee approved the release of " +
-                    $"₦{releaseRequest.Amount.ToDecimal():N0} from your " +
-                    $"\"{wallet.Name}\" wallet.\n\n" +
-                    $"The money is on its way to {bankName}. You'll get another " +
-                    $"email once the transfer completes.",
+                    "# Release approved\n\n" +
+                    $"**Your trustee approved the release of ₦{releaseRequest.Amount.ToDecimal():N0} from your \"{wallet.Name}\" wallet.**\n\n" +
+                    $"- The money is on its way to **{bankName}**.\n" +
+                    "- You will receive another email once the transfer completes.",
                     "Release approved");
             }
 

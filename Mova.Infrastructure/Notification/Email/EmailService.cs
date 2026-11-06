@@ -3,27 +3,30 @@ using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
-using Mova.Application.Common.Models;
+using Mova.Application.Models;
 using Mova.Application.Interfaces.Notification;
+using Mova.Infrastructure.ExternalAPI;
 using Mova.Infrastructure.Notification.Email;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Notification;
+namespace Mova.Infrastructure.Notification.Email;
 
 public sealed class EmailService : IEmailService
 {
     private readonly EmailSettings _settings;
+    private readonly ExternalApiSettings _externalApiSettings;
     private readonly ILogger<EmailService> _logger;
 
     private readonly TemplateRenderer _renderer;
 
     public EmailService(
         IOptions<EmailSettings> options,
+        IOptions<ExternalApiSettings> externalApiOptions,
         ILogger<EmailService> logger,
         TemplateRenderer renderer)
     {
         _settings = options.Value;
+        _externalApiSettings = externalApiOptions.Value;
         _logger = logger;
         _renderer = renderer;
     }
@@ -53,7 +56,7 @@ public sealed class EmailService : IEmailService
                 ["Name"] = name,
                 ["OTP"] = otp,
                 ["Expiry"] = "2 Minutes",
-                ["message"] = message
+                ["Message"] = message
             }, cancellationToken);
 
         await SendEmailAsync(
@@ -72,6 +75,7 @@ public sealed class EmailService : IEmailService
             "ForgotPasswordOtpEmailTemplate.html",
             new Dictionary<string, string>
             {
+                ["Name"] = "Customer",
                 ["OTP"] = otp,
                 ["Expiry"] = "2 Minutes"
             }, cancellationToken);
@@ -88,11 +92,16 @@ public sealed class EmailService : IEmailService
         string email,
         CancellationToken cancellationToken = default)
     {
+        var dashboardUrl = string.IsNullOrWhiteSpace(_externalApiSettings.FrontendBaseUrl)
+            ? "https://app.mova.app"
+            : _externalApiSettings.FrontendBaseUrl.TrimEnd('/');
+
         var body = await _renderer.RenderAsync(
             "WelcomeEmailTemplate.html",
             new Dictionary<string, string>
             {
-                ["FirstName"] = firstName
+                ["FirstName"] = firstName,
+                ["DashboardUrl"] = dashboardUrl
             }, cancellationToken);
 
         await SendEmailAsync(

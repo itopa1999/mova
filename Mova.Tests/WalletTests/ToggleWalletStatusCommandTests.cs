@@ -8,8 +8,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.WalletTests;
 
 public sealed class ToggleWalletStatusCommandTests : BaseTestWithPinChallenge
 {

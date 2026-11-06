@@ -14,7 +14,7 @@ using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class DeleteTrusteeCommand
@@ -189,9 +189,10 @@ public sealed class DeleteTrusteeCommand
                 _notificationQueue.QueueNotificationEmail(
                     trusteeDisplay,
                     trusteeEmail,
-                    $"{ownerName} has removed you as their trustee on MOVA.\n\n" +
-                    $"You no longer have any trustee duties for their wallets. " +
-                    $"If this was unexpected, please reach out to them directly.",
+                    "# Trustee access removed\n\n" +
+                    $"**{ownerName} has removed you as their trustee on MOVA.**\n\n" +
+                    "- You no longer have any trustee duties for their wallets.\n" +
+                    "- If this was unexpected, please reach out to them directly.",
                     "You've been removed as a trustee on MOVA");
             }
 

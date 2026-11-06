@@ -12,7 +12,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.WebHook;
 
 public sealed class PaystackWebHookCommand
@@ -264,8 +264,10 @@ public sealed class PaystackWebHookCommand
                 _notificationQueue.QueueNotificationEmail(
                     user.FirstName,
                     user.Email,
-                    $"₦{amount:N0} has been added to your MOVA available balance. " +
-                    "You can now allocate it to wallets or use it as you wish.",
+                    "# Deposit successful\n\n" +
+                    $"**₦{amount:N0} has been added to your MOVA available balance.**\n\n" +
+                    "- You can now allocate it to wallets or use it as you wish.\n" +
+                    "- Your balance is ready for your next move.",
                     "Your MOVA deposit is complete");
             }
         }

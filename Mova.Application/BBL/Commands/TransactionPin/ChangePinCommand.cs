@@ -9,7 +9,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.TransactionPin;
 
 public sealed class ChangePinCommand
@@ -204,9 +204,10 @@ public sealed class ChangePinCommand
                 _notificationQueue.QueueNotificationEmail(
                     user.FirstName,
                     user.Email,
-                    "Your transaction PIN was changed successfully. " +
-                    "If you didn't make this change, contact support immediately " +
-                    "to secure your account.",
+                    "# Transaction PIN updated\n\n" +
+                    "**Your transaction PIN was changed successfully.**\n\n" +
+                    "- If you didn't make this change, contact support immediately to secure your account.\n" +
+                    "- We recommend reviewing your recent wallet activity.",
                     "Your MOVA transaction PIN was changed");
             }
 

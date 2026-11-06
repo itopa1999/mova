@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Payment;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.Admin;
 
 public sealed class RefreshBanks

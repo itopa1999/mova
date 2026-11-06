@@ -1,8 +1,7 @@
 using System.Text.Json;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
-
-namespace Mova.Infrastructure.Services;
+namespace Mova.Infrastructure.Service;
 
 public sealed class SavingsCircleService : ISavingsCircleService
 {

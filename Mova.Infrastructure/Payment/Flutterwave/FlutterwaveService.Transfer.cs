@@ -3,8 +3,7 @@ using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Flutterwave;
 
 public sealed partial class FlutterwaveService
 {

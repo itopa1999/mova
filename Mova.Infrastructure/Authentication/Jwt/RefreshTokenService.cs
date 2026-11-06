@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
+using Mova.Infrastructure.Authentication.Jwt.Interface;
 using Mova.Infrastructure.Persistence;
 
 namespace Mova.Infrastructure.Authentication.Jwt;

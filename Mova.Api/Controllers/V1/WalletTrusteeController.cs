@@ -20,7 +20,7 @@ using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetTrusteeConsent
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.GetTrusteeWalletDetailQuery;
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.ListOwnerTrusteesQuery;
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.ListVerifiedTrusteesQuery;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]

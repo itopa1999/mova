@@ -1,4 +1,3 @@
-
 namespace Mova.Application.Interfaces.Notification;
 public interface ISmsService
 {

@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Mova.Api.Security;
-
 namespace Mova.Tests.TransactionPinTest;
 
 public sealed class RsaPinDecryptionServiceTests

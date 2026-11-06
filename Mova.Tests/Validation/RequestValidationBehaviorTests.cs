@@ -6,7 +6,7 @@ using Mova.Application.BBL.Queries.BanksAccount;
 using Mova.Application.Behaviors;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Tests.Validation;
 
 public sealed class RequestValidationBehaviorTests

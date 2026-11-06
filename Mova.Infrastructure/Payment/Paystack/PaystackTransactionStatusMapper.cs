@@ -1,6 +1,5 @@
 using Mova.Domain.Enums;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Paystack;
 
 public static class PaystackPaymentStatusMapper
 {

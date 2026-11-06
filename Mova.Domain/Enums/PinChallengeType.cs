@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-
 namespace Mova.Domain.Enums;
 
 [JsonConverter(typeof(JsonStringEnumConverter<PinChallengeType>))]

@@ -1,7 +1,6 @@
 using Mova.Application.Interfaces.Security;
 using Mova.Shared.Constants;
 using StackExchange.Redis;
-
 namespace Mova.Infrastructure.Security;
 
 public sealed class RedisTransactionPinAttemptStore : ITransactionPinAttemptStore

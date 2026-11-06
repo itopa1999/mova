@@ -9,8 +9,7 @@ using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Jobs;
+namespace Mova.Infrastructure.Jobs.TruteesJob;
 
 public sealed class ExpirePendingTrusteesJob
 {
@@ -183,8 +182,10 @@ public sealed class ExpirePendingTrusteesJob
                 _notificationQueue.QueueNotificationEmail(
                     owner.FirstName ?? string.Empty,
                     owner.Email,
-                    $"Your trustee invitation to {trusteeDisplay} expired without a response.\n\n" +
-                    $"You can send a new invitation from your Trustees page whenever you're ready.",
+                    $"# Trustee invitation expired\n\n" +
+                    $"Your invitation to **{trusteeDisplay}** expired without a response.\n\n" +
+                    $"- You can send a new invitation from your Trustees page anytime.\n" +
+                    $"- The invitation is no longer active.",
                     "Trustee invitation expired");
             }
         }

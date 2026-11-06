@@ -2,8 +2,7 @@ using System.Text.Json.Serialization;
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Payment.Monnify;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Monnify;
 
 public sealed partial class MonnifyService
 {

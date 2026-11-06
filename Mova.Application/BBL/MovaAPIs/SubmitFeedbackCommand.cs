@@ -10,7 +10,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.MovaAPIs;
 
 public sealed class SubmitFeedbackCommand
@@ -199,7 +199,10 @@ public sealed class SubmitFeedbackCommand
                 _notificationQueue.QueueNotificationEmail(
                     firstName,
                     email,
-                    $"{inAppMessage} Your input helps us improve MOVA for everyone.",
+                    "# Feedback received\n\n" +
+                    $"**{inAppMessage}**\n\n" +
+                    "- Your input helps us improve MOVA for everyone.\n" +
+                    "- We appreciate the time you took to share it.",
                     "We received your feedback");
             }
         }

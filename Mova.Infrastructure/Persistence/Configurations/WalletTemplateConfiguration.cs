@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-
 namespace Mova.Infrastructure.Persistence.Configurations;
 
 public class WalletTemplateConfiguration : IEntityTypeConfiguration<WalletTemplate>

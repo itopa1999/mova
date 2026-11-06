@@ -11,8 +11,7 @@ using DepositHistoryQuery = Mova.Application.BBL.Queries.BanksAccount.DepositTra
 using TransactionsQuery = Mova.Application.BBL.Queries.BanksAccount.GetTransactions;
 using FundingAccountQuery = Mova.Application.BBL.Queries.BanksAccount.GetAccountForFunding;
 using CallbackQuery = Mova.Application.BBL.Queries.BanksAccount.PaymentCallback;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.MovaAPITest;
 
 public sealed class BankAccountQueryOwnershipTests : BaseTest
 {

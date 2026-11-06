@@ -1,6 +1,5 @@
 
 using Mova.Domain.Enums;
-
 namespace Mova.Domain.ValueObjects;
 
 // Base config - all types share these

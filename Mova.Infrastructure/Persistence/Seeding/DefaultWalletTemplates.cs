@@ -1,7 +1,6 @@
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Infrastructure.Persistence.Seeding;
 
 public static class DefaultWalletTemplates

@@ -8,8 +8,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.TransactionPinTest;
 
 public sealed class ChangePinCommandTests : BaseTest
 {

@@ -16,7 +16,8 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
+using Mova.Application.Models;
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class CreateWalletCommand
@@ -599,9 +600,10 @@ public sealed class CreateWalletCommand
             PayoutDestination destination,
             UtilityType? utilityType,
             UtilityConfig? utilityConfig)
-            => $"Your {walletName} wallet has been created and is now active. " +
-               $"Your first release is scheduled for {firstReleaseDate:MMM d, yyyy}. " +
-               BuildDestinationClause(destination, utilityType, utilityConfig) + " " +
+            => $"# Your {walletName} wallet is ready\n\n" +
+               "**Your wallet has been created and is now active.**\n\n" +
+               $"- First release: **{firstReleaseDate:MMM d, yyyy}**\n" +
+               $"- {BuildDestinationClause(destination, utilityType, utilityConfig)}\n\n" +
                "MOVA will handle the schedule from here.";
 
         private static string BuildDestinationClause(

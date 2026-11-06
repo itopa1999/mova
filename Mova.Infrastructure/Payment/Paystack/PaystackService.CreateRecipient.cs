@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using Mova.Domain.Entities;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Paystack;
 
 public sealed partial class PaystackService
 {

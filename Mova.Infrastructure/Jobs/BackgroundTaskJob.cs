@@ -8,7 +8,6 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
-
 namespace Mova.Infrastructure.Jobs;
 
 public sealed class BackgroundTaskJob

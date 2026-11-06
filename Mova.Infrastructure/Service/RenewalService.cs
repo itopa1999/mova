@@ -9,8 +9,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Services;
+namespace Mova.Infrastructure.Service;
 
 public sealed class RenewalService : IRenewalService
 {

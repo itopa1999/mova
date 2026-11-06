@@ -3,9 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Infrastructure.Common;
 using Mova.Infrastructure.Identity.Extensions;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Common;
 
 namespace Mova.Infrastructure.Identity;
 

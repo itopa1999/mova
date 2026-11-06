@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mova.Api.Middlewares;
 using Mova.Shared.Common;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Tests.MovaAPITest;
 
 public sealed class ExceptionHandlingMiddlewareTests

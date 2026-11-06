@@ -3,7 +3,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
 using StackExchange.Redis;
-
 namespace Mova.Api.HealthChecks;
 
 public sealed class BackendReadinessHealthCheck : IHealthCheck

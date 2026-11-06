@@ -6,8 +6,7 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.Admin;
 
 public sealed class AddUserToRoleCommandTests
 {

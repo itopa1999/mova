@@ -6,10 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.AccountWallet;
-using Mova.Application.BBL.MovaAPIs;
 using Mova.Application.BBL.Queries.AccountWallet;
-using Mova.Application.BBL.Queries.SchedulePreview;
-using Mova.Application.BBL.Queries.WalletTemplates;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
@@ -18,18 +15,18 @@ using static Mova.Application.BBL.Commands.AccountWallet.CreateWalletCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.RestartWalletCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.ToggleRenewalCommand;
 using static Mova.Application.BBL.Commands.AccountWallet.UpdateRenewalPolicyCommand;
-using static Mova.Application.BBL.MovaAPIs.GetReleasesQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
+using static Mova.Application.BBL.Queries.AccountWallet.GetReleasesQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.GetRenewalEventsQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.GetRenewalPolicyQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletActivities;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletAnalytics;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletPayouts;
 using static Mova.Application.BBL.Queries.AccountWallet.GetWalletSchedulePreviewQuery;
+using static Mova.Application.BBL.Queries.AccountWallet.ListWalletTemplatesQuery;
+using static Mova.Application.BBL.Queries.AccountWallet.SchedulePreviewQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.WalletDetails;
-using static Mova.Application.BBL.Queries.SchedulePreview.SchedulePreviewQuery;
-using static Mova.Application.BBL.Queries.WalletTemplates.ListWalletTemplatesQuery;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]

@@ -1,6 +1,5 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
-
 namespace Mova.Api.RateLimiting;
 
 public static class RateLimitSetup

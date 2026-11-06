@@ -1,6 +1,5 @@
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Application.Interfaces.Notification;
 
 public interface INotificationQueue

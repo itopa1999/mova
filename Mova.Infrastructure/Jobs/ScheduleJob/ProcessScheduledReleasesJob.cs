@@ -11,8 +11,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Jobs;
+namespace Mova.Infrastructure.Jobs.ScheduleJob;
 
 public sealed class ProcessScheduledReleasesJob
 {
@@ -357,28 +356,35 @@ public sealed class ProcessScheduledReleasesJob
         var emailMessage = payoutDestination switch
         {
             PayoutDestination.Bank =>
-                $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                "The money is on its way to your linked bank account and should " +
-                "arrive within a few minutes. MOVA will handle the next release on schedule.",
+                $"# Your {walletName} release is on the way\n\n" +
+                $"**₦{amount:N0} has been released from your {walletName} wallet.**\n\n" +
+                "- The money is on its way to your linked bank account.\n" +
+                "- It should arrive within a few minutes.\n" +
+                "- MOVA will handle the next release on schedule.",
 
             PayoutDestination.Wallet =>
-                $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                "The money is now available in your wallet balance and you can " +
-                "withdraw it whenever you like. MOVA will handle the next release on schedule.",
+                $"# Your {walletName} release is now available\n\n" +
+                $"**₦{amount:N0} has been released from your {walletName} wallet.**\n\n" +
+                "- The money is now available in your wallet balance.\n" +
+                "- You can withdraw it whenever you like.\n" +
+                "- MOVA will handle the next release on schedule.",
 
             PayoutDestination.Main =>
-                $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                "The money is being added to your main MOVA balance. You can spend " +
-                "it inside MOVA — please note it cannot be withdrawn to a bank account. " +
-                "MOVA will handle the next release on schedule.",
+                $"# Your {walletName} release has been added\n\n" +
+                $"**₦{amount:N0} has been released from your {walletName} wallet.**\n\n" +
+                "- The money is being added to your main MOVA balance.\n" +
+                "- You can spend it inside MOVA.\n" +
+                "- MOVA will handle the next release on schedule.",
 
             PayoutDestination.Utilities =>
-                $"₦{amount:N0} has been released from your {walletName} wallet. " +
-                "The money has been used to top up your utility. " +
-                "MOVA will handle the next release on schedule.",
+                $"# Your {walletName} release has been used\n\n" +
+                $"**₦{amount:N0} has been released from your {walletName} wallet.**\n\n" +
+                "- The money has been used to top up your utility.\n" +
+                "- MOVA will handle the next release on schedule.",
 
             _ =>
-                $"₦{amount:N0} has been released from your {walletName} wallet.",
+                $"# Your {walletName} release\n\n" +
+                $"**₦{amount:N0} has been released from your {walletName} wallet.**",
         };
 
         _notificationQueue.QueueNotificationEmail(

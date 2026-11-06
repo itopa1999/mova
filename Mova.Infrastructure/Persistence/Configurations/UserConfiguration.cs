@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mova.Infrastructure.Identity;
-
 namespace Mova.Infrastructure.Persistence.Configurations;
 
 public sealed class UserConfiguration : IEntityTypeConfiguration<User>

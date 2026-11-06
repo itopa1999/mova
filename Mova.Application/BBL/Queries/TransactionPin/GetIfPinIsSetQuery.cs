@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Mova.Application.Interfaces.Identity;
 using Mova.Shared.Common;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.TransactionPin;
 
 public sealed class GetIfPinIsSetQuery

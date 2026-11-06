@@ -10,7 +10,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.SavingsCircles;
 
 public sealed class GetCircleRoundsQuery
@@ -188,7 +188,7 @@ public sealed class GetCircleRoundsQuery
                                 RotationPosition = recipientMember.RotationPosition,
                                 Status = recipientMember.Status.ToString()
                             },
-                        PoolTarget = circle.ContributionAmount.ToDecimal(),
+                        PoolTarget = circle.ContributionAmount.ToDecimal() * circle.MemberCount,
                         PooledAmount = 0m,
                         PaidOutAmount = 0m,
                         ContributedCount = 0,
@@ -291,7 +291,7 @@ public sealed class GetCircleRoundsQuery
                 RoundNumber = round.RoundNumber,
                 State = state,
                 Recipient = recipient,
-                PoolTarget = circle.ContributionAmount.ToDecimal(),
+                PoolTarget = circle.ContributionAmount.ToDecimal() * circle.MemberCount,
                 PooledAmount = pooledAmount,
                 PaidOutAmount = round.PaidOutAmount.ToDecimal(),
                 ContributedCount = contributedCount,

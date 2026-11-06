@@ -4,7 +4,7 @@ using MediatR;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.Profile;
 
 public sealed class GetProfile

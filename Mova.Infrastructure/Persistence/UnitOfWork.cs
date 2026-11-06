@@ -2,7 +2,6 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Mova.Application.Interfaces.Persistence;
-
 namespace Mova.Infrastructure.Persistence;
 
 public sealed class UnitOfWork : IUnitOfWork

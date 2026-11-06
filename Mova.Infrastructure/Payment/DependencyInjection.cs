@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Mova.Infrastructure.Payment.Flutterwave;
 using Mova.Infrastructure.Payment.Monnify;
 using Mova.Infrastructure.Payment.Paystack;
-
 namespace Mova.Infrastructure.Payment;
 
 public static class DependencyInjection

@@ -4,8 +4,7 @@ using Moq;
 using Mova.Application.BBL.Commands.Admin;
 using Mova.Application.Interfaces.Payment;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.BankAccountTest;
 
 public sealed class RefreshBanksTests : BaseTest
 {

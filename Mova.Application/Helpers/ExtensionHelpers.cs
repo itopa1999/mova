@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 using MediatR;
 using Mova.Domain.Enums;
-
 namespace Mova.Application.Helpers;
 
 public static partial class ExtensionHelpers

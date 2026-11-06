@@ -1,7 +1,6 @@
 
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-
 namespace Mova.Infrastructure.Persistence.Seeding;
 
 public static class DefaultWalletCategories

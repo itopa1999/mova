@@ -13,7 +13,8 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
+using Mova.Application.Models;
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class UpdateRenewalPolicyCommand
@@ -327,12 +328,15 @@ public sealed class UpdateRenewalPolicyCommand
             bool refillUntilExhausted)
         {
             var refillBehaviourClause = refillUntilExhausted
-                ? " Refills will now use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
+                ? "- Refills will now use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
                 : string.Empty;
 
-            return $"Your automation settings for {walletName} have been updated. " +
-                   "You can review or change them anytime from the wallet settings." +
-                   refillBehaviourClause;
+            return $"# Automation updated for {walletName}\n\n" +
+                   "**Your wallet automation settings have been updated.**\n\n" +
+                   "- You can review or change them anytime from the wallet settings.\n" +
+                   (string.IsNullOrWhiteSpace(refillBehaviourClause)
+                       ? string.Empty
+                       : refillBehaviourClause + "\n");
         }
     }
 }

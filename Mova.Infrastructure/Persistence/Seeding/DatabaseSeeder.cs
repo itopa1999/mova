@@ -8,7 +8,6 @@ using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Identity;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
 namespace Mova.Infrastructure.Persistence.Seeding;
 
 public sealed class DatabaseSeeder

@@ -4,8 +4,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
-
-namespace Mova.Infrastructure.Authentication.Jwt;
+namespace Mova.Infrastructure.Security;
 
 public sealed class PinChallengeService : IPinChallenge
 {

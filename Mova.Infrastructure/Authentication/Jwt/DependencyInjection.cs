@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Mova.Application.Interfaces.Security;
+using Mova.Infrastructure.Authentication.Jwt.Interface;
 
 namespace Mova.Infrastructure.Authentication.Jwt;
 

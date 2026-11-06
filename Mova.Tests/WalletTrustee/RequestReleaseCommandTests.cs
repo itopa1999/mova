@@ -12,8 +12,9 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
+using WalletTrusteeEntity = Mova.Domain.Entities.WalletTrustee;
 
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.WalletTrusteeTests;
 
 public sealed class RequestReleaseCommandTests : BaseTest
 {
@@ -69,7 +70,7 @@ public sealed class RequestReleaseCommandTests : BaseTest
         var cat = new WalletCategory { Name = "Test", Icon = "Test" };
         await UnitOfWork.AddAsync(cat);
 
-        var trustee = new WalletTrustee
+        var trustee = new WalletTrusteeEntity
         {
             OwnerPublicId = OwnerPublicId,
             Name = "Jane Doe",

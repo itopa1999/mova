@@ -15,7 +15,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class RequestReleaseCommand
@@ -280,15 +280,15 @@ public sealed class RequestReleaseCommand
             _notificationQueue.QueueNotificationEmail(
                 trusteeDisplay,
                 trustee.Email,
-                $"{displayName} has requested a release from their \"{wallet.Name}\" " +
-                $"trustee wallet.\n\n" +
-                $"Amount: ₦{request.Amount:N0}\n" +
-                $"Destination: {bank.BankName} • {maskedAccount}\n" +
-                noteClause +
-                $"\nApprove or reject:\n{approvalUrl}\n\n" +
-                $"This request expires in {_trusteeOptions.ReleaseRequestExpiryHours} " +
-                $"hours. If you do nothing, the request will expire automatically and " +
-                $"no money will move.",
+                "# Release request from " + displayName + "\n\n" +
+                $"**{displayName} has requested a release from their \"{wallet.Name}\" trustee wallet.**\n\n" +
+                $"- Amount: **₦{request.Amount:N0}**\n" +
+                $"- Destination: **{bank.BankName} • {maskedAccount}**\n" +
+                (string.IsNullOrWhiteSpace(releaseRequest.UserNote)
+                    ? string.Empty
+                    : $"- Reason: **{releaseRequest.UserNote}**\n") +
+                $"- Approve or reject: {approvalUrl}\n\n" +
+                $"This request expires in **{_trusteeOptions.ReleaseRequestExpiryHours} hours**. If you do nothing, it will expire automatically and no money will move.",
                 $"Release request from {displayName}");
 
             op.Success(

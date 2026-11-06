@@ -7,8 +7,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
 using GetRenewalEventsQuery = Mova.Application.BBL.Queries.AccountWallet.GetRenewalEventsQuery;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.WalletTests;
 
 public sealed class GetRenewalEventsQueryTests : BaseTest
 {

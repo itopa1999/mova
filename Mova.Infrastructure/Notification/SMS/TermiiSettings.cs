@@ -1,4 +1,4 @@
-namespace Mova.Infrastructure.Notification.Sms;
+namespace Mova.Infrastructure.Notification.SMS;
 
 public sealed class TermiiSettings
 {

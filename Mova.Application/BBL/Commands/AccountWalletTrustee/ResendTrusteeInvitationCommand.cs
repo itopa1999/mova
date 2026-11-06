@@ -16,7 +16,7 @@ using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class ResendTrusteeInvitationCommand
@@ -158,12 +158,12 @@ public sealed class ResendTrusteeInvitationCommand
             _notificationQueue.QueueNotificationEmail(
                 trusteeDisplayName,
                 trustee.Email,
-                $"{ownerName} has resent their invitation for you to be their trustee on MOVA.\n\n" +
-                $"As a trustee, you will be asked to approve or reject money releases from " +
-                $"wallets they assign to you. No money moves without your approval.\n\n" +
-                $"To accept or decline this invitation, open the link below:\n{consentUrl}\n\n" +
-                $"This link expires in {_trusteeOptions.InvitationExpiryHours} hours. Any " +
-                $"previous invitation link you received is no longer valid — use this one.",
+                "# Trustee invitation reminder\n\n" +
+                $"**{ownerName} has resent their invitation for you to be their trustee on MOVA.**\n\n" +
+                "- As a trustee, you will be asked to approve or reject money releases from their wallets.\n" +
+                "- No money moves without your approval.\n\n" +
+                $"To accept or decline this invitation, open: {consentUrl}\n\n" +
+                $"This link expires in **{_trusteeOptions.InvitationExpiryHours} hours**. Any previous invitation link is no longer valid.",
                 $"{ownerName} resent their trustee invitation on MOVA");
 
             op.Success(

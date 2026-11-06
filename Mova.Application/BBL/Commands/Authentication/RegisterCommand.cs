@@ -14,7 +14,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Net;
 using System.Text.Json.Serialization;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class RegisterCommand

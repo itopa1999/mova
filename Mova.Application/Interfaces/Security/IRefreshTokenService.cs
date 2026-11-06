@@ -1,5 +1,4 @@
 using Mova.Domain.Entities;
-
 namespace Mova.Application.Interfaces.Security;
 
 public interface IRefreshTokenService

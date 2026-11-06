@@ -3,7 +3,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using Mova.Domain.Common;
 using Mova.Domain.Enums;
-
 namespace Mova.Domain.Entities;
 
 

@@ -1,4 +1,4 @@
-namespace Mova.Infrastructure.Common;
+namespace Mova.Shared.Common;
 
 public static class DefaultProfilePictures
 {

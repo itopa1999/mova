@@ -8,8 +8,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Jobs;
+namespace Mova.Infrastructure.Jobs.TruteesJob;
 
 public sealed class ExpireReleaseRequestsJob
 {
@@ -108,11 +107,11 @@ public sealed class ExpireReleaseRequestsJob
                     _notificationQueue.QueueNotificationEmail(
                         owner.FirstName ?? string.Empty,
                         owner.Email,
-                        $"Your release request of " +
-                        $"₦{releaseRequest.Amount.ToDecimal():N0} from " +
-                        $"\"{wallet.Name}\" expired without a response from your " +
-                        $"trustee.\n\nFunds are back in your wallet. You can " +
-                        $"request again after the cooldown period.",
+                        $"# Release request expired\n\n" +
+                        $"Your release request of **₦{releaseRequest.Amount.ToDecimal():N0}** from " +
+                        $"\"{wallet.Name}\" expired without a response from your trustee.\n\n" +
+                        $"- Funds are back in your wallet.\n" +
+                        $"- You can request again after the cooldown period.",
                         "Release request expired");
                 }
             }

@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Flutterwave;
 
 public sealed partial class FlutterwaveService
 {

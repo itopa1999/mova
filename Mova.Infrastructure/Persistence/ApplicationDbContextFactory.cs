@@ -1,7 +1,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using Mova.Application.Interfaces.Services;
+using Mova.Infrastructure.Service;
 
 namespace Mova.Infrastructure.Persistence;
 

@@ -2,9 +2,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Mova.Application.Interfaces.Notification;
 using Mova.Infrastructure.Jobs;
-using Mova.Infrastructure.Notification.Sms;
-
-namespace Mova.Infrastructure.Notification;
+using Mova.Infrastructure.Notification.SMS;
+namespace Mova.Infrastructure.Notification.Email;
 
 public static class DependencyInjection
 {

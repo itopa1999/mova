@@ -8,7 +8,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Application.Validation;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.BanksAccount;
 
 public sealed class GetTransactions

@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using Mova.Domain.Common;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Domain.Entities;
 
 [Table("ledger_entries")]

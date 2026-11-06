@@ -10,8 +10,8 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Xunit;
 using WalletDetailsQuery = Mova.Application.BBL.Queries.AccountWallet.WalletDetails;
-
-namespace Mova.Tests.Handlers;
+using Mova.Shared.Common.Results;
+namespace Mova.Tests.WalletTests;
 
 public sealed class WalletDetailsQueryTests : BaseTest
 {

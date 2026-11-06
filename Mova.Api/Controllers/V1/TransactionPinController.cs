@@ -10,7 +10,7 @@ using Mova.Application.BBL.Commands.TransactionPin;
 using Mova.Application.BBL.Queries.TransactionPin;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]

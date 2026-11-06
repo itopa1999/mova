@@ -1,10 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Infrastructure.Authentication.Jwt;
+using Mova.Infrastructure.Security;
 using Xunit;
-
-namespace Mova.Tests.PinChallengeTests;
+namespace Mova.Tests.TransactionPinTest;
 
 public sealed class PinChallengeServiceTests : BaseTest
 {

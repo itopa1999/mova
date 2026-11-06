@@ -11,8 +11,8 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+using Mova.Shared.Common.Results;
+namespace Mova.Tests.AuthenticationTest;
 
 public sealed class RequestAccountDeletionTests : BaseTestWithPinChallenge
 {
@@ -280,7 +280,10 @@ public sealed class RequestAccountDeletionTests : BaseTestWithPinChallenge
             x => x.QueueNotificationEmail(
                 UserFirstName,
                 UserEmail,
-                It.Is<string>(m => m.Contains("successfully closed")),
+                It.Is<string>(m =>
+                    m.Contains("# Your MOVA account has been closed") &&
+                    m.Contains("**Thanks for trying MOVA.**") &&
+                    m.Contains("Your account is now closed successfully.")),
                 "Your MOVA account has been closed"),
             Times.Once);
     }

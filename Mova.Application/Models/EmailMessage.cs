@@ -1,4 +1,5 @@
-namespace Mova.Application.Common.Models;
+using Mova.Application.Models;
+namespace Mova.Application.Models;
 
 public sealed class EmailMessage
 {

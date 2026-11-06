@@ -1,6 +1,5 @@
 using Hangfire.Dashboard;
 using Mova.Shared.Constants;
-
 namespace Mova.Api.Configurations;
 
 public sealed class HangfireDashboardAuthorizationFilter : IDashboardAuthorizationFilter

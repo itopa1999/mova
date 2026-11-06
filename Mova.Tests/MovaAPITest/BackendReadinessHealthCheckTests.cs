@@ -7,8 +7,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Xunit;
 using Microsoft.EntityFrameworkCore;
-
-namespace Mova.Tests.HealthChecks;
+namespace Mova.Tests.MovaAPITest;
 
 public sealed class BackendReadinessHealthCheckTests : BaseTest
 {

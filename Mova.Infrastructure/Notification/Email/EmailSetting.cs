@@ -1,4 +1,4 @@
-namespace Mova.Infrastructure.Notification;
+namespace Mova.Infrastructure.Notification.Email;
 
 public sealed class EmailSettings
 {

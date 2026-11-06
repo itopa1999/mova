@@ -14,7 +14,7 @@ using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class AcceptTrusteeConsentCommand
@@ -147,10 +147,11 @@ public sealed class AcceptTrusteeConsentCommand
                 _notificationQueue.QueueNotificationEmail(
                     owner.FirstName ?? string.Empty,
                     owner.Email,
-                    $"{trusteeDisplay} has accepted to be your trustee on MOVA.\n\n" +
-                    $"You can now select them when creating a trustee wallet. Every release " +
-                    $"from that wallet will need their approval within a 3-hour window. No " +
-                    $"money moves without their approval.",
+                    "# Your trustee accepted the invitation\n\n" +
+                    $"**{trusteeDisplay} has accepted to be your trustee on MOVA.**\n\n" +
+                    "- You can now select them when creating a trustee wallet.\n" +
+                    "- Every release from that wallet will need their approval within a 3-hour window.\n" +
+                    "- No money moves without their approval.",
                     "Your trustee accepted the invitation");
             }
 

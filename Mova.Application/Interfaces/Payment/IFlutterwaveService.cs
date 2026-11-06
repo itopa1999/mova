@@ -1,6 +1,5 @@
 using Mova.Domain.Entities;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Application.Interfaces.Payment;
 
 public interface IFlutterwaveService
