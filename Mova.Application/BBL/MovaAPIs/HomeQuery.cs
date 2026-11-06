@@ -124,8 +124,10 @@ public sealed class HomeQuery
                     .ToListAsync(cancellationToken);
 
                 var displayedWallets = allWallets
-                    .GroupBy(w => w.Type)
-                    .SelectMany(g => g.Take(5))
+                    .OrderByDescending(w => w.Status == WalletStatus.Active)
+                    .ThenByDescending(w => w.Status == WalletStatus.Paused)
+                    .ThenByDescending(w => w.CreatedAt)
+                    .Take(8)
                     .ToList();
 
                 var walletIds = displayedWallets.Select(w => w.Id).ToList();
