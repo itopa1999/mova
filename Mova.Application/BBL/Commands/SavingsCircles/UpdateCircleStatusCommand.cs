@@ -9,9 +9,9 @@ using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
 public sealed class UpdateCircleStatusCommand
@@ -96,14 +96,8 @@ public sealed class UpdateCircleStatusCommand
 
                     if (depositPerMember > 0 && depositPerMember < contributionAmount)
                     {
-                        op.Warning(
-                            $"Circle deposit ({depositPerMember:N0}) is less than the " +
-                            $"contribution ({contributionAmount:N0}).");
-
-                        return Bad(
-                            $"The security deposit per member ({depositPerMember:N0}) must be " +
-                            $"at least the contribution amount ({contributionAmount:N0}) to " +
-                            $"start the circle. Please update the circle rules first.");
+                        op.Warning($"Circle deposit ({depositPerMember:N0}) is less than the contribution ({contributionAmount:N0}).");
+                        return Bad($"The security deposit per member ({depositPerMember:N0}) must be at least the contribution amount ({contributionAmount:N0}) to start the circle. Please update the circle rules first.");
                     }
 
                     var shortMembers = activeMembers
@@ -112,14 +106,8 @@ public sealed class UpdateCircleStatusCommand
 
                     if (shortMembers.Count > 0)
                     {
-                        op.Warning(
-                            $"{shortMembers.Count} member(s) have insufficient deposit " +
-                            $"to cover the first contribution of {contributionAmount}.");
-
-                        return Bad(
-                            $"{shortMembers.Count} active member(s) don't have enough deposit " +
-                            $"to cover the first round contribution ({contributionAmount:N0}). " +
-                            $"Ask them to top up their deposit before starting the circle.");
+                        op.Warning($"{shortMembers.Count} member(s) have insufficient deposit to cover the first contribution of {contributionAmount}.");
+                        return Bad($"{shortMembers.Count} active member(s) don't have enough deposit to cover the first round contribution ({contributionAmount:N0}). Ask them to top up their deposit before starting the circle.");
                     }
 
                     if (circle.RotationStrategy == RotationStrategy.RandomDraw)
@@ -168,39 +156,8 @@ public sealed class UpdateCircleStatusCommand
                         Status = CircleRoundStatus.Collecting,
                         RequiresManualReview = false
                     };
+                    
                     await _unitOfWork.AddAsync(firstRound, cancellationToken);
-
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-                    var totalPooled = 0m;
-                    var now = DateTimeOffset.UtcNow;
-
-                    foreach (var member in orderedMembers)
-                    {
-                        await _unitOfWork.AddAsync(new Contribution
-                        {
-                            CircleRoundId = firstRound.Id,
-                            CircleMemberId = member.Id,
-                            Amount = circle.ContributionAmount,
-                            PenaltyApplied = Money.FromNaira(0),
-                            Status = ContributionStatus.Collected,
-                            CollectedAt = now,
-                            PaymentReference = $"circle-start-{circle.Id}-{member.UserPublicId}",
-                            FailureReason = null
-                        }, cancellationToken);
-
-                        var previousDeposit = member.DepositHeld.ToDecimal();
-                        member.DepositHeld = Money.FromNaira(Math.Max(0, previousDeposit - contributionAmount));
-                        member.TotalContributed = Money.FromNaira(member.TotalContributed.ToDecimal() + contributionAmount);
-
-                        totalPooled += contributionAmount;
-
-                        _unitOfWork.Update(member);
-                    }
-
-                    firstRound.PooledAmount = Money.FromNaira(totalPooled);
-                    _unitOfWork.Update(firstRound);
-
                     _unitOfWork.Update(circle);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
 

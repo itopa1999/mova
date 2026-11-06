@@ -188,7 +188,7 @@ public sealed class GetCircleRoundsQuery
                                 RotationPosition = recipientMember.RotationPosition,
                                 Status = recipientMember.Status.ToString()
                             },
-                        PoolTarget = circle.ContributionAmount.ToDecimal(),
+                        PoolTarget = circle.ContributionAmount.ToDecimal() * circle.MemberCount,
                         PooledAmount = 0m,
                         PaidOutAmount = 0m,
                         ContributedCount = 0,
@@ -291,7 +291,7 @@ public sealed class GetCircleRoundsQuery
                 RoundNumber = round.RoundNumber,
                 State = state,
                 Recipient = recipient,
-                PoolTarget = circle.ContributionAmount.ToDecimal(),
+                PoolTarget = circle.ContributionAmount.ToDecimal() * circle.MemberCount,
                 PooledAmount = pooledAmount,
                 PaidOutAmount = round.PaidOutAmount.ToDecimal(),
                 ContributedCount = contributedCount,
