@@ -122,13 +122,16 @@ public sealed class CirclePayoutJob
                             if (organizer != null && !string.IsNullOrWhiteSpace(organizer.Identifier))
                             {
                                 var defaulterList = string.Join(", ", defaulterNames);
-                                var message = $"The payout for Round {currentRound.RoundNumber} in '{circle.Name}' is paused because funds are incomplete. The following members have exceeded the {circle.GracePeriodHours}-hour grace period and are now marked as Defaulted: {defaulterList}.";
-                                
+                                var message = $"# Action required: Defaulters in '{circle.Name}'\n\n" +
+                                    $"**The payout for Round {currentRound.RoundNumber} is paused because funds are incomplete.**\n\n" +
+                                    $"- The following members exceeded the {circle.GracePeriodHours}-hour grace period and are now marked as **defaulted**: {defaulterList}.\n" +
+                                    "- Please review the circle and take the necessary action.";
+                                 
                                 _notificationQueue.QueueNotificationEmail(
                                     organizer.DisplayName ?? "Organizer",
                                     organizer.Identifier,
-                                    $"Action Required: Defaulters in '{circle.Name}'",
-                                    message
+                                    message,
+                                    $"Action Required: Defaulters in '{circle.Name}'"
                                 );
 
                                 _notificationQueue.InAppNotificationAsync(
@@ -300,7 +303,10 @@ public sealed class CirclePayoutJob
                     _notificationQueue.QueueNotificationEmail(
                         member.DisplayName ?? "Member",
                         member.Identifier,
-                        $"You received ₦{payoutAmount:N0} from your '{circle.Name}' circle!",
+                        $"# Your payout has arrived\n\n" +
+                        $"**You received ₦{payoutAmount:N0} from your '{circle.Name}' circle.**\n\n" +
+                        $"- Round: **{paidRound.RoundNumber}**\n" +
+                        "- The payout is now available in your circle wallet.",
                         "Your Payout has arrived!");
                 }
             }
@@ -308,14 +314,16 @@ public sealed class CirclePayoutJob
             {
                 // Notify other members
                 var message = isCompleted 
-                    ? $"Round {paidRound.RoundNumber} of '{circle.Name}' was paid to {recipientName}. The circle is now complete!"
-                    : $"Round {paidRound.RoundNumber} of '{circle.Name}' was paid to {recipientName}. Get ready for the next round!";
+                    ? $"# Update from {circle.Name}\n\n**Round {paidRound.RoundNumber} was paid to {recipientName}.**\n\n- The circle is now complete.\n- You can view the latest round details in the app."
+                    : $"# Update from {circle.Name}\n\n**Round {paidRound.RoundNumber} was paid to {recipientName}.**\n\n- Get ready for the next round.\n- You can view the latest circle details in the app.";
 
                 _notificationQueue.InAppNotificationAsync(
                     member.UserPublicId!,
                     NotificationType.Wallet,
                     $"Round {paidRound.RoundNumber} Payout Complete",
-                    message,
+                    isCompleted
+                        ? $"Round {paidRound.RoundNumber} of '{circle.Name}' was paid to {recipientName}. The circle is now complete!"
+                        : $"Round {paidRound.RoundNumber} of '{circle.Name}' was paid to {recipientName}. Get ready for the next round!",
                     detailsUrl,
                     null,
                     cancellationToken);

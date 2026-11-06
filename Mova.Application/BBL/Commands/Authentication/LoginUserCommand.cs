@@ -377,17 +377,18 @@ public sealed class LoginUserCommand
             }
 
             var body =
-                $"Hi {firstName},\n\n" +
-                $"We noticed a login to your MOVA account from a device we don't recognise.\n\n" +
-                $"Platform: {platformLabel}\n" +
-                $"Device reference: {shortDeviceId}\n" +
-                $"Time: {DateTimeOffset.UtcNow:MMM d, yyyy h:mm tt} UTC\n\n" +
-                $"If this was you, you can ignore this message — we'll remember this device.\n\n" +
-                $"If this wasn't you, please:\n" +
-                $"  1. Change your password immediately\n" +
-                $"  2. Review your recent activity\n" +
-                $"  3. Contact support if anything looks wrong\n\n" +
-                $"— The MOVA team";
+                "# New device login detected\n\n" +
+                $"**Hi {firstName},**\n\n" +
+                "We noticed a login to your MOVA account from a device we don't recognise.\n\n" +
+                $"- Platform: **{platformLabel}**\n" +
+                $"- Device reference: **{shortDeviceId}**\n" +
+                $"- Time: **{DateTimeOffset.UtcNow:MMM d, yyyy h:mm tt} UTC**\n\n" +
+                "If this was you, you can ignore this message — we will remember this device.\n\n" +
+                "If this wasn't you, please:\n" +
+                "- Change your password immediately\n" +
+                "- Review your recent activity\n" +
+                "- Contact support if anything looks wrong\n\n" +
+                "— The MOVA team";
 
             _notificationQueue.QueueNotificationEmail(
                 firstName,

@@ -144,11 +144,52 @@
       margin-bottom: 0;
     }
 
+    .message > * + * {
+      margin-top: 12px;
+    }
+
+    .message h1,
+    .message h2,
+    .message h3,
+    .message h4,
+    .message h5,
+    .message h6 {
+      color: var(--mova-charcoal);
+      font-weight: 700;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+      margin: 0 0 12px;
+    }
+
+    .message h1 { font-size: 28px; }
+    .message h2 { font-size: 24px; }
+    .message h3 { font-size: 20px; }
+    .message h4, .message h5, .message h6 { font-size: 18px; }
+
+    .message p {
+      margin: 0 0 12px;
+    }
+
+    .message ul,
+    .message ol {
+      margin: 12px 0 16px 18px;
+      padding-left: 18px;
+    }
+
+    .message li + li {
+      margin-top: 6px;
+    }
+
     .message a {
       color: var(--mova-green);
       text-decoration: none;
       font-weight: 500;
       border-bottom: 1px solid rgba(27, 107, 58, 0.25);
+    }
+
+    .message strong {
+      color: var(--mova-charcoal);
+      font-weight: 700;
     }
 
     /* ─── Divider ───────────────────────────────────── */
@@ -232,9 +273,9 @@
         Hello <span class="name">{{FirstName}}</span>,
       </p>
 
-      <p class="message">
+      <div class="message">
         {{Message}}
-      </p>
+      </div>
 
       <div class="divider"></div>
 

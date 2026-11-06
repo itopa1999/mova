@@ -255,8 +255,10 @@ public sealed class AddBankAccount
                 _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
                     request.Email,
-                    $"{bankAccount.AccountName} ({bankAccount.BankName}) has been linked to your MOVA account. " +
-                    "You can now use this account to receive releases.",
+                    "# Bank account linked\n\n" +
+                    $"**{bankAccount.AccountName} ({bankAccount.BankName})** has been linked to your MOVA account.\n\n" +
+                    "- You can now use this account to receive releases.\n" +
+                    "- We will send future payouts to this account when due.",
                     "Your bank account has been linked");
             }
 

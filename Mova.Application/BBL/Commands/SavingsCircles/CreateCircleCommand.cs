@@ -632,11 +632,11 @@ public sealed class CreateCircleCommand
                 $"kicks off the first round.";
 
             return
-                $"Your \"{name}\" circle has been created as a draft on MOVA.\n\n" +
-                $"Here are the details:\n" +
-                $"• Members: {memberCount}\n" +
-                $"• Contribution: ₦{contributionAmount:N0} / {frequencyLabel}\n" +
-                $"• Round pool: ₦{roundPool:N0}\n\n" +
+                $"# Your \"{name}\" circle is ready\n\n" +
+                $"**Draft details**\n\n" +
+                $"- Members: {memberCount}\n" +
+                $"- Contribution: ₦{contributionAmount:N0} / {frequencyLabel}\n" +
+                $"- Round pool: ₦{roundPool:N0}\n\n" +
                 $"You're member #1 of this circle. A dedicated circle wallet is being " +
                 $"set up for you — your contributions and payouts flow through it, " +
                 $"separate from your main MOVA balance.\n\n" +
@@ -645,8 +645,8 @@ public sealed class CreateCircleCommand
                     ? $"{invitesSent} invitation(s) have been sent. The first " +
                       $"{memberCount - 1} invitees to accept will become members.\n\n"
                     : "") +
-                $"Invite code: {inviteCode}\n" +
-                $"Share link: {inviteLink}\n\n" +
+                $"**Invite code:** {inviteCode}\n\n" +
+                $"**Share link:** [Open invitation]({inviteLink})\n\n" +
                 (inviteOnly
                     ? "Only the people you invited can join."
                     : "Anyone with the link can join until the circle is full.") +
@@ -669,15 +669,16 @@ public sealed class CreateCircleCommand
                 $"The organizer will manually start the circle when the roster is ready.";
 
             return
+                $"# You’ve been invited to \"{circleName}\"\n\n" +
                 $"{organizerName} has invited you to join the \"{circleName}\" circle on MOVA.\n\n" +
-                $"About the circle:\n" +
-                $"• {memberCount} members · ₦{contributionAmount:N0} / {frequencyLabel}\n" +
-                $"• Round pool: ₦{roundPool:N0} · Each member receives the pot once\n\n" +
-                $"⚠ Membership is first-come, first-served. The first " +
+                $"**About the circle**\n\n" +
+                $"- {memberCount} members · ₦{contributionAmount:N0} / {frequencyLabel}\n" +
+                $"- Round pool: ₦{roundPool:N0} · Each member receives the pot once\n\n" +
+                $"**Important:** Membership is first-come, first-served. The first " +
                 $"{memberCount - 1} invitees (after the organizer) to accept will " +
                 $"secure a slot — so accept early to guarantee yours.\n\n" +
                 $"{startMessage}\n\n" +
-                $"To accept or decline, open:\n{inviteLink}\n\n" +
+                $"**To accept or decline, open:** [View invitation]({inviteLink})\n\n" +
                 $"Sign in or create a MOVA account with this email address to join. " +
                 $"Your invite is linked to this address — anyone else using the link " +
                 $"will be rejected.\n\n" +

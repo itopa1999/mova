@@ -194,8 +194,10 @@ public sealed class LinkAccountToBank
                 _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
                     request.Email,
-                    $"{bankAccount.BankName} ({bankAccount.AccountNumber}) has been linked to your {wallet.Name} wallet. " +
-                    "When a release is due, MOVA will send the money to this account automatically.",
+                    $"# A bank account was linked to your {wallet.Name} wallet\n\n" +
+                    $"**{bankAccount.BankName} ({bankAccount.AccountNumber})** is now connected to this wallet.\n\n" +
+                    "- When a release is due, MOVA will send the money here automatically.\n" +
+                    "- You can change this from your wallet settings anytime.",
                     $"A bank account was linked to your {wallet.Name} wallet");
             }
 

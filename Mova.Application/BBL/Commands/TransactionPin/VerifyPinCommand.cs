@@ -168,9 +168,11 @@ public sealed class VerifyPinCommand
                         _notificationQueue.QueueNotificationEmail(
                             user.FirstName,
                             user.Email,
-                            "We locked your transaction PIN for 1 hour after 3 incorrect attempts. " +
-                            "Please try again in 1 hour. If you did not make these attempts, " +
-                            "please contact MOVA support.",
+                            "# Transaction PIN temporarily locked\n\n" +
+                            "**We locked your PIN for 1 hour** after 3 incorrect attempts.\n\n" +
+                            "- Please try again in 1 hour.\n" +
+                            "- If you did not make these attempts, contact MOVA support immediately.\n\n" +
+                            "We take security seriously and protect your account on repeated failed attempts.",
                             "Transaction PIN temporarily locked");
                     }
 

@@ -189,13 +189,12 @@ public sealed class InviteTrusteeCommand
             _notificationQueue.QueueNotificationEmail(
                 trusteeDisplayName,
                 trusteeEmail,
-                $"{ownerName} has invited you to be their trustee on MOVA.\n\n" +
-                $"As a trustee, you will be asked to approve or reject money releases " +
-                $"from wallets they assign to you. No money moves without your approval.\n\n" +
-                $"To accept or decline this invitation, open the link below:\n{consentUrl}\n\n" +
-                $"This link expires in {_trusteeOptions.InvitationExpiryHours} hours. If you " +
-                $"don't recognise this invitation or don't want to be a trustee, you can " +
-                $"ignore this email — the invitation will expire automatically.",
+                "# Trustee invitation\n\n" +
+                $"**{ownerName} has invited you to be their trustee on MOVA.**\n\n" +
+                "- As a trustee, you will be asked to approve or reject money releases from their wallets.\n" +
+                "- No money moves without your approval.\n\n" +
+                $"To accept or decline this invitation, open: {consentUrl}\n\n" +
+                $"This link expires in **{_trusteeOptions.InvitationExpiryHours} hours**. If you don't recognise this invitation, you can ignore it — it will expire automatically.",
                 $"{ownerName} invited you to be a trustee on MOVA");
 
             op.Success(

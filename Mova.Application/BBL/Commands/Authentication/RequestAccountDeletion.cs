@@ -177,9 +177,11 @@ public sealed class RequestAccountDeletion
             _notificationQueue.QueueNotificationEmail(
                 user.FirstName,
                 user.Email,
-                "Your MOVA account has been successfully closed. " +
-                "Thank you for choosing MOVA — we're grateful you gave us a try. " +
-                "If you ever want to come back, our support team will be happy to help you set up a new account.",
+                "# Your MOVA account has been closed\n\n" +
+                "**Thanks for trying MOVA.**\n\n" +
+                "- Your account is now closed successfully.\n" +
+                "- We appreciate you giving us the opportunity to serve you.\n\n" +
+                "If you ever want to return, our support team will be happy to help you set up a new account.",
                 "Your MOVA account has been closed");
 
             op.Success("Account deletion request completed.");

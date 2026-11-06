@@ -152,10 +152,10 @@ public sealed class RejectReleaseRequestCommand
                 _notificationQueue.QueueNotificationEmail(
                     owner.FirstName ?? string.Empty,
                     owner.Email,
-                    $"Your trustee rejected the release request of " +
-                    $"₦{releaseRequest.Amount.ToDecimal():N0} from your " +
-                    $"\"{wallet.Name}\" wallet.{reasonClause}\n\n" +
-                    $"The funds are back in your wallet.",
+                    "# Release rejected\n\n" +
+                    $"**Your trustee rejected the release request of ₦{releaseRequest.Amount.ToDecimal():N0} from your \"{wallet.Name}\" wallet.**\n\n" +
+                    $"- {reasonClause.Trim()}\n" +
+                    "- The funds are back in your wallet.",
                     "Release rejected");
             }
 

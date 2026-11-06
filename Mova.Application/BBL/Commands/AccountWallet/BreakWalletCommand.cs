@@ -241,10 +241,11 @@ public sealed class BreakWalletCommand
                 _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
                     request.Email,
-                    $"₦{amountReturned:N0} is on its way to your linked bank " +
-                    $"account and should arrive within a few minutes. " +
-                    $"A break fee of ₦{breakFee:N0} was applied, and the " +
-                    $"remaining ₦{amountReturned:N0} is being returned to you.",
+                    $"# Your {wallet.Name} wallet has been broken\n\n" +
+                    $"**₦{amountReturned:N0} is on its way to your linked bank account.**\n\n" +
+                    $"- A break fee of **₦{breakFee:N0}** was applied.\n" +
+                    $"- The remaining **₦{amountReturned:N0}** is being returned to you.\n" +
+                    "- This should arrive within a few minutes.",
                     $"Your {wallet.Name} wallet has been broken");
             }
 

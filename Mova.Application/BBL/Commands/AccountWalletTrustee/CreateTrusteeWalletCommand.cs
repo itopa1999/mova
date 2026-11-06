@@ -380,14 +380,16 @@ public sealed class CreateTrusteeWalletCommand
             if (!string.IsNullOrWhiteSpace(request.Email))
             {
                 var emailBody = trusteeAlreadyLinked
-                    ? $"Your {walletName} trustee wallet has been created and funded with " +
-                      $"₦{request.TargetAmount:N0}. Your trustee is already set — every " +
-                      $"release request will need their approval within 3 hours. No money " +
-                      $"moves without their approval."
-                    : $"Your {walletName} trustee wallet has been created and funded with " +
-                      $"₦{request.TargetAmount:N0}. To complete setup, add the person you " +
-                      $"trust as your trustee. Once added, they'll need to approve every " +
-                      $"release request within 3 hours — no money moves without their approval.";
+                    ? $"# Your {walletName} trustee wallet is ready\n\n" +
+                      $"**Your wallet has been created and funded with ₦{request.TargetAmount:N0}.**\n\n" +
+                      "- Your trustee is already set.\n" +
+                      "- Every release request will need their approval within 3 hours.\n" +
+                      "- No money moves without their approval."
+                    : $"# Your {walletName} trustee wallet is ready\n\n" +
+                      $"**Your wallet has been created and funded with ₦{request.TargetAmount:N0}.**\n\n" +
+                      "- To complete setup, add the person you trust as your trustee.\n" +
+                      "- Once added, they will need to approve every release request within 3 hours.\n" +
+                      "- No money moves without their approval.";
 
                 _notificationQueue.QueueNotificationEmail(
                     request.FirstName,
@@ -408,17 +410,15 @@ public sealed class CreateTrusteeWalletCommand
                     : linkedTrustee.Name.Trim();
 
                 var trusteeEmailBody =
-                    $"Hi {trusteeDisplayName},\n\n" +
-                    $"{ownerDisplayName} has made you the trustee on their " +
-                    $"\"{walletName}\" wallet on MOVA.\n\n" +
-                    $"The wallet currently holds ₦{request.TargetAmount:N0}, and no money " +
-                    $"can leave it without your approval. Here's what to expect:\n\n" +
-                    $"• Whenever {ownerDisplayName} requests a release, you'll be notified " +
-                    $"and asked to approve or reject it.\n" +
-                    $"• You'll have 3 hours to respond to each request.\n" +
-                    $"• If you don't respond in time, the request expires automatically and " +
-                    $"no funds move.\n\n" +
-                    $"You're the safeguard here — nothing is released without your say-so. ";
+                    "# Trustee assignment\n\n" +
+                    $"**Hi {trusteeDisplayName},**\n\n" +
+                    $"{ownerDisplayName} has made you the trustee on their \"{walletName}\" wallet on MOVA.\n\n" +
+                    $"- The wallet currently holds **₦{request.TargetAmount:N0}**.\n" +
+                    "- No money can leave it without your approval.\n" +
+                    $"- Whenever {ownerDisplayName} requests a release, you will be notified and asked to approve or reject it.\n" +
+                    "- You have 3 hours to respond to each request.\n" +
+                    "- If you do not respond in time, the request expires automatically and no funds move.\n\n" +
+                    "You are the safeguard here — nothing is released without your say-so.";
                     
                 _notificationQueue.QueueNotificationEmail(
                     trusteeDisplayName,

@@ -398,11 +398,14 @@ public sealed class CreateRenewalPolicyCommand
             };
 
             var refillBehaviourClause = refillUntilExhausted
-                ? " Refills will use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
+                ? "- Refills will use whatever is available in your main balance — even if it's less than the refill amount — so long as there's something there."
                 : string.Empty;
 
-            return $"{triggerClause}{refillBehaviourClause} " +
-                   "You can pause or edit this automation anytime from your wallet settings.";
+            return "# Automation is on\n\n" +
+                   $"**{triggerClause}**\n\n" +
+                   (string.IsNullOrWhiteSpace(refillBehaviourClause)
+                       ? "- You can pause or edit this automation anytime from your wallet settings."
+                       : $"{refillBehaviourClause}\n- You can pause or edit this automation anytime from your wallet settings.");
         }
     }
 }

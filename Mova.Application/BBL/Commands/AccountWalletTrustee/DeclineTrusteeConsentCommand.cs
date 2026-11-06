@@ -138,8 +138,10 @@ public sealed class DeclineTrusteeConsentCommand
                 _notificationQueue.QueueNotificationEmail(
                     owner.FirstName ?? string.Empty,
                     owner.Email,
-                    $"{trusteeDisplay} declined to be your trustee.{reasonClause}\n\n" +
-                    $"You can invite someone else from your Trustees page whenever you're ready.",
+                    "# Trustee invitation declined\n\n" +
+                    $"**{trusteeDisplay} declined to be your trustee.**\n\n" +
+                    $"- {reasonClause.Trim()}\n" +
+                    "- You can invite someone else from your Trustees page whenever you're ready.",
                     "Trustee invitation declined");
             }
 

@@ -337,7 +337,10 @@ public sealed class WithdrawalCommand
                 notificationQueue.QueueNotificationEmail(
                     user.FirstName,
                     user.Email,
-                    $"{notificationMessage} Your withdrawal request has been recorded and is currently processing.",
+                    "# Withdrawal initiated\n\n" +
+                    $"**{notificationMessage}**\n\n" +
+                    "- Your withdrawal request has been recorded.\n" +
+                    "- The payment is currently processing.",
                     "Your MOVA withdrawal has been initiated");
             }
 
