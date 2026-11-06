@@ -16,7 +16,8 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
+using Mova.Shared.Common.Results;
+using Mova.Application.Models;
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class CreateWalletCommand

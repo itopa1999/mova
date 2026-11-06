@@ -1,5 +1,4 @@
-
-namespace Mova.Infrastructure.Authentication.Jwt;
+namespace Mova.Infrastructure.Authentication.Jwt.Interface;
 
 public interface IRefreshTokenGenerator
 {

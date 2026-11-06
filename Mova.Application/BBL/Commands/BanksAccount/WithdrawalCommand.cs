@@ -16,7 +16,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using DataAnnotationValidationResult = System.ComponentModel.DataAnnotations.ValidationResult;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.BanksAccount;
 
 public sealed class WithdrawalCommand

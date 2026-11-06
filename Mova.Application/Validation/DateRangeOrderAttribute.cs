@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
-
 namespace Mova.Application.Validation;
 
 [AttributeUsage(AttributeTargets.Class)]

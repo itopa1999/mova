@@ -1,5 +1,4 @@
 using Mova.Application.Interfaces.Security;
-
 namespace Mova.Infrastructure.Security;
 public sealed class OtpService : IOtpService
 {

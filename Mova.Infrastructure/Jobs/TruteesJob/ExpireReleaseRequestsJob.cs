@@ -8,8 +8,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Jobs;
+namespace Mova.Infrastructure.Jobs.TruteesJob;
 
 public sealed class ExpireReleaseRequestsJob
 {

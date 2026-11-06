@@ -8,8 +8,8 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
-namespace Mova.Application.BBL.Queries.Authentication;
+using Mova.Shared.Common.Results;
+namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class CheckRegistrationAvailability
 {

@@ -4,8 +4,7 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
-namespace Mova.Infrastructure.Services;
+namespace Mova.Infrastructure.Service;
 
 public class SchedulePreviewService : ISchedulePreviewService
 {

@@ -1,5 +1,4 @@
 using Mova.Domain.Enums;
-
 namespace Mova.Infrastructure.Payment.Monnify;
 
 /// <summary>Maps Monnify collection statuses to MOVA's transaction lifecycle.</summary>

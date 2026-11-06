@@ -10,8 +10,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
 using WalletListQuery = Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.MovaAPITest;
 
 public sealed class UserScopedQueryTests : BaseTest
 {

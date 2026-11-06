@@ -4,11 +4,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Mova.Application.Interfaces.Persistence;
-using Mova.Application.Interfaces.Services;
 using Mova.Domain.Entities;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
-
+using Mova.Infrastructure.Service;
 namespace Mova.Tests;
 
 public sealed class TestCurrentUserService : ICurrentUserService

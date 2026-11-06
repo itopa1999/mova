@@ -1,7 +1,6 @@
 using Moq;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
-
 namespace Mova.Tests;
 
 public abstract class BaseTestWithPinChallenge : BaseTest

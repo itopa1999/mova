@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.RegularExpressions;
-
 namespace Mova.Infrastructure.Notification.Email;
 
 public sealed class TemplateRenderer

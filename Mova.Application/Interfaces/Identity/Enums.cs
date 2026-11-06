@@ -1,5 +1,4 @@
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Application.Interfaces.Identity;
 
 public sealed record UserIdentityDto(

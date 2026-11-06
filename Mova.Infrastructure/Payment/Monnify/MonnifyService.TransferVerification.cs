@@ -4,8 +4,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Payment.Monnify;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Monnify;
 
 public sealed partial class MonnifyService
 {

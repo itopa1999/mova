@@ -5,7 +5,6 @@ using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Logging;
-
 namespace Mova.Infrastructure.Jobs;
 
 public sealed class ProcessPendingProcessingTransactions

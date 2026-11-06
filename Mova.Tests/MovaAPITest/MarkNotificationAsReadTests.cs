@@ -7,8 +7,7 @@ using Mova.Application.Interfaces.Caching;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.MovaAPITest;
 
 public sealed class MarkNotificationAsReadTests : BaseTest
 {

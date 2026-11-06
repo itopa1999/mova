@@ -3,7 +3,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Shared.Common;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.Admin;
 
 public sealed class GetUserRolesQuery

@@ -12,8 +12,8 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
-
-namespace Mova.Application.BBL.Commands.AccountWallet;
+using Mova.Shared.Common.Results;
+namespace Mova.Application.BBL.Commands.BanksAccount;
 
 public sealed class LinkAccountToBank
 {

@@ -2,15 +2,14 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Mova.Application.BBL.Commands.AccountWallet;
+using Mova.Application.BBL.Commands.BanksAccount;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.BankAccountTest;
 
 public sealed class LinkAccountToBankTests : BaseTestWithPinChallenge
 {

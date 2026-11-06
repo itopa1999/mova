@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-
 namespace Mova.Api.Security;
 
 public sealed class RsaPinDecryptionService : IPinDecryptionService, IDisposable

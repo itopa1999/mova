@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Paystack;
 
 public sealed partial class PaystackService
 {

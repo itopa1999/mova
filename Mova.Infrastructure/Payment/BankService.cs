@@ -1,13 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Mova.Application.Interfaces.Caching;
-using Mova.Application.Interfaces.ExternalAPI;
+using Mova.Application.ExternalAPI;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Shared.Constants;
-
 namespace Mova.Infrastructure.Payment;
 
 public sealed class BankService : IBankService

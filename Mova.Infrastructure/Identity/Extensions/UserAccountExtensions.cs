@@ -1,5 +1,4 @@
 using Mova.Domain.Enums;
-
 namespace Mova.Infrastructure.Identity.Extensions;
 
 /// <summary>

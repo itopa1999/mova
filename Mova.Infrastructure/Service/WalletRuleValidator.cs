@@ -6,7 +6,6 @@ using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Infrastructure.Service;
 
 public class WalletRuleValidator : IWalletRuleValidator

@@ -10,8 +10,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Constants;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.TransactionPinTest;
 
 public sealed class VerifyForgotPinOtpCommandTests : BaseTest
 {

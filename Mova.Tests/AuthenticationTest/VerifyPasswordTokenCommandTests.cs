@@ -9,8 +9,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.AuthenticationTest;
 
 public sealed class VerifyPasswordTokenCommandTests : BaseTest
 {

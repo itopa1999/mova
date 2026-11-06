@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Mova.Domain.Enums;
-
-namespace Mova.Api.Controllers.V1;
+namespace Mova.Api.Configurations;
 
 public sealed class EncryptedPinRequest
 {

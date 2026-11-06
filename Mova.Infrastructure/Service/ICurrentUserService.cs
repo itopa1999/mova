@@ -1,4 +1,4 @@
-namespace Mova.Application.Interfaces.Services;
+namespace Mova.Infrastructure.Service;
 
 public interface ICurrentUserService
 {

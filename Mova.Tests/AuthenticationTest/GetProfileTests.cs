@@ -5,8 +5,7 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.AuthenticationTest;
 
 public sealed class GetProfileTests : BaseTest
 {

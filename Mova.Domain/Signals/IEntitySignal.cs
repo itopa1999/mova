@@ -1,5 +1,4 @@
 using Mova.Domain.Common;
-
 namespace Mova.Domain.Signals;
 
 /// <summary>

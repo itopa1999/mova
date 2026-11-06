@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Mova.Domain.Common;
-
 namespace Mova.Domain.Entities;
 
 [Table("feedbacks")]

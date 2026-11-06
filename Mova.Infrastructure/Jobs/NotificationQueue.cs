@@ -4,7 +4,6 @@ using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Logging;
-
 namespace Mova.Infrastructure.Jobs;
 
 public sealed class NotificationQueue : INotificationQueue

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Mova.Infrastructure.Authentication.Jwt.Interface;
 
 namespace Mova.Infrastructure.Authentication.Jwt;
 

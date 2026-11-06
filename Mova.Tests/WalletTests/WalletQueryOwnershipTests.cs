@@ -3,7 +3,6 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Queries.AccountWallet;
-using Mova.Application.BBL.Queries.SchedulePreview;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
@@ -11,9 +10,9 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Xunit;
-using ReleaseQuery = Mova.Application.BBL.MovaAPIs.GetReleasesQuery;
-
-namespace Mova.Tests.Handlers;
+using ReleaseQuery = Mova.Application.BBL.Queries.AccountWallet.GetReleasesQuery;
+using Mova.Shared.Common.Results;
+namespace Mova.Tests.WalletTests;
 
 public sealed class WalletQueryOwnershipTests : BaseTest
 {

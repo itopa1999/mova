@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-
 namespace Mova.Application.Helpers;
 
 internal static class TrusteeTokenHelper

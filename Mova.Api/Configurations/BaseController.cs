@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
-
 namespace Mova.Api.Configurations;
 
 [ApiController]

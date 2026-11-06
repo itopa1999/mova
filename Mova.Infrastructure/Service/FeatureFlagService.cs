@@ -6,8 +6,7 @@ using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
 using static Mova.Application.Interfaces.Service.IFeatureFlagService;
-
-namespace Mova.Infrastructure.Services;
+namespace Mova.Infrastructure.Service;
 
 public sealed class FeatureFlagService : IFeatureFlagService
 {

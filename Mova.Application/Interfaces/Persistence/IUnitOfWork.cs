@@ -1,5 +1,4 @@
 using System.Data;
-
 namespace Mova.Application.Interfaces.Persistence;
 
 public interface IUnitOfWork : IAsyncDisposable

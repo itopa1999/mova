@@ -13,7 +13,7 @@ using Mova.Application.BBL.Queries.BanksAccount;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
-using static Mova.Application.BBL.Commands.AccountWallet.LinkAccountToBank;
+using static Mova.Application.BBL.Commands.BanksAccount.LinkAccountToBank;
 using static Mova.Application.BBL.Commands.BanksAccount.AddBankAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.FundAccount;
 using static Mova.Application.BBL.Commands.BanksAccount.VerifyBankAccount;
@@ -23,7 +23,7 @@ using static Mova.Application.BBL.Queries.BanksAccount.GetBanks;
 using static Mova.Application.BBL.Queries.BanksAccount.GetTransactions;
 using WithdrawalRequest = Mova.Application.BBL.Commands.BanksAccount.WithdrawalCommand.Command;
 using WithdrawalResponse = Mova.Application.BBL.Commands.BanksAccount.WithdrawalCommand.WithdrawalResponse;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]

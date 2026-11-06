@@ -1,6 +1,5 @@
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-
 namespace Mova.Application.Interfaces.Security;
 
 public interface IPinChallenge

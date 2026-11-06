@@ -7,7 +7,6 @@ using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
 namespace Mova.Infrastructure.Jobs;
 
 public sealed class BackgroundNotificationJob

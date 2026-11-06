@@ -9,7 +9,7 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.MovaAPIs;
 
 public sealed class GetNotificationsQuery

@@ -7,7 +7,6 @@ using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.Authentication;
-using Mova.Application.BBL.Queries.Authentication;
 using Mova.Application.BBL.Queries.Profile;
 using Mova.Infrastructure.Authentication.Jwt;
 using Mova.Shared.Common;
@@ -20,9 +19,9 @@ using static Mova.Application.BBL.Commands.Authentication.ResendVerificationOtpC
 using static Mova.Application.BBL.Commands.Authentication.UpdateNotificationPreferenceCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyAccountCommand;
 using static Mova.Application.BBL.Commands.Authentication.VerifyPasswordTokenCommand;
-using static Mova.Application.BBL.Queries.Authentication.CheckRegistrationAvailability;
+using static Mova.Application.BBL.Commands.Authentication.CheckRegistrationAvailability;
 using static Mova.Application.BBL.Queries.Profile.GetProfile;
-
+using Mova.Shared.Common.Results;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]

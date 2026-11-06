@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Caching;
 using Mova.Shared.Logging;
 using StackExchange.Redis;
-
 namespace Mova.Infrastructure.Caching;
 
 public sealed class RedisCacheService : ICacheService

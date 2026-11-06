@@ -1,10 +1,9 @@
 using Microsoft.Extensions.Options;
-using Mova.Application.Interfaces.ExternalAPI;
+using Mova.Application.ExternalAPI;
 using Mova.Application.Interfaces.Payment;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Infrastructure.Payment.Paystack;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Paystack;
 
 public sealed partial class PaystackService(
     IOptions<PaystackSettings> options,

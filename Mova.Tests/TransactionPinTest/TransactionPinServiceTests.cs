@@ -5,9 +5,8 @@ using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
-using Mova.Infrastructure.Services.Security;
+using Mova.Infrastructure.Security;
 using Mova.Shared.Constants;
-
 namespace Mova.Tests.TransactionPinTest;
 
 public sealed class TransactionPinServiceTests : BaseTest

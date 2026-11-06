@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Mova.Api.HealthChecks;
-
 namespace Mova.Api.Controllers;
 
 /// <summary>Provides backend readiness status for deployment probes.</summary>

@@ -7,8 +7,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
-
-namespace Mova.Infrastructure.Jobs;
+namespace Mova.Infrastructure.Jobs.CircleJob;
 
 public sealed class CirclePayoutJob
 {

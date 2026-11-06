@@ -12,8 +12,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.WebHookTest;
 
 public sealed class PaystackWebHookCommandTests : BaseTest
 {

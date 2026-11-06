@@ -1,13 +1,12 @@
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Mova.Application.BBL.Queries.SchedulePreview;
+using Mova.Application.BBL.Queries.AccountWallet;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Enums;
 using Xunit;
-using SchedulePreviewQuery = Mova.Application.BBL.Queries.SchedulePreview.SchedulePreviewQuery;
-
-namespace Mova.Tests.Handlers;
+using SchedulePreviewQuery = Mova.Application.BBL.Queries.AccountWallet.SchedulePreviewQuery;
+namespace Mova.Tests.WalletTests;
 
 public sealed class SchedulePreviewQueryTests : BaseTest
 {

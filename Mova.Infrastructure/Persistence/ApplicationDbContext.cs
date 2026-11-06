@@ -2,10 +2,10 @@ using System.Linq.Expressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Mova.Application.Interfaces.Services;
 using Mova.Domain.Common;
 using Mova.Domain.Entities;
 using Mova.Infrastructure.Identity;
+using Mova.Infrastructure.Service;
 
 namespace Mova.Infrastructure.Persistence;
 

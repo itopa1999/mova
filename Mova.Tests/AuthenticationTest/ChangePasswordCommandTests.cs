@@ -6,8 +6,7 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
 using Mova.Domain.ValueObjects;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.AuthenticationTest;
 
 public sealed class ChangePasswordCommandTests : BaseTest
 {

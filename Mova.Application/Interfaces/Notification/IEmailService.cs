@@ -1,7 +1,6 @@
 
 
-using Mova.Application.Common.Models;
-
+using Mova.Application.Models;
 namespace Mova.Application.Interfaces.Notification;
 public interface IEmailService
 {

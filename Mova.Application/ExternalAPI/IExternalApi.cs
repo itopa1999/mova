@@ -1,4 +1,4 @@
-namespace Mova.Application.Interfaces.ExternalAPI;
+namespace Mova.Application.ExternalAPI;
 public interface IExternalApiClient
 {
     Task<T?> GetAsync<T>(

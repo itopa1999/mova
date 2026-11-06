@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using MediatR;
-
 namespace Mova.Application.Behaviors;
 
 public sealed class RequestValidationBehavior<TRequest, TResponse>

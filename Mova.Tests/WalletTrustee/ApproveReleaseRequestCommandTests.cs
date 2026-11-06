@@ -11,8 +11,9 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
+using WalletTrusteeEntity = Mova.Domain.Entities.WalletTrustee;
 
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.WalletTrusteeTests;
 
 public sealed class ApproveReleaseRequestCommandTests : BaseTest
 {
@@ -82,7 +83,7 @@ public sealed class ApproveReleaseRequestCommandTests : BaseTest
     private async Task<(
         WalletCategory category, 
         BankAccount bank, 
-        WalletTrustee trustee, 
+        WalletTrusteeEntity trustee, 
         Wallet wallet, 
         ReleaseRequest request)> 
         SeedRequestPrerequisitesAsync(
@@ -108,7 +109,7 @@ public sealed class ApproveReleaseRequestCommandTests : BaseTest
         };
         await UnitOfWork.AddAsync(bank);
 
-        var trustee = new WalletTrustee
+        var trustee = new WalletTrusteeEntity
         {
             OwnerPublicId = OwnerPublicId,
             Name = "Jane Doe",

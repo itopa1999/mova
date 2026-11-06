@@ -1,7 +1,6 @@
 using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Enums;
-
-namespace Mova.Infrastructure.Payment;
+namespace Mova.Infrastructure.Payment.Flutterwave;
 
 public sealed partial class FlutterwaveService
 {

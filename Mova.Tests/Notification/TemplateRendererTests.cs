@@ -1,5 +1,4 @@
 using Mova.Infrastructure.Notification.Email;
-
 namespace Mova.Tests.Notification;
 
 public sealed class TemplateRendererTests

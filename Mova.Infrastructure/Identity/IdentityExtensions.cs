@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
-
 namespace Mova.Infrastructure.Identity;
 
 public static class IdentityExtensions

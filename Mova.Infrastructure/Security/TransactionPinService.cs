@@ -7,8 +7,7 @@ using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
-
-namespace Mova.Infrastructure.Services.Security;
+namespace Mova.Infrastructure.Security;
 
 public class TransactionPinService : ITransactionPinService
 {

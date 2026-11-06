@@ -4,8 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Mova.Application.Interfaces.Notification;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Notification.Sms;
+namespace Mova.Infrastructure.Notification.SMS;
 
 public sealed class SmsService : ISmsService
 {

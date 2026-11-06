@@ -1,4 +1,3 @@
-
 namespace Mova.Domain.ValueObjects;
 
 public class ValidationResult

@@ -5,7 +5,6 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Mova.Application.Interfaces.Security;
-
 namespace Mova.Infrastructure.Authentication.Jwt;
 
 public sealed class JwtTokenGenerator : IJwtTokenGenerator

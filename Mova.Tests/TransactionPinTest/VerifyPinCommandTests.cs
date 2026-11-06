@@ -8,8 +8,7 @@ using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.TransactionPinTest;
 
 public sealed class VerifyPinCommandTests : BaseTest
 {
@@ -258,7 +257,10 @@ public sealed class VerifyPinCommandTests : BaseTest
         _notificationQueue.Verify(x => x.QueueNotificationEmail(
             UserFirstName,
             UserEmail,
-            It.Is<string>(message => message.Contains("locked your transaction PIN for 1 hour")),
+            It.Is<string>(message =>
+                message.Contains("# Transaction PIN temporarily locked") &&
+                message.Contains("**We locked your PIN for 1 hour**") &&
+                message.Contains("Please try again in 1 hour")),
             "Transaction PIN temporarily locked"), Times.Once);
     }
 

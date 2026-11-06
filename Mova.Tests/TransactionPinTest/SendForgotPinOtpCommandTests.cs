@@ -11,8 +11,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.TransactionPinTest;
 
 public sealed class SendForgotPinOtpCommandTests : BaseTest
 {

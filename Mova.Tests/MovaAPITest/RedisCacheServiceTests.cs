@@ -4,9 +4,7 @@ using Moq;
 using StackExchange.Redis;
 using Mova.Infrastructure.Caching;
 using Microsoft.Extensions.Logging;
-
-
-namespace Mova.Tests.Caching;
+namespace Mova.Tests.MovaAPITest;
 
 public sealed class RedisCacheServiceUnitTests
 {

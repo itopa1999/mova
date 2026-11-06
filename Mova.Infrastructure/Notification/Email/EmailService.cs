@@ -3,14 +3,13 @@ using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
-using Mova.Application.Common.Models;
+using Mova.Application.Models;
 using Mova.Application.Interfaces.Notification;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Infrastructure.Notification.Email;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
-
-namespace Mova.Infrastructure.Notification;
+namespace Mova.Infrastructure.Notification.Email;
 
 public sealed class EmailService : IEmailService
 {

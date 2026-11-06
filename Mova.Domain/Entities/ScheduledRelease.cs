@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 using Mova.Domain.Common;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-
 namespace Mova.Domain.Entities;
 
 [Table("scheduled_releases")]

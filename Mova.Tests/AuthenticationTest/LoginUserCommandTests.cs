@@ -10,8 +10,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
-
-namespace Mova.Tests.Handlers;
+namespace Mova.Tests.AuthenticationTest;
 
 public sealed class LoginUserCommandTests : BaseTest
 {
