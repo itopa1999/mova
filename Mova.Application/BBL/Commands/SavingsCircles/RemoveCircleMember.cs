@@ -14,6 +14,9 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
+using Mova.Application.Interfaces.Caching;
+
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
 public sealed class RemoveCircleMemberCommand
@@ -30,17 +33,20 @@ public sealed class RemoveCircleMemberCommand
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
+            ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -200,23 +206,25 @@ public sealed class RemoveCircleMemberCommand
 
                 await _unitOfWork.AddAsync(refund, cancellationToken);
 
-                // ─── FIX: Save the transaction first to generate the Id ───
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await _unitOfWork.AddAsync(new LedgerEntry
                 {
                     WalletId = null,
-                    TransactionId = refund.Id, // Now we have the Id!
+                    TransactionId = refund.Id,
                     Amount = Money.FromNaira(refundAmount),
                     IsCredit = true
                 }, cancellationToken);
             }
 
-            // Final save for the LedgerEntry and the member updates
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             await tx.CommitAsync(cancellationToken);
 
+            // ─── NOTIFICATIONS ───
+            var removedMemberName = member.DisplayName ?? "A member";
+
+            // 1. Notify the removed member
             _notificationQueue.InAppNotificationAsync(
                 request.TargetUserPublicId,
                 NotificationType.Wallet,
@@ -229,10 +237,56 @@ public sealed class RemoveCircleMemberCommand
                 null,
                 CancellationToken.None);
 
+            if (!string.IsNullOrWhiteSpace(member.Identifier))
+            {
+                _notificationQueue.QueueNotificationEmail(
+                    member.DisplayName ?? "Member",
+                    member.Identifier,
+                    $"# Removed from {circle.Name}\n\n" +
+                    $"**You have been removed from the circle '{circle.Name}' by the organizer.**\n\n" +
+                    (refundAmount > 0 ? $"- Your deposit of ₦{refundAmount:N0} has been refunded to your balance.\n" : "") +
+                    $"- If you believe this is a mistake, please contact the organizer.",
+                    $"Removed from {circle.Name}");
+            }
+
+            // 2. Notify all remaining active members
+            var remainingMembers = circle.Members
+                .Where(m => m.Status != CircleMemberStatus.Exited && m.UserPublicId != request.TargetUserPublicId)
+                .ToList();
+
+            foreach (var m in remainingMembers)
+            {
+                if (!string.IsNullOrWhiteSpace(m.UserPublicId))
+                {
+                    _notificationQueue.InAppNotificationAsync(
+                        m.UserPublicId,
+                        NotificationType.Wallet,
+                        "Member removed",
+                        $"{removedMemberName} has been removed from '{circle.Name}' by the organizer.",
+                        $"/dashboard/circles/details/{wallet.Id}",
+                        null,
+                        CancellationToken.None);
+                }
+
+                if (!string.IsNullOrWhiteSpace(m.Identifier))
+                {
+                    _notificationQueue.QueueNotificationEmail(
+                        m.DisplayName ?? "Member",
+                        m.Identifier,
+                        $"# Update from {circle.Name}\n\n" +
+                        $"**{removedMemberName} has been removed from your circle '{circle.Name}' by the organizer.**\n\n" +
+                        $"- The group will continue with the remaining members.\n" +
+                        $"- You can view the latest details in the app.",
+                        $"Update from {circle.Name}");
+                }
+            }
+
             op.Success(
                 $"Member {member.Id} ({request.TargetUserPublicId}) removed " +
                 $"from circle {circle.Id} by organizer {request.UserPublicId}. " +
                 $"Refunded {refundAmount}.");
+
+            await _cacheService.DeletePrefixAsync(CacheKeys.CircleMembersPrefix(circle.Id), cancellationToken);
 
             return new BaseResult<RemoveCircleMemberResponse>(
                 HttpStatusCode.OK,
@@ -242,7 +296,8 @@ public sealed class RemoveCircleMemberCommand
                 new RemoveCircleMemberResponse
                 {
                     Removed = true,
-                    RefundedAmount = refundAmount
+                    RefundedAmount = refundAmount,
+                    Notification = true
                 });
         }
 
@@ -257,4 +312,5 @@ public sealed class RemoveCircleMemberResponse
 {
     public bool Removed { get; set; }
     public decimal RefundedAmount { get; set; }
+    public bool Notification { get; set; }
 }

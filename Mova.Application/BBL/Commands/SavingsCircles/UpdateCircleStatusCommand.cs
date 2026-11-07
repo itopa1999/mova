@@ -4,11 +4,14 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 
@@ -29,15 +32,21 @@ public sealed class UpdateCircleStatusCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ISavingsCircleService _savingsCircleService;
+        private readonly ICacheService _cacheService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             ISavingsCircleService savingsCircleService,
+            ICacheService cacheService,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _savingsCircleService = savingsCircleService;
+            _cacheService = cacheService;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -171,6 +180,9 @@ public sealed class UpdateCircleStatusCommand
                     _unitOfWork.Update(circle);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+                    await InvalidateCircleCacheAsync(circle.Id, cancellationToken);
+                    await NotifyMembersAsync(circle, $"The circle '{circle.Name}' has been started by the organizer. Round 1 is now collecting.", cancellationToken);
+
                     op.Success("Circle started successfully.");
                     return Ok("Circle started successfully. Round 1 is now collecting.");
                 }
@@ -179,6 +191,9 @@ public sealed class UpdateCircleStatusCommand
                     circle.Status = SavingsCircleStatus.Active;
                     _unitOfWork.Update(circle);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+                    await InvalidateCircleCacheAsync(circle.Id, cancellationToken);
+                    await NotifyMembersAsync(circle, $"The circle '{circle.Name}' has been resumed by the organizer.", cancellationToken);
 
                     op.Success("Circle resumed successfully.");
                     return Ok("Circle resumed successfully.");
@@ -196,6 +211,9 @@ public sealed class UpdateCircleStatusCommand
                     _unitOfWork.Update(circle);
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+                    await InvalidateCircleCacheAsync(circle.Id, cancellationToken);
+                    await NotifyMembersAsync(circle, $"The circle '{circle.Name}' has been suspended by the organizer.", cancellationToken);
+
                     op.Success("Circle suspended successfully.");
                     return Ok("Circle suspended successfully.");
                 }
@@ -208,8 +226,48 @@ public sealed class UpdateCircleStatusCommand
             return Bad("Invalid status transition requested.");
         }
 
+        private async Task InvalidateCircleCacheAsync(long circleId, CancellationToken cancellationToken)
+        {
+            await _cacheService.DeletePrefixAsync(CacheKeys.CircleMembersPrefix(circleId), cancellationToken);
+            await _cacheService.DeletePrefixAsync(CacheKeys.CircleRoundsPrefix(circleId), cancellationToken);
+            await _cacheService.DeletePrefixAsync(CacheKeys.CircleContributionsPrefix(circleId), cancellationToken);
+        }
+
+        private async Task NotifyMembersAsync(SavingsCircle circle, string message, CancellationToken cancellationToken)
+        {
+            var activeMembers = circle.Members
+                .Where(m => m.Status == CircleMemberStatus.Active && m.UserPublicId != circle.OrganizerUserPublicId)
+                .ToList();
+
+            foreach (var member in activeMembers)
+            {
+                if (!string.IsNullOrWhiteSpace(member.UserPublicId))
+                {
+                    _notificationQueue.InAppNotificationAsync(
+                        member.UserPublicId,
+                        NotificationType.Wallet,
+                        $"Circle {circle.Status}",
+                        message,
+                        $"/dashboard/circles/details/{circle.Id}",
+                        null,
+                        cancellationToken);
+                }
+
+                if (!string.IsNullOrWhiteSpace(member.Identifier))
+                {
+                    _notificationQueue.QueueNotificationEmail(
+                        member.DisplayName ?? "Member",
+                        member.Identifier,
+                        $"# Update from {circle.Name}\n\n" +
+                        $"**{message}**\n\n" +
+                        $"- You can view the latest details in the app.",
+                        $"Update from {circle.Name}");
+                }
+            }
+        }
+
         private static BaseResult<UpdateCircleStatusResponse> Ok(string message)
-            => new(HttpStatusCode.OK, message, new UpdateCircleStatusResponse { Updated = true });
+            => new(HttpStatusCode.OK, message, new UpdateCircleStatusResponse { Updated = true, Notification = true });
 
         private static BaseResult<UpdateCircleStatusResponse> Bad(
             string message,
@@ -221,4 +279,5 @@ public sealed class UpdateCircleStatusCommand
 public sealed class UpdateCircleStatusResponse
 {
     public bool Updated { get; set; }
+    public bool Notification { get; set; }
 }

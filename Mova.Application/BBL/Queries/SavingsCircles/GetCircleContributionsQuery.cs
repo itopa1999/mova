@@ -3,11 +3,13 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Queries.SavingsCircles;
 
 public sealed class GetCircleContributionsQuery
@@ -21,12 +23,19 @@ public sealed class GetCircleContributionsQuery
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetCircleContributionsResponse>>
     {
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(6);
+
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
-        public Handler(IUnitOfWork unitOfWork, ILogger<Handler> logger)
+        public Handler(
+            IUnitOfWork unitOfWork, 
+            ICacheService cacheService,
+            ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -37,24 +46,62 @@ public sealed class GetCircleContributionsQuery
             if (string.IsNullOrWhiteSpace(request.UserPublicId))
                 return Bad("You must be signed in.", HttpStatusCode.Unauthorized);
 
-            var wallet = await _unitOfWork.Query<Wallet>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(w => w.Id == request.WalletId && w.Type == WalletType.Circle, cancellationToken);
+            try
+            {
+                var wallet = await _unitOfWork.Query<Wallet>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(w => w.Id == request.WalletId && w.Type == WalletType.Circle, cancellationToken);
 
-            if (wallet is null || wallet.SavingsCircleId is null)
-                return Bad("Circle wallet not found.", HttpStatusCode.NotFound);
+                if (wallet is null || wallet.SavingsCircleId is null)
+                    return Bad("Circle wallet not found.", HttpStatusCode.NotFound);
 
-            var circleId = wallet.SavingsCircleId.Value;
+                var circleId = wallet.SavingsCircleId.Value;
 
+                var cacheKey = CacheKeys.CircleContributions(circleId, request.TargetMemberUserPublicId);
+
+                var response = await _cacheService.GetOrSetAsync(
+                    cacheKey,
+                    ct => LoadContributionsFromDbAsync(
+                        circleId,
+                        wallet.Name,
+                        request.TargetMemberUserPublicId,
+                        ct),
+                    timeout: CacheDuration,
+                    cancellationToken: cancellationToken);
+
+                return new BaseResult<GetCircleContributionsResponse>(
+                    HttpStatusCode.OK,
+                    "Contributions fetched successfully.",
+                    response!);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching circle contributions for wallet {WalletId}", request.WalletId);
+                return new BaseResult<GetCircleContributionsResponse>(
+                    HttpStatusCode.InternalServerError,
+                    "An error occurred while retrieving contributions. Please try again later.");
+            }
+        }
+
+        private async Task<GetCircleContributionsResponse> LoadContributionsFromDbAsync(
+            long circleId,
+            string circleName,
+            string? targetMemberUserPublicId,
+            CancellationToken cancellationToken)
+        {
             var query = _unitOfWork.Query<Contribution>()
                 .AsNoTracking()
                 .Include(c => c.CircleMember)
                 .Include(c => c.CircleRound)
                 .Where(c => c.CircleRound.SavingsCircleId == circleId);
 
-            if (!string.IsNullOrWhiteSpace(request.TargetMemberUserPublicId))
+            if (!string.IsNullOrWhiteSpace(targetMemberUserPublicId))
             {
-                query = query.Where(c => c.CircleMember.UserPublicId == request.TargetMemberUserPublicId);
+                query = query.Where(c => c.CircleMember.UserPublicId == targetMemberUserPublicId);
             }
 
             var rawContributions = await query
@@ -86,19 +133,14 @@ public sealed class GetCircleContributionsQuery
                 })
                 .ToList();
 
-            var response = new GetCircleContributionsResponse
+            return new GetCircleContributionsResponse
             {
                 CircleId = circleId,
-                CircleName = wallet.Name,
+                CircleName = circleName,
                 TotalLifetimeCollected = groupedData.Sum(x => x.TotalCollected),
                 TotalLifetimePenalties = groupedData.Sum(x => x.TotalPenalties),
                 DailyGroups = groupedData
             };
-
-            return new BaseResult<GetCircleContributionsResponse>(
-                HttpStatusCode.OK,
-                "Contributions fetched successfully.",
-                response);
         }
 
         private static BaseResult<GetCircleContributionsResponse> Bad(

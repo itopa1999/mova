@@ -5,7 +5,6 @@ using System.Text.RegularExpressions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Mova.Application.ExternalAPI;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -165,6 +164,23 @@ public sealed class InviteCircleMembersCommand
             var organizer = circle.Members.FirstOrDefault(m => m.UserPublicId == circle.OrganizerUserPublicId);
             var organizerName = organizer?.DisplayName ?? "The organizer";
             var inviteCode = circle.InviteCode ?? string.Empty;
+
+            foreach (var invite in inviteDataList)
+            {
+                if (!string.IsNullOrWhiteSpace(invite.TargetUserPublicId))
+                {
+                    _notificationQueue.InAppNotificationAsync(
+                        invite.TargetUserPublicId,
+                        NotificationType.Wallet,
+                        $"You've been invited to {circle.Name}",
+                        $"{organizerName} invited you to join '{circle.Name}' — " +
+                        $"{circle.MemberCount} members, ₦{circle.ContributionAmount.ToDecimal():N0} / " +
+                        $"{circle.Frequency.ToString().ToLowerInvariant()}. Tap to accept the invitation.",
+                        $"/circle/wallet/consent/{inviteCode}",
+                        null,
+                        cancellationToken);
+                }
+            }
 
             _notificationQueue.QueueCreateCircleInvitationMemberAsync(
                 circle.Id,

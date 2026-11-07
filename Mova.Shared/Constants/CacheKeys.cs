@@ -90,5 +90,35 @@ public static class CacheKeys
 
     public static string TransactionPinPrefixGlobal() => TransactionPinPrefix;
 
+
+     // ── Circle Contributions ──────────────────────────────────────────────
+    public static string CircleContributions(long circleId, string? targetMemberUserPublicId) =>
+        $"circle_contributions:{circleId}:{(string.IsNullOrWhiteSpace(targetMemberUserPublicId) ? "all" : Norm(targetMemberUserPublicId))}";
+
+    public static string CircleContributionsPrefix(long circleId) =>
+        $"circle_contributions:{circleId}:";
+
+    public const string CircleContributionsPrefixGlobal = "circle_contributions:";
+
+
+    // ── Circle Members ────────────────────────────────────────────────────
+    public static string CircleMembers(long circleId, string userPublicId, string? statusFilter) =>
+    $"circle_members:{circleId}:{Norm(userPublicId)}:{(string.IsNullOrWhiteSpace(statusFilter) ? "all" : Norm(statusFilter))}";
+
+    public static string CircleMembersPrefix(long circleId) =>
+        $"circle_members:{circleId}:";
+
+    public const string CircleMembersPrefixGlobal = "circle_members:";
+
+    // ── Circle Rounds ────────────────────────────────────────────────────
+    public static string CircleRounds(long circleId, string userPublicId) =>
+        $"circle_rounds:{circleId}:{Norm(userPublicId)}";
+
+    public static string CircleRoundsPrefix(long circleId) =>
+        $"circle_rounds:{circleId}:";
+
+    public const string CircleRoundsPrefixGlobal = "circle_rounds:";
+
+
     private static string Norm(string s) => s.Trim().ToLowerInvariant();
 }
