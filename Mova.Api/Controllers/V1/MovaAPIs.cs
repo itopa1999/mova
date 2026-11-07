@@ -12,11 +12,12 @@ using static Mova.Application.BBL.MovaAPIs.HomeQuery;
 using static Mova.Application.BBL.MovaAPIs.SubmitFeedbackCommand;
 using Mova.Shared.Constants;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
-[Route("api/v1/mova")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/mova")]
+[ApiVersion("1.0")]
 public class MovaController(
     IMediator mediator) : BaseController
 {

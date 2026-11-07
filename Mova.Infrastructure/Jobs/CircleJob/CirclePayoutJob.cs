@@ -67,148 +67,195 @@ public sealed class CirclePayoutJob
                 var gracePeriodEnd = currentRound.CollectionDate.AddHours(circle.GracePeriodHours);
                 var contributionAmount = circle.ContributionAmount.ToDecimal();
 
-                var activeMembers = circle.Members.Where(m => m.Status == CircleMemberStatus.Active).ToList();
+                // Include Defaulted members so we can attempt to collect from them if they have funded their wallets
+                var membersToCollect = circle.Members
+                    .Where(m => m.Status == CircleMemberStatus.Active || m.Status == CircleMemberStatus.Defaulted)
+                    .ToList();
                 
-                foreach (var member in activeMembers)
+                foreach (var member in membersToCollect)
                 {
                     var contrib = currentRound.Contributions.FirstOrDefault(c => c.CircleMemberId == member.Id);
 
-                    if (contrib == null)
-                    {
-                        bool paid = false;
-                        string paymentRef = "";
+                    // Skip if already paid
+                    if (contrib != null && contrib.Status == ContributionStatus.Collected)
+                        continue;
 
-                        if (currentRound.RoundNumber == 1)
+                    var isLate = now > currentRound.CollectionDate;
+                    
+                    decimal penaltyFromRound = 0m;
+                    decimal penaltyFromDeposit = 0m;
+                    decimal totalAmountDue = contributionAmount;
+
+                    // Apply Penalty Rules if late and enabled
+                    if (isLate && circle.AllowPenalty)
+                    {
+                        var penaltyAmount = circle.PenaltyAmount.ToDecimal();
+                        if (circle.PenaltyAmountFrom == PenaltyAmountFrom.Round)
                         {
-                            if (member.DepositHeld.ToDecimal() >= contributionAmount)
-                            {
-                                member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - contributionAmount);
-                                paid = true;
-                                paymentRef = $"circle-start-{circle.Id}-{member.UserPublicId}";
-                            }
+                            penaltyFromRound = penaltyAmount;
+                            totalAmountDue += penaltyFromRound;
                         }
                         else
                         {
-                            paid = await _identityService.DebitBalanceAsync(member.UserPublicId!, contributionAmount, cancellationToken);
-                            paymentRef = $"circle-contrib-{circle.Id}-{currentRound.RoundNumber}-{member.Id}";
+                            penaltyFromDeposit = penaltyAmount;
                         }
+                    }
 
+                    bool paid = false;
+                    string paymentRef = "";
+
+                    // Attempt Payment
+                    if (currentRound.RoundNumber == 1)
+                    {
+                        // Round 1: Deduct from DepositHeld (must cover contribution + deposit penalty)
+                        decimal requiredFromDeposit = totalAmountDue + penaltyFromDeposit;
+                        if (member.DepositHeld.ToDecimal() >= requiredFromDeposit)
+                        {
+                            member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - requiredFromDeposit);
+                            paid = true;
+                            paymentRef = $"circle-start-{circle.Id}-{member.UserPublicId}";
+                        }
+                    }
+                    else
+                    {
+                        // Round > 1: Debit external wallet balance (covers contribution + round penalty)
+                        paid = await _identityService.DebitBalanceAsync(member.UserPublicId!, totalAmountDue, cancellationToken);
+                        
                         if (paid)
+                        {
+                            paymentRef = $"circle-contrib-{circle.Id}-{currentRound.RoundNumber}-{member.Id}";
+                            
+                            // Deduct deposit penalty if applicable
+                            if (penaltyFromDeposit > 0)
+                            {
+                                decimal deducted = Math.Min(member.DepositHeld.ToDecimal(), penaltyFromDeposit);
+                                member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - deducted);
+                            }
+                        }
+                    }
+
+                    if (paid)
+                    {
+                        // Payment successful - mark as collected and un-default
+                        if (contrib == null)
                         {
                             contrib = new Contribution
                             {
                                 CircleRoundId = currentRound.Id,
                                 CircleMemberId = member.Id,
-                                Amount = circle.ContributionAmount,
-                                PenaltyApplied = Money.FromNaira(0),
+                                Amount = Money.FromNaira(totalAmountDue),
+                                PenaltyApplied = Money.FromNaira(penaltyFromRound + penaltyFromDeposit),
                                 Status = ContributionStatus.Collected,
                                 CollectedAt = now,
                                 PaymentReference = paymentRef
                             };
                             _context.Contributions.Add(contrib);
-                            currentRound.PooledAmount = Money.FromNaira(currentRound.PooledAmount.ToDecimal() + contributionAmount);
-                            
-                            if (currentRound.RoundNumber > 1)
-                            {
-                                var transaction = new Transaction
-                                {
-                                    UserPublicId = member.UserPublicId!,
-                                    WalletId = null,
-                                    Title = $"Circle Contribution: {circle.Name} (Round {currentRound.RoundNumber})",
-                                    Amount = Money.FromNaira(contributionAmount),
-                                    Type = TransactionType.Debit,
-                                    Status = TransactionStatus.Completed,
-                                    Reference = paymentRef,
-                                    CompletedAt = now
-                                };
-                                _context.Transactions.Add(transaction);
-                            }
                         }
                         else
+                        {
+                            contrib.Status = ContributionStatus.Collected;
+                            contrib.CollectedAt = now;
+                            contrib.Amount = Money.FromNaira(totalAmountDue);
+                            contrib.PenaltyApplied = Money.FromNaira(penaltyFromRound + penaltyFromDeposit);
+                            contrib.FailureReason = null;
+                            contrib.PaymentReference = paymentRef;
+                        }
+
+                        if (member.Status == CircleMemberStatus.Defaulted)
+                            member.Status = CircleMemberStatus.Active;
+
+                        currentRound.PooledAmount = Money.FromNaira(currentRound.PooledAmount.ToDecimal() + totalAmountDue);
+                        
+                        if (currentRound.RoundNumber > 1)
+                        {
+                            _context.Transactions.Add(new Transaction
+                            {
+                                UserPublicId = member.UserPublicId!,
+                                WalletId = null,
+                                Title = $"Circle Contribution: {circle.Name} (Round {currentRound.RoundNumber})",
+                                Amount = Money.FromNaira(totalAmountDue),
+                                Type = TransactionType.Debit,
+                                Status = TransactionStatus.Completed,
+                                Reference = paymentRef,
+                                CompletedAt = now
+                            });
+                        }
+                    }
+                    else
+                    {
+                        // Payment failed
+                        if (contrib == null)
                         {
                             contrib = new Contribution
                             {
                                 CircleRoundId = currentRound.Id,
                                 CircleMemberId = member.Id,
-                                Amount = circle.ContributionAmount,
-                                PenaltyApplied = Money.FromNaira(0),
+                                Amount = Money.FromNaira(totalAmountDue),
+                                PenaltyApplied = Money.FromNaira(penaltyFromRound + penaltyFromDeposit),
                                 Status = ContributionStatus.Pending
                             };
                             _context.Contributions.Add(contrib);
+
+                            // Send email/in-app notification for insufficient funds
+                            _notificationQueue.QueueNotificationEmail(
+                                member.DisplayName ?? "Member",
+                                member.Identifier,
+                                $"# Action Required: Insufficient funds\n\n" +
+                                $"We couldn't automatically collect your contribution of ₦{totalAmountDue:N0} for Round {currentRound.RoundNumber} in '{circle.Name}'.\n\n" +
+                                $"Please fund your wallet to avoid penalties or being marked as defaulted.",
+                                $"Action Required: Insufficient funds for {circle.Name}");
+
+                            _notificationQueue.InAppNotificationAsync(
+                                member.UserPublicId!,
+                                NotificationType.Wallet,
+                                "Insufficient funds for contribution",
+                                $"We couldn't collect your ₦{totalAmountDue:N0} contribution for {circle.Name}. Please fund your wallet.",
+                                $"/dashboard/circles/details/{circle.Id}",
+                                null,
+                                cancellationToken);
                         }
-                    }
-                    else if (contrib.Status == ContributionStatus.Pending)
-                    {
-                        if (now <= gracePeriodEnd)
+
+                        if (now > gracePeriodEnd)
                         {
-                            bool retryPaid = false;
-                            if (currentRound.RoundNumber == 1)
+                            // Grace period expired - Fallback to Deposit
+                            decimal requiredFromDeposit = totalAmountDue + penaltyFromDeposit;
+                            bool fallbackPaid = false;
+
+                            if (currentRound.RoundNumber == 1 && member.DepositHeld.ToDecimal() >= requiredFromDeposit)
                             {
-                                if (member.DepositHeld.ToDecimal() >= contributionAmount)
-                                {
-                                    member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - contributionAmount);
-                                    retryPaid = true;
-                                }
+                                member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - requiredFromDeposit);
+                                fallbackPaid = true;
                             }
-                            else
+                            else if (currentRound.RoundNumber > 1 && penaltyFromDeposit > 0)
                             {
-                                retryPaid = await _identityService.DebitBalanceAsync(member.UserPublicId!, contributionAmount, cancellationToken);
+                                // At least take the deposit penalty if available
+                                decimal deducted = Math.Min(member.DepositHeld.ToDecimal(), penaltyFromDeposit);
+                                member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - deducted);
+                                penaltyFromDeposit = deducted; // Update tracked penalty
                             }
 
-                            if (retryPaid)
+                            if (fallbackPaid)
                             {
                                 contrib.Status = ContributionStatus.Collected;
                                 contrib.CollectedAt = now;
-                                contrib.PaymentReference = $"circle-retry-{Guid.NewGuid():N}";
-                                currentRound.PooledAmount = Money.FromNaira(currentRound.PooledAmount.ToDecimal() + contributionAmount);
-                                
-                                if (currentRound.RoundNumber > 1)
-                                {
-                                    _context.Transactions.Add(new Transaction
-                                    {
-                                        UserPublicId = member.UserPublicId!,
-                                        WalletId = null,
-                                        Title = $"Circle Contribution: {circle.Name} (Round {currentRound.RoundNumber})",
-                                        Amount = Money.FromNaira(contributionAmount),
-                                        Type = TransactionType.Debit,
-                                        Status = TransactionStatus.Completed,
-                                        Reference = contrib.PaymentReference,
-                                        CompletedAt = now
-                                    });
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // Grace period expired. Check if the DepositHeld can cover the FULL contribution.
-                            if (member.DepositHeld.ToDecimal() >= contributionAmount)
-                            {
-                                // Full deduction from deposit
-                                member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - contributionAmount);
-                                contrib.Status = ContributionStatus.Collected;
-                                contrib.CollectedAt = now;
+                                contrib.Amount = Money.FromNaira(totalAmountDue);
+                                contrib.PenaltyApplied = Money.FromNaira(penaltyFromRound + penaltyFromDeposit);
                                 contrib.PaymentReference = $"circle-deposit-fallback-{Guid.NewGuid():N}";
-                                currentRound.PooledAmount = Money.FromNaira(currentRound.PooledAmount.ToDecimal() + contributionAmount);
-
-                                _context.Transactions.Add(new Transaction
-                                {
-                                    UserPublicId = member.UserPublicId!,
-                                    WalletId = null,
-                                    Title = $"Circle Contribution (From Deposit): {circle.Name} (Round {currentRound.RoundNumber})",
-                                    Amount = Money.FromNaira(contributionAmount),
-                                    Type = TransactionType.Debit,
-                                    Status = TransactionStatus.Completed,
-                                    Reference = contrib.PaymentReference,
-                                    CompletedAt = now
-                                });
+                                currentRound.PooledAmount = Money.FromNaira(currentRound.PooledAmount.ToDecimal() + totalAmountDue);
+                                
+                                if (member.Status == CircleMemberStatus.Defaulted)
+                                    member.Status = CircleMemberStatus.Active;
                             }
                             else
                             {
-                                // Deposit is not up to the contribution. Do not deduct partially. Mark as default.
-                                contrib.Status = ContributionStatus.Failed;
-                                contrib.FailureReason = "Grace period elapsed without payment, and deposit insufficient to cover contribution.";
-                                member.Status = CircleMemberStatus.Defaulted;
-                                member.MissedContributions += 1;
+                                // Mark as defaulted
+                                if (contrib.Status != ContributionStatus.Failed)
+                                {
+                                    contrib.Status = ContributionStatus.Failed;
+                                    contrib.FailureReason = "Grace period elapsed without payment, and deposit insufficient.";
+                                    member.Status = CircleMemberStatus.Defaulted;
+                                    member.MissedContributions += 1;
+                                }
                             }
                         }
                     }

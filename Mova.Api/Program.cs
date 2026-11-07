@@ -40,16 +40,17 @@ if (builder.Environment.IsProduction())
     });
 }
 
-var startup = new Startup(builder.Configuration);
+var startup = new Startup(builder.Configuration, builder.Environment);
 
 startup.ConfigureServices(builder.Services);
 
 var app = builder.Build();
 
-await app.Services.SeedIdentityAsync();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
+    await app.Services.SeedIdentityAsync();
+    
     var seeder = scope.ServiceProvider
         .GetRequiredService<DatabaseSeeder>();
 

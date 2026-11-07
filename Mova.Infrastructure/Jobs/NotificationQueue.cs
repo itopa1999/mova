@@ -4,6 +4,7 @@ using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Logging;
+using static Mova.Application.Interfaces.Notification.INotificationQueue;
 namespace Mova.Infrastructure.Jobs;
 
 public sealed class NotificationQueue : INotificationQueue
@@ -144,6 +145,26 @@ public sealed class NotificationQueue : INotificationQueue
                     CancellationToken.None)),
             ("UserPublicId", UserPublicId),
             ("CircleId", SavingsCircleId));
+    }
+
+
+    public void QueueCreateCircleInvitationMemberAsync(
+        long savingsCircleId,
+        string organizerName,
+        string inviteCode,
+        List<CircleInviteData> invites)
+    {
+        TryEnqueue(
+            "QueueCreateCircleInvitationMember",
+            () => _backgroundJobClient.Enqueue<BackgroundTaskJob>(
+                job => job.CreateCircleInvitationMemberAsync(
+                    savingsCircleId,
+                    organizerName,
+                    inviteCode,
+                    invites,
+                    CancellationToken.None)),
+            ("CircleId", savingsCircleId),
+            ("InviteCount", invites?.Count ?? 0));
     }
 
     private void TryEnqueue(

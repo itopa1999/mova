@@ -22,12 +22,13 @@ using static Mova.Application.BBL.Queries.BanksAccount.GetTransactions;
 using WithdrawalRequest = Mova.Application.BBL.Commands.BanksAccount.WithdrawalCommand.Command;
 using WithdrawalResponse = Mova.Application.BBL.Commands.BanksAccount.WithdrawalCommand.WithdrawalResponse;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
-[Route("api/v1/bank-account")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/bank-account")]
+[ApiVersion("1.0")]
 public class BankAccountController(
     IMediator mediator,
     IOptions<ExternalApiSettings> externalApiSettings) : BaseController

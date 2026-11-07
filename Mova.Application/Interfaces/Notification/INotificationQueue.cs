@@ -44,15 +44,31 @@ public interface INotificationQueue
         string phoneNumber
     );
 
-void QueueCreateCircleWalletAsync(
-    string UserPublicId,
-    long CategoryId,
-    long SavingsCircleId,
-    string Name,
-    string Description,
-    decimal TargetAmount,
-    decimal TotalUpfrontCharge,
-    decimal TotalMovaFees,
-    decimal DepositAmount);
+    void QueueCreateCircleWalletAsync(
+        string UserPublicId,
+        long CategoryId,
+        long SavingsCircleId,
+        string Name,
+        string Description,
+        decimal TargetAmount,
+        decimal TotalUpfrontCharge,
+        decimal TotalMovaFees,
+        decimal DepositAmount);
+
+    void QueueCreateCircleInvitationMemberAsync(
+        long savingsCircleId,
+        string organizerName,
+        string inviteCode,
+        List<CircleInviteData> invites);
+
+
+    public class CircleInviteData
+    {
+        public string Identifier { get; set; } = string.Empty;
+        public string? TargetUserPublicId { get; set; }
+        public string? Phone { get; set; }
+        public string? DisplayName { get; set; }
+        public int? PayoutPosition { get; set; }
+    }
 
 }

@@ -110,6 +110,16 @@ public sealed class UpdateCircleStatusCommand
                         return Bad($"{shortMembers.Count} active member(s) don't have enough deposit to cover the first round contribution ({contributionAmount:N0}). Ask them to top up their deposit before starting the circle.");
                     }
 
+                    if (circle.RotationStrategy != RotationStrategy.RandomDraw)
+                    {
+                        var membersWithoutPosition = activeMembers.Where(m => !m.RotationPosition.HasValue).ToList();
+                        if (membersWithoutPosition.Count > 0)
+                        {
+                            op.Warning($"{membersWithoutPosition.Count} active member(s) do not have a rotation position assigned.");
+                            return Bad($"All active members must have a payout position before the circle can start. {membersWithoutPosition.Count} member(s) are missing a position. Please assign positions first.");
+                        }
+                    }
+
                     if (circle.RotationStrategy == RotationStrategy.RandomDraw)
                     {
                         var random = Random.Shared;

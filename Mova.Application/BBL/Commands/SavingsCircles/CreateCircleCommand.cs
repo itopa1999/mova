@@ -19,6 +19,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using static Mova.Application.Interfaces.Notification.INotificationQueue;
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
 public sealed class CreateCircleCommand
@@ -215,7 +216,7 @@ public sealed class CreateCircleCommand
             var inviteLink =
                 $"{_externalApiSettings.FrontendBaseUrl.TrimEnd('/')}/circle/wallet/consent/{inviteCode}";
 
-            var (circle, memberRowsCreated) = await SaveCircleToDatabaseAsync(
+            var circle = await SaveCircleToDatabaseAsync(
                 request, validatedData!, inviteCode, cancellationToken);
 
             var movaInviteCount = validatedData!.ValidatedInvites.Count(i => i.IsMovaUser);
@@ -224,7 +225,7 @@ public sealed class CreateCircleCommand
 
             op.Success(
                 $"Circle persisted. CircleId: {circle.Id}, InviteCode: {inviteCode}, " +
-                $"MemberRows: 1 organizer + {memberRowsCreated} MOVA invites " +
+                $"MemberRows: 1 organizer + {validatedData.ValidatedInvites.Count} invites " +
                 $"(cap: {circle.MemberCount}), EmailOnlyInvites: {emailOnlyInviteCount}");
 
             SendNotifications(
@@ -393,7 +394,7 @@ public sealed class CreateCircleCommand
             return null;
         }
 
-        private async Task<(SavingsCircle Circle, int MemberRowsCreated)> SaveCircleToDatabaseAsync(
+        private async Task<SavingsCircle> SaveCircleToDatabaseAsync(
             Command request,
             ValidatedCircleData data,
             string inviteCode,
@@ -413,7 +414,6 @@ public sealed class CreateCircleCommand
                     : request.Email.Split('@')[0];
 
             SavingsCircle circle;
-            var memberRowsCreated = 0;
 
             await using (var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken))
             {
@@ -461,33 +461,11 @@ public sealed class CreateCircleCommand
 
                 await _unitOfWork.AddAsync(organizerMember, cancellationToken);
 
-                foreach (var invite in data.ValidatedInvites.Where(i => i.IsMovaUser))
-                {
-                    var inviteMember = new CircleMember
-                    {
-                        SavingsCircleId = circle.Id,
-                        Identifier = invite.NormalizedIdentifier,
-                        UserPublicId = invite.UserPublicId,
-                        Phone = invite.Phone,
-                        DisplayName = invite.DisplayName,
-                        InvitedAt = now,
-                        AcceptedAt = null,
-                        RotationPosition = invite.PayoutPosition,
-                        Status = CircleMemberStatus.Invited,
-                        TotalContributed = Money.FromNaira(0),
-                        TotalReceived = Money.FromNaira(0),
-                        DepositHeld = Money.FromNaira(0),
-                    };
-
-                    await _unitOfWork.AddAsync(inviteMember, cancellationToken);
-                    memberRowsCreated++;
-                }
-
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await tx.CommitAsync(cancellationToken);
             }
 
-            return (circle, memberRowsCreated);
+            return circle;
         }
 
         private void SendNotifications(
@@ -511,7 +489,6 @@ public sealed class CreateCircleCommand
                 totalMovaFees,
                 depositAmount);
 
-            var inviteeActionPath = $"/circle/wallet/consent/{inviteCode}";
             var organizerFirstName = (request.FirstName ?? string.Empty).Trim();
             var organizerLastName = (request.LastName ?? string.Empty).Trim();
             var organizerFullName = $"{organizerFirstName} {organizerLastName}".Trim();
@@ -550,35 +527,22 @@ public sealed class CreateCircleCommand
                     $"Your {data.Name} circle is ready");
             }
 
-            foreach (var invite in data.ValidatedInvites)
+            if (data.ValidatedInvites.Any())
             {
-                if (invite.IsMovaUser && !string.IsNullOrWhiteSpace(invite.UserPublicId))
+                var inviteDataList = data.ValidatedInvites.Select(invite => new CircleInviteData
                 {
-                    _notificationQueue.InAppNotificationAsync(
-                        invite.UserPublicId,
-                        NotificationType.Wallet,
-                        $"You've been invited to {data.Name}",
-                        $"{organizerDisplayName} invited you to join '{data.Name}' — " +
-                        $"{circle.MemberCount} members, ₦{request.ContributionAmount:N0} / " +
-                        $"{request.Frequency.ToString().ToLowerInvariant()}. " +
-                        $"Tap to accept the invitation.",
-                        inviteeActionPath,
-                        null,
-                        CancellationToken.None);
-                }
+                    Identifier = invite.NormalizedIdentifier,
+                    TargetUserPublicId = invite.UserPublicId,
+                    Phone = invite.Phone,
+                    DisplayName = invite.DisplayName,
+                    PayoutPosition = invite.PayoutPosition
+                }).ToList();
 
-                _notificationQueue.QueueNotificationEmail(
-                    invite.DisplayName,
-                    invite.NormalizedIdentifier,
-                    BuildInviteeEmail(
-                        organizerDisplayName,
-                        data.Name,
-                        circle.MemberCount,
-                        request.ContributionAmount,
-                        request.Frequency,
-                        inviteLink,
-                        request.InviteOnly),
-                    $"{organizerDisplayName} invited you to join {data.Name}");
+                _notificationQueue.QueueCreateCircleInvitationMemberAsync(
+                    circle.Id,
+                    organizerDisplayName,
+                    inviteCode,
+                    inviteDataList);
             }
         }
 
@@ -652,39 +616,6 @@ public sealed class CreateCircleCommand
                     ? "Only the people you invited can join."
                     : "Anyone with the link can join until the circle is full.") +
                 "\n\n— MOVA";
-        }
-
-        private static string BuildInviteeEmail(
-            string organizerName,
-            string circleName,
-            int memberCount,
-            decimal contributionAmount,
-            ContributionFrequency frequency,
-            string inviteLink,
-            bool inviteOnly)
-        {
-            var frequencyLabel = frequency.ToString().ToLowerInvariant();
-            var roundPool = contributionAmount * memberCount;
-
-            var startMessage =
-                $"The organizer will manually start the circle when the roster is ready.";
-
-            return
-                $"# You’ve been invited to \"{circleName}\"\n\n" +
-                $"{organizerName} has invited you to join the \"{circleName}\" circle on MOVA.\n\n" +
-                $"**About the circle**\n\n" +
-                $"- {memberCount} members · ₦{contributionAmount:N0} / {frequencyLabel}\n" +
-                $"- Round pool: ₦{roundPool:N0} · Each member receives the pot once\n\n" +
-                $"**Important:** Membership is first-come, first-served. The first " +
-                $"{memberCount - 1} invitees (after the organizer) to accept will " +
-                $"secure a slot — so accept early to guarantee yours.\n\n" +
-                $"{startMessage}\n\n" +
-                $"**To accept or decline, open:** [View invitation]({inviteLink})\n\n" +
-                $"Sign in or create a MOVA account with this email address to join. " +
-                $"Your invite is linked to this address — anyone else using the link " +
-                $"will be rejected.\n\n" +
-                $"If you don't recognize this invitation, you can safely ignore this email.\n\n" +
-                "— MOVA";
         }
     }
 

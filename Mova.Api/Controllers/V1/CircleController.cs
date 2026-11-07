@@ -7,17 +7,17 @@ using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.SavingsCircles;
 using Mova.Application.BBL.Queries.SavingsCircles;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using static Mova.Application.BBL.Commands.SavingsCircles.CreateCircleCommand;
 using static Mova.Application.BBL.Queries.SavingsCircles.SearchCircleInviteeQuery;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
-[Route("api/v1/circle")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/circle")]
+[ApiVersion("1.0")]
 public class CircleController(
     IMediator mediator) : BaseController
 {
@@ -286,5 +286,26 @@ public class CircleController(
     public sealed class UpdateCircleStatusBody
     {
         public string Status { get; set; } = string.Empty;
+    }
+
+    [HttpPost("{circleId:long}/invites")]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [ProducesResponseType(typeof(BaseResult<InviteCircleMembersCommand.InviteMembersResponseDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> InviteCircleMembers(
+        [FromRoute] long circleId,
+        [FromBody] List<InviteCircleMembersCommand.InviteMemberDto> body,
+        CancellationToken cancellationToken)
+    {
+        var command = new InviteCircleMembersCommand.Command
+        {
+            UserPublicId = UserPublicId ?? string.Empty,
+            CircleId = circleId,
+            Invites = body
+        };
+
+        var result = await _mediator.Send(command, cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
     }
 }

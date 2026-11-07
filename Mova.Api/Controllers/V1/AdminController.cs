@@ -15,12 +15,13 @@ using static Mova.Application.BBL.Commands.Admin.CreateVirtualAccountForUserComm
 using static Mova.Application.BBL.Commands.Admin.ToggleFeatureFlag;
 using static Mova.Application.BBL.Queries.Admin.GetFeatureFlags;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.AllAdmins)]
-[Route("api/v1/admin")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/admin")]
+[ApiVersion("1.0")]
 public class AdminController(
     IMediator mediator) : BaseController
 {

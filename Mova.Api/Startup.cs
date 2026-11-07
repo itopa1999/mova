@@ -18,18 +18,23 @@ using Mova.Shared.Common.Results;
 using Mova.Infrastructure.Jobs.CircleJob;
 using Mova.Infrastructure.Jobs.ScheduleJob;
 using Mova.Infrastructure.Jobs.TruteesJob;
+using Asp.Versioning;
 namespace Mova.Api;
 
-public class Startup(IConfiguration configuration)
+public class Startup(IConfiguration configuration, IWebHostEnvironment environment)
 {
     private readonly IConfiguration _configuration = configuration;
+    private readonly IWebHostEnvironment _environment = environment;
 
 
     // Register services
     public void ConfigureServices(IServiceCollection services)
     {
         // Controllers
-        services.AddControllers()
+        services.AddControllers(options =>
+            {
+                options.Filters.Add<ApiVersionResultFilter>();
+            })
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
@@ -103,6 +108,19 @@ public class Startup(IConfiguration configuration)
 
         services.AddAppRateLimiting();
 
+        services.AddApiVersioning(options =>
+        {
+            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.AssumeDefaultVersionWhenUnspecified = true;
+            options.ReportApiVersions = true; 
+        })
+        .AddMvc()
+        .AddApiExplorer(options =>
+        {
+            options.GroupNameFormat = "'v'VVV";
+            options.SubstituteApiVersionInUrl = true;
+        });
+
         // Swagger
         services.AddEndpointsApiExplorer();
 
@@ -125,31 +143,33 @@ public class Startup(IConfiguration configuration)
                     Name = "Internal Use"
                 }
             });
-
-            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            if (_environment.IsDevelopment())
             {
-                Name = "Authorization",
-                Type = SecuritySchemeType.Http,
-                Scheme = "bearer",
-                BearerFormat = "JWT",
-                In = ParameterLocation.Header,
-                Description = "Enter JWT Token. Example: eyJhbGciOiJIUzI1NiIs..."
-            });
-
-            options.AddSecurityRequirement(new OpenApiSecurityRequirement
-            {
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
-                    new OpenApiSecurityScheme
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "Enter JWT Token. Example: eyJhbGciOiJIUzI1NiIs..."
+                });
+
+                options.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
                     {
-                        Reference = new OpenApiReference
+                        new OpenApiSecurityScheme
                         {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
-                        }
-                    },
-                    Array.Empty<string>()
-                }
-            });
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        },
+                        Array.Empty<string>()
+                    }
+                });
+            }
 
 
             options.SwaggerDoc("v2", new OpenApiInfo
@@ -205,35 +225,35 @@ public class Startup(IConfiguration configuration)
         var recurringJobManager = app.Services
             .GetRequiredService<IRecurringJobManager>();
 
-        recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
-            "process-scheduled-releases",
-            job => job.ExecuteAsync(CancellationToken.None),
-            Cron.MinuteInterval(1));
+        // recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
+        //     "process-scheduled-releases",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(1));
 
-        recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
-            "process-releases-payouts",
-            job => job.ExecuteAsync(CancellationToken.None),
-            Cron.MinuteInterval(1));
+        // recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
+        //     "process-releases-payouts",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(1));
 
-        recurringJobManager.AddOrUpdate<ProcessPendingProcessingTransactions>(
-            "process-pending-processing-transactions",
-            job => job.ExecuteAsync(CancellationToken.None),
-            Cron.MinuteInterval(1));
+        // recurringJobManager.AddOrUpdate<ProcessPendingProcessingTransactions>(
+        //     "process-pending-processing-transactions",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(1));
 
-        recurringJobManager.AddOrUpdate<ExpirePendingTrusteesJob>(
-            "expire-pending-trustees",
-            job => job.ExecuteAsync(CancellationToken.None),
-            Cron.HourInterval(2));
+        // recurringJobManager.AddOrUpdate<ExpirePendingTrusteesJob>(
+        //     "expire-pending-trustees",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.HourInterval(2));
 
-        recurringJobManager.AddOrUpdate<ExpireReleaseRequestsJob>(
-            "expire-release-requests",
-            job => job.ExecuteAsync(CancellationToken.None),
-            Cron.MinuteInterval(1));
+        // recurringJobManager.AddOrUpdate<ExpireReleaseRequestsJob>(
+        //     "expire-release-requests",
+        //     job => job.ExecuteAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(1));
 
-        recurringJobManager.AddOrUpdate<CirclePayoutJob>(
-            "process-circle-payouts",
-            job => job.ProcessDuePayoutsAsync(CancellationToken.None),
-            Cron.MinuteInterval(1));
+        // recurringJobManager.AddOrUpdate<CirclePayoutJob>(
+        //     "process-circle-payouts",
+        //     job => job.ProcessDuePayoutsAsync(CancellationToken.None),
+        //     Cron.MinuteInterval(1));
 
         // ─────────────────────────────────────────────────────────────
         // 1. Exception handler FIRST — catches exceptions from every
