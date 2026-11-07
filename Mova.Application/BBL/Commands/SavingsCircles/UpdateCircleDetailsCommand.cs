@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
@@ -11,6 +12,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
 public sealed class UpdateCircleDetailsCommand
@@ -42,11 +44,16 @@ public sealed class UpdateCircleDetailsCommand
     public sealed class Handler : IRequestHandler<Command, BaseResult<UpdateCircleDetailsResponse>>
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
-        public Handler(IUnitOfWork unitOfWork, ILogger<Handler> logger)
+        public Handler(
+            IUnitOfWork unitOfWork, 
+            INotificationQueue notificationQueue,
+            ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -89,11 +96,13 @@ public sealed class UpdateCircleDetailsCommand
                 _unitOfWork.Update(circle);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+                await NotifyMembersAsync(circle, cancellationToken);
+
                 op.Success("Active circle description updated.");
                 return new BaseResult<UpdateCircleDetailsResponse>(
                     HttpStatusCode.OK,
                     "Description updated successfully.",
-                    new UpdateCircleDetailsResponse { Updated = true });
+                    new UpdateCircleDetailsResponse { Updated = true, Notification = true });
             }
 
             if (circle.Status == SavingsCircleStatus.Draft)
@@ -129,7 +138,6 @@ public sealed class UpdateCircleDetailsCommand
                 wallet.Name = circle.Name;
                 wallet.Description = circle.Description;
 
-                // Handle Penalty amount logic
                 if (request.AllowPenalty)
                     circle.PenaltyAmount = Money.FromNaira(request.PenaltyAmount);
                 else
@@ -138,14 +146,49 @@ public sealed class UpdateCircleDetailsCommand
                 _unitOfWork.Update(circle);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+                await NotifyMembersAsync(circle, cancellationToken);
+
                 op.Success("Draft circle details updated successfully.");
                 return new BaseResult<UpdateCircleDetailsResponse>(
                     HttpStatusCode.OK,
                     "Circle rules updated successfully.",
-                    new UpdateCircleDetailsResponse { Updated = true });
+                    new UpdateCircleDetailsResponse { Updated = true, Notification = true });
             }
 
             return Bad("Unable to update circle in its current state.");
+        }
+
+        private async Task NotifyMembersAsync(SavingsCircle circle, CancellationToken cancellationToken)
+        {
+            var activeMembers = circle.Members
+                .Where(m => m.Status == CircleMemberStatus.Active && m.UserPublicId != circle.OrganizerUserPublicId)
+                .ToList();
+
+            foreach (var member in activeMembers)
+            {
+                if (!string.IsNullOrWhiteSpace(member.UserPublicId))
+                {
+                    _notificationQueue.InAppNotificationAsync(
+                        member.UserPublicId,
+                        NotificationType.Wallet,
+                        "Circle updated",
+                        $"The organizer updated the details for '{circle.Name}'.",
+                        $"/dashboard/circles/details/{circle.Id}",
+                        null,
+                        cancellationToken);
+                }
+
+                if (!string.IsNullOrWhiteSpace(member.Identifier))
+                {
+                    _notificationQueue.QueueNotificationEmail(
+                        member.DisplayName ?? "Member",
+                        member.Identifier,
+                        $"# Update from {circle.Name}\n\n" +
+                        $"**The organizer has updated the details for the circle '{circle.Name}'.**\n\n" +
+                        $"- Please review the latest rules and schedule in the app.",
+                        $"Update from {circle.Name}");
+                }
+            }
         }
 
         private static BaseResult<UpdateCircleDetailsResponse> Bad(
@@ -158,4 +201,5 @@ public sealed class UpdateCircleDetailsCommand
 public sealed class UpdateCircleDetailsResponse
 {
     public bool Updated { get; set; }
+    public bool Notification { get; set; }
 }

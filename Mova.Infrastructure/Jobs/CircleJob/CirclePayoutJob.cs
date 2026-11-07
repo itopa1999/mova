@@ -1,6 +1,7 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Service;
@@ -8,6 +9,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Jobs.CircleJob;
 
@@ -17,6 +19,7 @@ public sealed class CirclePayoutJob
     private readonly ISavingsCircleService _savingsCircleService;
     private readonly INotificationQueue _notificationQueue;
     private readonly IIdentityService _identityService;
+    private readonly ICacheService _cacheService;
     private readonly ILogger<CirclePayoutJob> _logger;
 
     public CirclePayoutJob(
@@ -24,12 +27,14 @@ public sealed class CirclePayoutJob
         ISavingsCircleService savingsCircleService,
         INotificationQueue notificationQueue,
         IIdentityService identityService,
+        ICacheService cacheService,
         ILogger<CirclePayoutJob> logger)
     {
         _context = context;
         _savingsCircleService = savingsCircleService;
         _notificationQueue = notificationQueue;
         _identityService = identityService;
+        _cacheService = cacheService;
         _logger = logger;
     }
 
@@ -41,10 +46,7 @@ public sealed class CirclePayoutJob
         
         var dueCircles = await _context.SavingsCircles
             .Include(c => c.Members)
-            .Where(c => c.Status == SavingsCircleStatus.Active 
-                    // && c.NextCollectionDate != null 
-                    //  && c.NextCollectionDate <= now
-                     )
+            .Where(c => c.Status == SavingsCircleStatus.Active)
             .Take(50)
             .ToListAsync(cancellationToken);
 
@@ -67,7 +69,6 @@ public sealed class CirclePayoutJob
                 var gracePeriodEnd = currentRound.CollectionDate.AddHours(circle.GracePeriodHours);
                 var contributionAmount = circle.ContributionAmount.ToDecimal();
 
-                // Include Defaulted members so we can attempt to collect from them if they have funded their wallets
                 var membersToCollect = circle.Members
                     .Where(m => m.Status == CircleMemberStatus.Active || m.Status == CircleMemberStatus.Defaulted)
                     .ToList();
@@ -76,7 +77,6 @@ public sealed class CirclePayoutJob
                 {
                     var contrib = currentRound.Contributions.FirstOrDefault(c => c.CircleMemberId == member.Id);
 
-                    // Skip if already paid
                     if (contrib != null && contrib.Status == ContributionStatus.Collected)
                         continue;
 
@@ -86,7 +86,6 @@ public sealed class CirclePayoutJob
                     decimal penaltyFromDeposit = 0m;
                     decimal totalAmountDue = contributionAmount;
 
-                    // Apply Penalty Rules if late and enabled
                     if (isLate && circle.AllowPenalty)
                     {
                         var penaltyAmount = circle.PenaltyAmount.ToDecimal();
@@ -104,10 +103,8 @@ public sealed class CirclePayoutJob
                     bool paid = false;
                     string paymentRef = "";
 
-                    // Attempt Payment
                     if (currentRound.RoundNumber == 1)
                     {
-                        // Round 1: Deduct from DepositHeld (must cover contribution + deposit penalty)
                         decimal requiredFromDeposit = totalAmountDue + penaltyFromDeposit;
                         if (member.DepositHeld.ToDecimal() >= requiredFromDeposit)
                         {
@@ -118,14 +115,12 @@ public sealed class CirclePayoutJob
                     }
                     else
                     {
-                        // Round > 1: Debit external wallet balance (covers contribution + round penalty)
                         paid = await _identityService.DebitBalanceAsync(member.UserPublicId!, totalAmountDue, cancellationToken);
                         
                         if (paid)
                         {
                             paymentRef = $"circle-contrib-{circle.Id}-{currentRound.RoundNumber}-{member.Id}";
                             
-                            // Deduct deposit penalty if applicable
                             if (penaltyFromDeposit > 0)
                             {
                                 decimal deducted = Math.Min(member.DepositHeld.ToDecimal(), penaltyFromDeposit);
@@ -136,7 +131,6 @@ public sealed class CirclePayoutJob
 
                     if (paid)
                     {
-                        // Payment successful - mark as collected and un-default
                         if (contrib == null)
                         {
                             contrib = new Contribution
@@ -183,7 +177,6 @@ public sealed class CirclePayoutJob
                     }
                     else
                     {
-                        // Payment failed
                         if (contrib == null)
                         {
                             contrib = new Contribution
@@ -196,7 +189,6 @@ public sealed class CirclePayoutJob
                             };
                             _context.Contributions.Add(contrib);
 
-                            // Send email/in-app notification for insufficient funds
                             _notificationQueue.QueueNotificationEmail(
                                 member.DisplayName ?? "Member",
                                 member.Identifier,
@@ -217,7 +209,6 @@ public sealed class CirclePayoutJob
 
                         if (now > gracePeriodEnd)
                         {
-                            // Grace period expired - Fallback to Deposit
                             decimal requiredFromDeposit = totalAmountDue + penaltyFromDeposit;
                             bool fallbackPaid = false;
 
@@ -228,10 +219,9 @@ public sealed class CirclePayoutJob
                             }
                             else if (currentRound.RoundNumber > 1 && penaltyFromDeposit > 0)
                             {
-                                // At least take the deposit penalty if available
                                 decimal deducted = Math.Min(member.DepositHeld.ToDecimal(), penaltyFromDeposit);
                                 member.DepositHeld = Money.FromNaira(member.DepositHeld.ToDecimal() - deducted);
-                                penaltyFromDeposit = deducted; // Update tracked penalty
+                                penaltyFromDeposit = deducted;
                             }
 
                             if (fallbackPaid)
@@ -248,7 +238,6 @@ public sealed class CirclePayoutJob
                             }
                             else
                             {
-                                // Mark as defaulted
                                 if (contrib.Status != ContributionStatus.Failed)
                                 {
                                     contrib.Status = ContributionStatus.Failed;
@@ -301,6 +290,19 @@ public sealed class CirclePayoutJob
                     }
                     
                     await tx.CommitAsync(cancellationToken);
+                    
+                    await _cacheService.DeletePrefixAsync(
+                        CacheKeys.CircleContributionsPrefix(circle.Id),
+                        cancellationToken);
+
+                    await _cacheService.DeletePrefixAsync(
+                        CacheKeys.CircleMembersPrefix(circle.Id),
+                        cancellationToken);
+
+                    await _cacheService.DeletePrefixAsync(
+                        CacheKeys.CircleRoundsPrefix(circle.Id),
+                        cancellationToken);
+                        
                     continue;
                 }
 
@@ -389,6 +391,18 @@ public sealed class CirclePayoutJob
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await tx.CommitAsync(cancellationToken);
+
+                await _cacheService.DeletePrefixAsync(
+                    CacheKeys.CircleContributionsPrefix(circle.Id),
+                    cancellationToken);
+
+                await _cacheService.DeletePrefixAsync(
+                    CacheKeys.CircleMembersPrefix(circle.Id),
+                    cancellationToken);
+
+                await _cacheService.DeletePrefixAsync(
+                    CacheKeys.CircleRoundsPrefix(circle.Id),
+                    cancellationToken);
 
                 await SendPayoutNotificationsAsync(circle, currentRound, recipient, isCompleted, cancellationToken);
 

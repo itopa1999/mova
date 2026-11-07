@@ -5,12 +5,15 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Queries.SavingsCircles;
 
 public sealed class GetCircleRoundsQuery
@@ -25,14 +28,19 @@ public sealed class GetCircleRoundsQuery
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<CircleRoundListResponseDto>>
     {
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(6);
+
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
+            ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -46,55 +54,86 @@ public sealed class GetCircleRoundsQuery
                 ("UserId", request.UserPublicId),
                 ("WalletId", request.WalletId));
 
-            var wallet = await _unitOfWork.Query<Wallet>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    w => w.Id == request.WalletId &&
-                         w.UserPublicId == request.UserPublicId,
-                    cancellationToken);
-
-            if (wallet is null)
+            try
             {
-                op.Warning("Wallet not found or not owned by user.");
-                return new BaseResult<CircleRoundListResponseDto>(
-                    HttpStatusCode.NotFound,
-                    "Wallet not found.");
-            }
+                var wallet = await _unitOfWork.Query<Wallet>()
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        w => w.Id == request.WalletId &&
+                             w.UserPublicId == request.UserPublicId,
+                        cancellationToken);
 
-            if (wallet.Type != WalletType.Circle || wallet.SavingsCircleId is null)
+                if (wallet is null)
+                {
+                    op.Warning("Wallet not found or not owned by user.");
+                    return new BaseResult<CircleRoundListResponseDto>(
+                        HttpStatusCode.NotFound,
+                        "Wallet not found.");
+                }
+
+                if (wallet.Type != WalletType.Circle || wallet.SavingsCircleId is null)
+                {
+                    op.Warning("Wallet is not a circle wallet.");
+                    return new BaseResult<CircleRoundListResponseDto>(
+                        HttpStatusCode.BadRequest,
+                        "This wallet is not linked to a savings circle.");
+                }
+
+                var circleId = wallet.SavingsCircleId.Value;
+                var cacheKey = CacheKeys.CircleRounds(circleId, request.UserPublicId);
+
+                var dto = await _cacheService.GetOrSetAsync(
+                    cacheKey,
+                    ct => LoadRoundsFromDbAsync(
+                        circleId,
+                        request.UserPublicId,
+                        ct),
+                    timeout: CacheDuration,
+                    cancellationToken: cancellationToken);
+
+                op.Success(
+                    $"Rounds retrieved. CircleId: {circleId}, " +
+                    $"Rounds: {dto?.Rounds.Count ?? 0}, Current: {dto?.CurrentRound ?? 0}/{dto?.TotalRounds ?? 0}.");
+
+                return new BaseResult<CircleRoundListResponseDto>(
+                    HttpStatusCode.OK,
+                    "Circle rounds retrieved successfully.",
+                    dto!);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                op.Warning("Wallet is not a circle wallet.");
-                return new BaseResult<CircleRoundListResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "This wallet is not linked to a savings circle.");
+                throw;
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching circle rounds for wallet {WalletId}", request.WalletId);
+                return new BaseResult<CircleRoundListResponseDto>(
+                    HttpStatusCode.InternalServerError,
+                    "An error occurred while retrieving circle rounds. Please try again later.");
+            }
+        }
 
+        private async Task<CircleRoundListResponseDto> LoadRoundsFromDbAsync(
+            long circleId,
+            string userPublicId,
+            CancellationToken cancellationToken)
+        {
             var circle = await _unitOfWork.Query<SavingsCircle>()
                 .AsNoTracking()
                 .Include(c => c.Members)
                 .FirstOrDefaultAsync(
-                    c => c.Id == wallet.SavingsCircleId.Value,
+                    c => c.Id == circleId,
                     cancellationToken);
 
             if (circle is null)
-            {
-                op.Warning("Circle not found.");
-                return new BaseResult<CircleRoundListResponseDto>(
-                    HttpStatusCode.NotFound,
-                    "The circle linked to this wallet no longer exists.");
-            }
+                throw new InvalidOperationException($"Circle {circleId} not found.");
 
             var currentMember = circle.Members.FirstOrDefault(m =>
                 !string.IsNullOrWhiteSpace(m.UserPublicId) &&
-                m.UserPublicId == request.UserPublicId);
+                m.UserPublicId == userPublicId);
 
             if (currentMember is null)
-            {
-                op.Warning("User is not a member of this circle.");
-                return new BaseResult<CircleRoundListResponseDto>(
-                    HttpStatusCode.Forbidden,
-                    "You are not a member of this circle.");
-            }
+                throw new UnauthorizedAccessException("User is not a member of this circle.");
 
             var rounds = await _unitOfWork.Query<CircleRound>()
                 .AsNoTracking()
@@ -196,7 +235,7 @@ public sealed class GetCircleRoundsQuery
                         PayoutDate = futureDates[i],
                         PaidOutAt = null,
                         MyContributionStatus = "NotStarted",
-                        IsRecipient = recipientMember?.UserPublicId == request.UserPublicId
+                        IsRecipient = recipientMember?.UserPublicId == userPublicId
                     });
                 }
             }
@@ -211,21 +250,12 @@ public sealed class GetCircleRoundsQuery
             else
                 currentRound = 0;
 
-            var dto = new CircleRoundListResponseDto
+            return new CircleRoundListResponseDto
             {
                 CurrentRound = currentRound,
                 TotalRounds = circle.MemberCount,
                 Rounds = roundItems
             };
-
-            op.Success(
-                $"Rounds retrieved. CircleId: {circle.Id}, " +
-                $"Rounds: {roundItems.Count}, Current: {currentRound}/{circle.MemberCount}.");
-
-            return new BaseResult<CircleRoundListResponseDto>(
-                HttpStatusCode.OK,
-                "Circle rounds retrieved successfully.",
-                dto);
         }
 
         private static CircleRoundItemDto BuildDbRoundItem(

@@ -98,6 +98,7 @@ public sealed class CreateCircleCommand
         public int TotalRounds { get; init; }
         public string InviteCode { get; init; } = string.Empty;
         public string InviteLink { get; init; } = string.Empty;
+        public bool Notification { get; init; }
     }
 
     public sealed class Handler
@@ -256,6 +257,7 @@ public sealed class CreateCircleCommand
                     TotalRounds = circle.MemberCount,
                     InviteCode = inviteCode,
                     InviteLink = inviteLink,
+                    Notification = true,
                 });
         }
 

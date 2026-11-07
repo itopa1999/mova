@@ -4,12 +4,16 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
+using Mova.Application.Interfaces.Caching;
+
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
 public sealed class UpdateCircleRotationCommand
@@ -29,13 +33,19 @@ public sealed class UpdateCircleRotationCommand
         : IRequestHandler<Command, BaseResult<UpdateCircleRotationResponse>>
     {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
+            ICacheService cacheService,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -106,8 +116,8 @@ public sealed class UpdateCircleRotationCommand
                 if (!activeUserIds.Contains(update.UserPublicId))
                     return Bad($"Member {update.UserPublicId} is not active in this circle.");
 
-                if (update.Position < 1 || update.Position > activeMembers.Count)
-                    return Bad($"Position {update.Position} is out of range (1..{activeMembers.Count}).");
+                if (update.Position < 1 || update.Position > circle.MemberCount)
+                    return Bad($"Position {update.Position} is out of range (1..{circle.MemberCount}).");
             }
 
             var duplicatePositions = request.Positions
@@ -141,11 +151,14 @@ public sealed class UpdateCircleRotationCommand
                 .Select(p => p!.Value)
                 .ToList();
 
-            var expected = Enumerable.Range(1, activeMembers.Count).ToHashSet();
-            var actual = finalValues.ToHashSet();
+            var duplicateFinals = finalValues
+                .GroupBy(p => p)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
 
-            if (!expected.SetEquals(actual))
-                return Bad($"Positions must form a complete sequence from 1 to {activeMembers.Count}.");
+            if (duplicateFinals.Count > 0)
+                return Bad($"Positions must be unique. Duplicate values: {string.Join(", ", duplicateFinals)}.");
 
             var changes = new List<(CircleMember Member, int NewPos)>();
             foreach (var update in request.Positions)
@@ -161,7 +174,7 @@ public sealed class UpdateCircleRotationCommand
                 return new BaseResult<UpdateCircleRotationResponse>(
                     HttpStatusCode.OK,
                     "Rotation order updated.",
-                    new UpdateCircleRotationResponse { Updated = true });
+                    new UpdateCircleRotationResponse { Updated = true, Notification = false });
             }
 
             await using var tx = await _unitOfWork.BeginAtomicSerializableAsync(
@@ -184,14 +197,51 @@ public sealed class UpdateCircleRotationCommand
 
             await tx.CommitAsync(cancellationToken);
 
+            await NotifyMembersAsync(circle, cancellationToken);
+
             op.Success(
                 $"Rotation updated for circle {circle.Id} by {request.UserPublicId}. " +
                 $"Applied {changes.Count} position change(s).");
 
+            await _cacheService.DeletePrefixAsync(CacheKeys.CircleMembersPrefix(circle.Id), cancellationToken);
+
             return new BaseResult<UpdateCircleRotationResponse>(
                 HttpStatusCode.OK,
                 "Rotation order updated.",
-                new UpdateCircleRotationResponse { Updated = true });
+                new UpdateCircleRotationResponse { Updated = true, Notification = true });
+        }
+
+        private async Task NotifyMembersAsync(SavingsCircle circle, CancellationToken cancellationToken)
+        {
+            var activeMembers = circle.Members
+                .Where(m => m.Status == CircleMemberStatus.Active && m.UserPublicId != circle.OrganizerUserPublicId)
+                .ToList();
+
+            foreach (var member in activeMembers)
+            {
+                if (!string.IsNullOrWhiteSpace(member.UserPublicId))
+                {
+                    _notificationQueue.InAppNotificationAsync(
+                        member.UserPublicId,
+                        NotificationType.Wallet,
+                        "Payout rotation updated",
+                        $"The organizer updated the payout rotation for '{circle.Name}'.",
+                        $"/dashboard/circles/details/{circle.Id}",
+                        null,
+                        cancellationToken);
+                }
+
+                if (!string.IsNullOrWhiteSpace(member.Identifier))
+                {
+                    _notificationQueue.QueueNotificationEmail(
+                        member.DisplayName ?? "Member",
+                        member.Identifier,
+                        $"# Update from {circle.Name}\n\n" +
+                        $"**The organizer has updated the payout rotation for the circle '{circle.Name}'.**\n\n" +
+                        $"- Please review the new rotation order in the app.",
+                        $"Update from {circle.Name}");
+                }
+            }
         }
 
         private static BaseResult<UpdateCircleRotationResponse> Bad(
@@ -213,4 +263,5 @@ public sealed class RotationPositionItem
 public sealed class UpdateCircleRotationResponse
 {
     public bool Updated { get; set; }
+    public bool Notification { get; set; }
 }

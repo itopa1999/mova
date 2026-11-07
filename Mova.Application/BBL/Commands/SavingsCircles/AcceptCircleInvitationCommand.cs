@@ -13,6 +13,8 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
+using Mova.Application.Interfaces.Caching;
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
 public sealed class AcceptCircleInvitationCommand
@@ -33,17 +35,20 @@ public sealed class AcceptCircleInvitationCommand
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
+            ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -279,7 +284,6 @@ public sealed class AcceptCircleInvitationCommand
                     $"Member already has wallet {existingMember.WalletId}; skipping queue.");
             }
 
-            // ── 15. In-app notification (same pattern as CreateCircle) ───
             _notificationQueue.InAppNotificationAsync(
                 request.UserPublicId,
                 NotificationType.Wallet,
@@ -299,6 +303,8 @@ public sealed class AcceptCircleInvitationCommand
             op.Success(
                 $"User joined circle {circle.Id} at position " +
                 $"{rotationPosition?.ToString() ?? "pending-draw"}.");
+
+            await _cacheService.DeletePrefixAsync(CacheKeys.CircleMembersPrefix(circle.Id), cancellationToken);
 
             return new BaseResult<AcceptCircleInvitationResponse>(
                 HttpStatusCode.OK,
