@@ -5,7 +5,6 @@ using Mova.Application.ExternalAPI;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
-using Mova.Infrastructure.ExternalAPI;
 using Mova.Shared.Constants;
 namespace Mova.Infrastructure.Payment;
 

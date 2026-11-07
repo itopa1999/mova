@@ -1,4 +1,4 @@
-namespace Mova.Infrastructure.ExternalAPI;
+namespace Mova.Application.ExternalAPI;
 public sealed class ExternalApiSettings
 {
     public const string SectionName = "ExternalApi";

@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Mova.Application.ExternalAPI;
 using Mova.Application.Helpers;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
@@ -57,6 +58,7 @@ public sealed class RequestReleaseCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
         private readonly TrusteeOptions _trusteeOptions;
+        private readonly ExternalApiSettings _externalApiSettings;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
@@ -65,6 +67,7 @@ public sealed class RequestReleaseCommand
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
             IOptions<TrusteeOptions> trusteeOptions,
+            IOptions<ExternalApiSettings> externalApiSettings,
             ILogger<Handler> logger)
         {
             _identityService = identityService;
@@ -72,6 +75,7 @@ public sealed class RequestReleaseCommand
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
             _trusteeOptions = trusteeOptions.Value;
+            _externalApiSettings = externalApiSettings.Value;
             _logger = logger;
         }
 
@@ -271,7 +275,8 @@ public sealed class RequestReleaseCommand
                 CancellationToken.None);
 
             var maskedAccount = MaskAccount(bank.AccountNumber);
-            var approvalUrl = $"{_trusteeOptions.ReleaseConsentBaseUrl.TrimEnd('/')}/{rawToken}";
+            var approvalUrl =
+                $"{_externalApiSettings.FrontendBaseUrl.TrimEnd('/')}/trustee/wallet/release/{rawToken}";
 
             var noteClause = string.IsNullOrWhiteSpace(releaseRequest.UserNote)
                 ? string.Empty

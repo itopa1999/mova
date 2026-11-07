@@ -13,10 +13,10 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Application.ExternalAPI;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class InviteTrusteeCommand
@@ -56,6 +56,7 @@ public sealed class InviteTrusteeCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
         private readonly TrusteeOptions _trusteeOptions;
+        private readonly ExternalApiSettings _externalApiSettings;
         private readonly ICacheService _cacheService;
 
         public Handler(
@@ -65,6 +66,7 @@ public sealed class InviteTrusteeCommand
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
             IOptions<TrusteeOptions> trusteeOptions,
+            IOptions<ExternalApiSettings> externalApiSettings,
             ICacheService cacheService)
         {
             _identityService = identityService;
@@ -73,6 +75,7 @@ public sealed class InviteTrusteeCommand
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
             _trusteeOptions = trusteeOptions.Value;
+            _externalApiSettings = externalApiSettings.Value;
             _cacheService = cacheService;
         }
 
@@ -180,7 +183,8 @@ public sealed class InviteTrusteeCommand
                 CacheKeys.OwnerTrustees(request.UserPublicId),
                 cancellationToken);
 
-            var consentUrl = $"{_trusteeOptions.ConsentBaseUrl.TrimEnd('/')}/{rawToken}";
+            var consentUrl =
+                $"{_externalApiSettings.FrontendBaseUrl.TrimEnd('/')}/trustee/wallet/consent/{rawToken}";
             var trusteeDisplayName = trusteeName ?? trusteeEmail.Split('@')[0];
             var ownerName = string.IsNullOrWhiteSpace(request.FirstName)
                 ? "The wallet owner"
