@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Mova.Application.BBL.Commands.AccountWalletTrustee;
+using Mova.Application.ExternalAPI;
 using Mova.Application.Helpers;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
@@ -20,11 +21,13 @@ public sealed class InviteTrusteeCommandTests : BaseTest
     private const string UserPublicId = "owner_123";
     private const string UserEmail = "owner@mova.app";
     private const string UserFirstName = "Lucky";
+    private const string FrontendBaseUrl = "https://mova.com";
 
     private readonly Mock<IIdentityService> _identityService = new();
     private readonly Mock<INotificationQueue> _notifications = new();
     private readonly Mock<IPinChallenge> _pinChallenge = new();
     private readonly Mock<IOptions<TrusteeOptions>> _optionsMock = new();
+    private readonly Mock<IOptions<ExternalApiSettings>> _externalApiOptionsMock = new();
     private readonly Mock<ICacheService> _cache = new();
 
     public InviteTrusteeCommandTests()
@@ -40,7 +43,11 @@ public sealed class InviteTrusteeCommandTests : BaseTest
         _optionsMock.Setup(x => x.Value).Returns(new TrusteeOptions
         {
             InvitationExpiryHours = 24,
-            ConsentBaseUrl = "https://mova.com/accept"
+        });
+
+        _externalApiOptionsMock.Setup(x => x.Value).Returns(new ExternalApiSettings
+        {
+            FrontendBaseUrl = FrontendBaseUrl,
         });
     }
 
@@ -53,6 +60,7 @@ public sealed class InviteTrusteeCommandTests : BaseTest
             _notifications.Object,
             _pinChallenge.Object,
             _optionsMock.Object,
+            _externalApiOptionsMock.Object,
             _cache.Object);
     }
 
@@ -163,7 +171,7 @@ public sealed class InviteTrusteeCommandTests : BaseTest
         _notifications.Verify(x => x.QueueNotificationEmail(
             "Jane Doe",
             "jane@test.com",
-            It.Is<string>(m => m.Contains("https://mova.com/accept/")),
+            It.Is<string>(m => m.Contains($"{FrontendBaseUrl}/trustee/wallet/consent/")),
             "Lucky invited you to be a trustee on MOVA"), Times.Once);
     }
 }

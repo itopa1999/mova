@@ -5,10 +5,9 @@ using Microsoft.Extensions.Options;
 using MimeKit;
 using Mova.Application.Models;
 using Mova.Application.Interfaces.Notification;
-using Mova.Infrastructure.ExternalAPI;
-using Mova.Infrastructure.Notification.Email;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
+using Mova.Application.ExternalAPI;
 namespace Mova.Infrastructure.Notification.Email;
 
 public sealed class EmailService : IEmailService

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Mova.Application.BBL.Commands.AccountWalletTrustee;
+using Mova.Application.ExternalAPI;
 using Mova.Application.Helpers;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
@@ -20,11 +21,13 @@ public sealed class RequestReleaseCommandTests : BaseTest
 {
     private const string OwnerPublicId = "owner_123";
     private const string OwnerFirstName = "Lucky";
+    private const string FrontendBaseUrl = "https://mova.com";
 
     private readonly Mock<IIdentityService> _identityService = new();
     private readonly Mock<INotificationQueue> _notifications = new();
     private readonly Mock<IPinChallenge> _pinChallenge = new();
     private readonly Mock<IOptions<TrusteeOptions>> _optionsMock = new();
+    private readonly Mock<IOptions<ExternalApiSettings>> _externalApiOptionsMock = new();
 
     public RequestReleaseCommandTests()
     {
@@ -32,10 +35,16 @@ public sealed class RequestReleaseCommandTests : BaseTest
             .Setup(x => x.ValidateAsync(OwnerPublicId, PinChallengeType.RequestRelease, It.IsAny<CancellationToken>()))
             .ReturnsAsync((true, string.Empty));
 
+        // ↓ was missing — this is what caused the NRE at line 194
         _optionsMock.Setup(x => x.Value).Returns(new TrusteeOptions
         {
-            ReleaseRequestExpiryHours = 48,
-            ReleaseConsentBaseUrl = "https://mova.com/release"
+            InvitationExpiryHours = 24,
+            ReleaseRequestExpiryHours = 24,
+        });
+
+        _externalApiOptionsMock.Setup(x => x.Value).Returns(new ExternalApiSettings
+        {
+            FrontendBaseUrl = FrontendBaseUrl,
         });
     }
 
@@ -47,6 +56,7 @@ public sealed class RequestReleaseCommandTests : BaseTest
             _notifications.Object,
             _pinChallenge.Object,
             _optionsMock.Object,
+            _externalApiOptionsMock.Object,
             Mock.Of<ILogger<RequestReleaseCommand.Handler>>());
     }
 
@@ -168,11 +178,13 @@ public sealed class RequestReleaseCommandTests : BaseTest
         var updatedWallet = await Context.Wallets.FindAsync(wallet.Id);
         Assert.Equal(300m, updatedWallet!.LockedAmount.ToDecimal());
 
-        // Verify Email
+        // Verify Email — URL is now /trustee/wallet/release/{token}
         _notifications.Verify(x => x.QueueNotificationEmail(
             "Jane Doe",
             "jane@test.com",
-            It.Is<string>(m => m.Contains("200") && m.Contains("https://mova.com/release/")),
+            It.Is<string>(m =>
+                m.Contains("200") &&
+                m.Contains($"{FrontendBaseUrl}/trustee/wallet/release/")),
             "Release request from Lucky"), Times.Once);
     }
 }

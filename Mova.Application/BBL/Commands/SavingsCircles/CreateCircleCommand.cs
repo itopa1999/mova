@@ -6,6 +6,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Mova.Application.ExternalAPI;
 using Mova.Application.Helpers;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
@@ -108,6 +109,7 @@ public sealed class CreateCircleCommand
         private readonly ISavingsCircleService _savingsCircleService;
         private readonly INotificationQueue _notificationQueue;
         private readonly CircleOptions _circleOptions;
+        private readonly ExternalApiSettings _externalApiSettings;
 
         public Handler(
             IIdentityService identityService,
@@ -116,7 +118,8 @@ public sealed class CreateCircleCommand
             IPinChallenge pinChallenge,
             ISavingsCircleService savingsCircleService,
             INotificationQueue notificationQueue,
-            IOptions<CircleOptions> circleOptions)
+            IOptions<CircleOptions> circleOptions,
+            IOptions<ExternalApiSettings> externalApiSettings)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
@@ -125,6 +128,7 @@ public sealed class CreateCircleCommand
             _savingsCircleService = savingsCircleService;
             _notificationQueue = notificationQueue;
             _circleOptions = circleOptions.Value;
+            _externalApiSettings = externalApiSettings.Value;
         }
 
         public async Task<BaseResult<CreateCircleResponseDto>> Handle(
@@ -208,7 +212,8 @@ public sealed class CreateCircleCommand
                 return Bad("Could not create a unique invite code. Please try again.", HttpStatusCode.InternalServerError);
             }
 
-            var inviteLink = $"{_circleOptions.InviteBaseUrl.TrimEnd('/')}/{inviteCode}";
+            var inviteLink =
+                $"{_externalApiSettings.FrontendBaseUrl.TrimEnd('/')}/circle/wallet/consent/{inviteCode}";
 
             var (circle, memberRowsCreated) = await SaveCircleToDatabaseAsync(
                 request, validatedData!, inviteCode, cancellationToken);
@@ -506,11 +511,7 @@ public sealed class CreateCircleCommand
                 totalMovaFees,
                 depositAmount);
 
-            var inviteBasePath = _circleOptions.InviteBaseUrl.Contains("://")
-                ? new Uri(_circleOptions.InviteBaseUrl).AbsolutePath
-                : _circleOptions.InviteBaseUrl;
-
-            var inviteeActionPath = $"{inviteBasePath.TrimEnd('/')}/{inviteCode}";
+            var inviteeActionPath = $"/circle/wallet/consent/{inviteCode}";
             var organizerFirstName = (request.FirstName ?? string.Empty).Trim();
             var organizerLastName = (request.LastName ?? string.Empty).Trim();
             var organizerFullName = $"{organizerFirstName} {organizerLastName}".Trim();

@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Mova.Application.ExternalAPI;
 using Mova.Application.Helpers;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
@@ -53,6 +54,7 @@ public sealed class ResendTrusteeInvitationCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
         private readonly TrusteeOptions _trusteeOptions;
+        private readonly ExternalApiSettings _externalApiSettings;
         private readonly ICacheService _cacheService;
 
         public Handler(
@@ -62,6 +64,7 @@ public sealed class ResendTrusteeInvitationCommand
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
             IOptions<TrusteeOptions> trusteeOptions,
+            IOptions<ExternalApiSettings> externalApiSettings,
             ICacheService cacheService)
         {
             _identityService = identityService;
@@ -70,6 +73,7 @@ public sealed class ResendTrusteeInvitationCommand
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
             _trusteeOptions = trusteeOptions.Value;
+            _externalApiSettings = externalApiSettings.Value;
             _cacheService = cacheService;
         }
 
@@ -146,7 +150,8 @@ public sealed class ResendTrusteeInvitationCommand
                 CacheKeys.OwnerTrustees(request.UserPublicId),
                 cancellationToken);
 
-            var consentUrl = $"{_trusteeOptions.ConsentBaseUrl.TrimEnd('/')}/{rawToken}";
+            var consentUrl =
+                $"{_externalApiSettings.FrontendBaseUrl.TrimEnd('/')}/trustee/wallet/consent/{rawToken}";
             var trusteeDisplayName = string.IsNullOrWhiteSpace(trustee.Name)
                 ? trustee.Email.Split('@')[0]
                 : trustee.Name;
