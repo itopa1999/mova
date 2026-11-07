@@ -27,12 +27,13 @@ using static Mova.Application.BBL.Queries.AccountWallet.ListWalletTemplatesQuery
 using static Mova.Application.BBL.Queries.AccountWallet.SchedulePreviewQuery;
 using static Mova.Application.BBL.Queries.AccountWallet.WalletDetails;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
-[Route("api/v1/wallets")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/wallets")]
+[ApiVersion("1.0")]
 public class WalletController(
     IMediator mediator) : BaseController
 {

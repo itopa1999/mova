@@ -11,12 +11,13 @@ using Mova.Application.BBL.Queries.TransactionPin;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
-[Route("api/v1/security/pin")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/security/pin")]
+[ApiVersion("1.0")]
 public class TransactionPinController(
     IMediator mediator,
     IPinDecryptionService pinDecryptionService,

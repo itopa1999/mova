@@ -8,11 +8,12 @@ using Mova.Api.Configurations;
 using Mova.Application.BBL.Commands.WebHook;
 using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
-[Route("api/v1/webhook")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/webhook")]
+[ApiVersion("1.0")]
 public class WebHookController(
     IMediator mediator) : BaseController
 {

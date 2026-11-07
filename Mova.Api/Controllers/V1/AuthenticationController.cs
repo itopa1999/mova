@@ -22,11 +22,12 @@ using static Mova.Application.BBL.Commands.Authentication.VerifyPasswordTokenCom
 using static Mova.Application.BBL.Commands.Authentication.CheckRegistrationAvailability;
 using static Mova.Application.BBL.Queries.Profile.GetProfile;
 using Mova.Shared.Common.Results;
+using Asp.Versioning;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
-[Route("api/v1/auth")]
-[ApiExplorerSettings(GroupName = "v1")]
+[Route("api/v{version:apiVersion}/auth")]
+[ApiVersion("1.0")]
 public class AuthenticationController(
     IMediator mediator,
     IOptions<JwtSettings> jwtOptions) : BaseController
