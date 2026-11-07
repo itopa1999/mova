@@ -7,6 +7,7 @@ using Mova.Domain.Enums;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
+
 namespace Mova.Infrastructure.Jobs;
 
 public sealed class BackgroundNotificationJob
@@ -15,17 +16,20 @@ public sealed class BackgroundNotificationJob
     private readonly ISmsService _smsService;
     private readonly ILogger<BackgroundNotificationJob> _logger;
     private readonly ApplicationDbContext _context;
+    private readonly ICacheService _cache;
 
     public BackgroundNotificationJob(
         IEmailService emailService,
         ISmsService smsService,
         ILogger<BackgroundNotificationJob> logger,
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        ICacheService cache)
     {
         _emailService = emailService;
         _smsService = smsService;
         _logger = logger;
         _context = context;
+        _cache = cache;
     }
 
     [AutomaticRetry(Attempts = 3)]
@@ -179,6 +183,10 @@ public sealed class BackgroundNotificationJob
                 .AddAsync(notification, cancellationToken);
 
             await _context.SaveChangesAsync(cancellationToken);
+
+            await _cache.DeletePrefixAsync(
+                CacheKeys.NotificationsPrefix(userId),
+                cancellationToken);
 
             op.Success($"In-app notification saved. Id: {notification.Id}");
         }

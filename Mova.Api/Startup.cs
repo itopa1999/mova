@@ -16,6 +16,8 @@ using Mova.Api.HealthChecks;
 using Mova.Application.Helpers;
 using Mova.Shared.Common.Results;
 using Mova.Infrastructure.Jobs.CircleJob;
+using Mova.Infrastructure.Jobs.ScheduleJob;
+using Mova.Infrastructure.Jobs.TruteesJob;
 namespace Mova.Api;
 
 public class Startup(IConfiguration configuration)
@@ -203,35 +205,35 @@ public class Startup(IConfiguration configuration)
         var recurringJobManager = app.Services
             .GetRequiredService<IRecurringJobManager>();
 
-        // recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
-        //     "process-scheduled-releases",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.MinuteInterval(1));
+        recurringJobManager.AddOrUpdate<ProcessScheduledReleasesJob>(
+            "process-scheduled-releases",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
 
-        // recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
-        //     "process-releases-payouts",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.MinuteInterval(1));
+        recurringJobManager.AddOrUpdate<ProcessPayoutsJob>(
+            "process-releases-payouts",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
 
-        // recurringJobManager.AddOrUpdate<ProcessPendingProcessingTransactions>(
-        //     "process-pending-processing-transactions",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.MinuteInterval(1));
+        recurringJobManager.AddOrUpdate<ProcessPendingProcessingTransactions>(
+            "process-pending-processing-transactions",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
 
-        // recurringJobManager.AddOrUpdate<ExpirePendingTrusteesJob>(
-        //     "expire-pending-trustees",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.HourInterval(2));
+        recurringJobManager.AddOrUpdate<ExpirePendingTrusteesJob>(
+            "expire-pending-trustees",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.HourInterval(2));
 
-        // recurringJobManager.AddOrUpdate<ExpireReleaseRequestsJob>(
-        //     "expire-release-requests",
-        //     job => job.ExecuteAsync(CancellationToken.None),
-        //     Cron.MinuteInterval(5));
+        recurringJobManager.AddOrUpdate<ExpireReleaseRequestsJob>(
+            "expire-release-requests",
+            job => job.ExecuteAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
 
-        // recurringJobManager.AddOrUpdate<CirclePayoutJob>(
-        //     "process-circle-payouts",
-        //     job => job.ProcessDuePayoutsAsync(CancellationToken.None),
-        //     Cron.MinuteInterval(1));
+        recurringJobManager.AddOrUpdate<CirclePayoutJob>(
+            "process-circle-payouts",
+            job => job.ProcessDuePayoutsAsync(CancellationToken.None),
+            Cron.MinuteInterval(1));
 
         // ─────────────────────────────────────────────────────────────
         // 1. Exception handler FIRST — catches exceptions from every
