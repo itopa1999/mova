@@ -208,7 +208,7 @@ public sealed class ProcessPendingProcessingTransactions
 
         transaction.Status = TransactionStatus.Failed;
         transaction.FailureReason =
-            "Transaction was not found at the payment provider after the grace period.";
+            "Transaction was not found at the payment provider";
 
         await _context.SaveChangesAsync(cancellationToken);
         op.Success("Marked failed (not found at provider after grace period).");

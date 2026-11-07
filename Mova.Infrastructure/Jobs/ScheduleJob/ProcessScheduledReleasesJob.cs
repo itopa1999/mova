@@ -253,7 +253,7 @@ public sealed class ProcessScheduledReleasesJob
                 Message = $"₦{scheduledRelease.Amount.ToDecimal():N0} has been released " +
                           $"from your {wallet.Name} wallet {inAppDestination}",
                 IsRead = false,
-                ActionUrl = $"/wallet/{wallet.Id}",
+                ActionUrl = $"/dashboard/scheduled/wallet/{wallet.Id}",
                 Metadata = null,
             },
             cancellationToken);

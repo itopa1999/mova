@@ -135,7 +135,7 @@ public sealed class BankService : IBankService
         return bank is null ? null : MapToDto(bank);
     }
 
-    public async Task RefreshBanksAsync(
+        public async Task RefreshBanksAsync(
         CancellationToken cancellationToken = default)
     {
         var banks = await _externalApiClient.GetAsync<List<BankData>>(
@@ -156,12 +156,14 @@ public sealed class BankService : IBankService
                 StringComparer.OrdinalIgnoreCase);
 
         var bankCodes = banks
+            .Where(b => !string.IsNullOrWhiteSpace(b.Code))
             .Select(bank => bank.Code)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var existingBank in existingBanks)
         {
-            if (!bankCodes.Contains(existingBank.Code))
+            if (!string.IsNullOrWhiteSpace(existingBank.Code) && 
+                !bankCodes.Contains(existingBank.Code))
             {
                 existingBank.IsActive = false;
                 _unitOfWork.Update(existingBank);
@@ -201,7 +203,6 @@ public sealed class BankService : IBankService
             existingBank.Logo = bankData.Logo;
             existingBank.IsActive = true;
 
-            _unitOfWork.Update(existingBank);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);

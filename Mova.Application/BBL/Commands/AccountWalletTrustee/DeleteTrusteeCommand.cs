@@ -162,7 +162,10 @@ public sealed class DeleteTrusteeCommand
 
             var rowsAffected = await _unitOfWork.Query<WalletTrustee>()
                 .Where(x => x.Id == trustee.Id)
-                .ExecuteDeleteAsync(cancellationToken);
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(x => x.IsDeleted, true),
+                    cancellationToken);
 
             if (rowsAffected == 0)
             {
