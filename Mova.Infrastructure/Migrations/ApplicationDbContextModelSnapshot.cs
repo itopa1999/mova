@@ -405,16 +405,14 @@ namespace Mova.Infrastructure.Migrations
                         .HasDatabaseName("IX_bank_accounts_RecipientCode");
 
                     b.HasIndex("UserPublicId")
-                        .HasDatabaseName("IX_bank_accounts_UserPublicId");
+                        .IsUnique()
+                        .HasDatabaseName("IX_bank_accounts_UserPublicId_IsDefault")
+                        .HasFilter("\"IsDefault\" = true AND \"IsDeleted\" = false");
 
                     b.HasIndex("UserPublicId", "AccountNumber")
                         .IsUnique()
-                        .HasDatabaseName("IX_bank_accounts_UserPublicId_AccountNumber");
-
-                    b.HasIndex("UserPublicId", "IsDefault")
-                        .IsUnique()
-                        .HasDatabaseName("IX_bank_accounts_UserPublicId_IsDefault")
-                        .HasFilter("\"IsDefault\" = true");
+                        .HasDatabaseName("IX_bank_accounts_UserPublicId_AccountNumber")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.HasIndex("UserPublicId", "Status")
                         .HasDatabaseName("IX_bank_accounts_UserPublicId_Status");

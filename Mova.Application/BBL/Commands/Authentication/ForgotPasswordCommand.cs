@@ -98,14 +98,14 @@ public sealed class ForgotPasswordCommand
             }
 
             var userPublicId = user.PublicId;
-            var otpCode = _otpService.GenerateOtp();
+            var otpCode = _otpService.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString());
 
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             var otp = new OtpVerification
             {
                 UserPublicId = userPublicId,
-                OtpCode = otpCode,
+                OtpCode = otpCode.HashedOtp,
                 Purpose = OtpPurpose.PasswordReset,
                 ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -122,7 +122,7 @@ public sealed class ForgotPasswordCommand
             _notificationQueue.QueueForgotPasswordOtp(
                 user.Email ?? string.Empty,
                 user.PhoneNumber,
-                otpCode);
+                otpCode.RawOtp);
 
             return new BaseResult<ForgotPasswordResponseDto>(
                 HttpStatusCode.OK,

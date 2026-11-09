@@ -14,6 +14,7 @@ using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Commands.BanksAccount;
 
 public sealed class AddBankAccount
@@ -183,13 +184,16 @@ public sealed class AddBankAccount
                     "Invalid bank.");
             }
 
+            // 1. Look for ANY account (including soft-deleted ones)
             var existingAccount = await _unitOfWork.Query<BankAccount>()
+                .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(
                     x => x.UserPublicId == request.UserPublicId
                          && x.AccountNumber == accountNumber,
                     cancellationToken);
 
-            if (existingAccount is not null)
+            // If it exists and is NOT deleted, block it
+            if (existingAccount is not null && !existingAccount.IsDeleted)
             {
                 op.Warning($"Bank account already exists: {accountNumber}");
                 return new BaseResult<AddBankAccountDto>(
@@ -217,29 +221,58 @@ public sealed class AddBankAccount
                          && x.Status == BankAccountStatus.Active,
                     cancellationToken);
 
-            var bankAccount = new BankAccount
-            {
-                UserPublicId = request.UserPublicId,
-                AccountNumber = verifiedAccount.AccountNumber,
-                AccountName = verifiedAccount.AccountName,
-                BankCode = bank.Code,
-                BankName = bank.Name,
-                BankImageUrl = bank.Logo,
-                Status = BankAccountStatus.Active,
-                IsDefault = !hasDefaultAccount,
-                VerifiedAt = DateTimeOffset.UtcNow,
-                VerificationMessage = "Account verified successfully.",
-                ConsentGiven = true,
-                ConsentGivenAt = DateTimeOffset.UtcNow,
-                ConsentVersion = "v1",
-                Currency = "NGN",
-            };
+            BankAccount bankAccount;
 
-            await _unitOfWork.AddAsync(bankAccount, cancellationToken);
+            // 2. If it exists but IS deleted, reactivate it
+            if (existingAccount is not null && existingAccount.IsDeleted)
+            {
+
+                existingAccount.IsDeleted = false;
+                existingAccount.DeletedAt = null;
+                existingAccount.DeletedBy = null;
+                existingAccount.AccountName = verifiedAccount.AccountName;
+                existingAccount.BankCode = bank.Code;
+                existingAccount.BankName = bank.Name;
+                existingAccount.BankImageUrl = bank.Logo;
+                existingAccount.Status = BankAccountStatus.Active;
+                existingAccount.IsDefault = !hasDefaultAccount;
+                existingAccount.VerifiedAt = DateTimeOffset.UtcNow;
+                existingAccount.VerificationMessage = "Account verified and reactivated.";
+                existingAccount.ConsentGiven = true;
+                existingAccount.ConsentGivenAt = DateTimeOffset.UtcNow;
+                existingAccount.ConsentVersion = "v1";
+                existingAccount.Currency = "NGN";
+
+                _unitOfWork.Update(existingAccount);
+                bankAccount = existingAccount;
+            }
+            else
+            {
+                bankAccount = new BankAccount
+                {
+                    UserPublicId = request.UserPublicId,
+                    AccountNumber = verifiedAccount.AccountNumber,
+                    AccountName = verifiedAccount.AccountName,
+                    BankCode = bank.Code,
+                    BankName = bank.Name,
+                    BankImageUrl = bank.Logo,
+                    Status = BankAccountStatus.Active,
+                    IsDefault = !hasDefaultAccount,
+                    VerifiedAt = DateTimeOffset.UtcNow,
+                    VerificationMessage = "Account verified successfully.",
+                    ConsentGiven = true,
+                    ConsentGivenAt = DateTimeOffset.UtcNow,
+                    ConsentVersion = "v1",
+                    Currency = "NGN",
+                };
+
+                await _unitOfWork.AddAsync(bankAccount, cancellationToken);
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             op.Success(
-                $"Bank account added. Id: {bankAccount.Id}, Bank: {bankAccount.BankName}.");
+                $"Bank account {(existingAccount != null ? "reactivated" : "added")}. Id: {bankAccount.Id}, Bank: {bankAccount.BankName}.");
 
             _notificationQueue.InAppNotificationAsync(
                 request.UserPublicId,

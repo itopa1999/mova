@@ -119,12 +119,12 @@ public sealed class SendForgotPinOtpCommand
                 _unitOfWork.Update(existing);
             }
 
-            var otpCode = _otpService.GenerateOtp();
+            var otpCode = _otpService.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString());
 
             var otp = new OtpVerification
             {
                 UserPublicId = request.UserPublicId,
-                OtpCode = otpCode,
+                OtpCode = otpCode.HashedOtp,
                 Purpose = OtpPurpose.TransactionPin,
                 ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(OtpExpiryMinutes),
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -141,9 +141,9 @@ public sealed class SendForgotPinOtpCommand
 
             _notificationQueue.QueueOtpDelivery(
                 user.FirstName,
-                user.Email,
+                user.Email!,
                 user.PhoneNumber,
-                otpCode,
+                otpCode.RawOtp,
                 otp.Purpose);
 
             return new BaseResult<object>(

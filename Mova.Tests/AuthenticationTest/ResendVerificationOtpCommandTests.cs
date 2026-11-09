@@ -8,6 +8,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
+using Mova.Shared.Common;
 using Mova.Shared.Constants;
 namespace Mova.Tests.AuthenticationTest;
 
@@ -93,8 +94,8 @@ public sealed class ResendVerificationOtpCommandTests : BaseTest
     private void SetupOtpGeneration(string otp = GeneratedOtp)
     {
         _otpService
-            .Setup(x => x.GenerateOtp())
-            .Returns(otp);
+            .Setup(x => x.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString()))
+            .Returns(new OtpResult(otp, otp));
     }
 
     private async Task<OtpVerification> SeedOtpAsync(

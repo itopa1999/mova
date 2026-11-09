@@ -48,6 +48,8 @@ public static class DependencyInjection
 
         services.AddHangfireServer();
 
+        var hmacKey = configuration["Security:HmacKey"]
+            ?? throw new InvalidOperationException("HMAC Key is missing.");
         
         // Redis
         var redisConnectionString = configuration["Redis:URL"]
@@ -87,6 +89,7 @@ public static class DependencyInjection
         services.AddScoped<ISavingsCircleService, SavingsCircleService>();
         services.AddNotificationServices(configuration);
         services.AddSingleton<TemplateRenderer>();
+        services.AddSingleton(new SensitiveIdentifierHasher(hmacKey));
 
         services.Configure<ExternalApiSettings>(
             configuration.GetSection(ExternalApiSettings.SectionName));

@@ -143,6 +143,7 @@ public sealed class DeleteBankAccount
             }
 
             account.IsDeleted = true;
+            account.IsDefault = false;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -1,31 +1,31 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Behaviors;
-using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
-using Mova.Shared.Constants;
+using Mova.Shared.Common;
+
 namespace Mova.Infrastructure.Security;
 
 public class TransactionPinService : ITransactionPinService
 {
     private readonly ApplicationDbContext _context;
-    private readonly IPasswordHasher<User> _passwordHasher;
     private readonly ITransactionPinAttemptStore _pinAttemptStore;
     private readonly IPinChallenge _pinChallenge;
+    private readonly SensitiveIdentifierHasher _hasher;
 
     public TransactionPinService(
         ApplicationDbContext context,
-        IPasswordHasher<User> passwordHasher,
         ITransactionPinAttemptStore pinAttemptStore,
-        IPinChallenge pinChallenge)
+        IPinChallenge pinChallenge,
+        SensitiveIdentifierHasher hasher)
     {
         _context = context;
-        _passwordHasher = passwordHasher;
         _pinAttemptStore = pinAttemptStore;
         _pinChallenge = pinChallenge;
+        _hasher = hasher;
     }
 
     public async Task<bool> HasPinAsync(
@@ -59,8 +59,7 @@ public class TransactionPinService : ITransactionPinService
                 "Transaction PIN has already been set.");
         }
 
-        user.TransactionPinHash =
-            _passwordHasher.HashPassword(user, pin);
+        user.TransactionPinHash = _hasher.Hash(pin, SecuritySaltPurpose.TransactionPin.ToString());
         user.TransactionPinSetAt = DateTimeOffset.UtcNow;
 
         if (isOnboarding && user.OnboardingStage < OnboardingStage.Pin)
@@ -89,14 +88,11 @@ public class TransactionPinService : ITransactionPinService
             return false;
         }
 
-        var result = _passwordHasher.VerifyHashedPassword(
-            user,
+        var hash = _hasher.Hash(pin, SecuritySaltPurpose.TransactionPin.ToString());
+        return string.Equals(
+            hash,
             user.TransactionPinHash,
-            pin);
-
-        var isValid = result == PasswordVerificationResult.Success ||
-                      result == PasswordVerificationResult.SuccessRehashNeeded;
-        return isValid;
+            StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<TransactionPinVerificationResult> VerifyPinWithStatusAsync(
@@ -123,13 +119,11 @@ public class TransactionPinService : ITransactionPinService
             return TransactionPinVerificationResult.Invalid;
         }
 
-        var result = _passwordHasher.VerifyHashedPassword(
-            user,
+        var hash = _hasher.Hash(pin, SecuritySaltPurpose.TransactionPin.ToString());
+        var isValid = string.Equals(
+            hash,
             user.TransactionPinHash,
-            pin);
-
-        var isValid = result == PasswordVerificationResult.Success ||
-                      result == PasswordVerificationResult.SuccessRehashNeeded;
+            StringComparison.OrdinalIgnoreCase);
 
         if (isValid)
         {
@@ -199,8 +193,7 @@ public class TransactionPinService : ITransactionPinService
                 "Transaction PIN has not been set.");
         }
 
-        user.TransactionPinHash =
-            _passwordHasher.HashPassword(user, newPin);
+        user.TransactionPinHash = _hasher.Hash(newPin, SecuritySaltPurpose.TransactionPin.ToString());
         user.TransactionPinChangedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);

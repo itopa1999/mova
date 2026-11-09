@@ -6,10 +6,12 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Common;
+using Mova.Application.Interfaces.Security;
+
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class VerifyPasswordTokenCommand
@@ -33,15 +35,18 @@ public sealed class VerifyPasswordTokenCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
+        private readonly IOtpService _otpService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
+            IOtpService otpService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
+            _otpService = otpService;
             _logger = logger;
         }
 
@@ -105,7 +110,9 @@ public sealed class VerifyPasswordTokenCommand
                     "Invalid OTP. Please request a new one.");
             }
 
-            if (otpVerification.OtpCode != request.Token)
+            var hashedToken = _otpService.Hash(request.Token, SecuritySaltPurpose.OTPVerification.ToString());
+
+            if (!string.Equals(otpVerification.OtpCode, hashedToken, StringComparison.OrdinalIgnoreCase))
             {
                 op.Warning($"Invalid OTP code for user {request.UserPublicId}.");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
