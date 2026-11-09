@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+
 namespace Mova.Infrastructure.Persistence.Configurations;
 
 public class BankAccountConfiguration
@@ -71,7 +72,8 @@ public class BankAccountConfiguration
             .HasMaxLength(3)
             .HasDefaultValue("NGN");
 
-        // Indexes
+        // ─── Indexes ────────────────────────────────────────────────
+        
         builder.HasIndex(x => x.UserPublicId)
             .HasDatabaseName("IX_bank_accounts_UserPublicId");
 
@@ -81,16 +83,19 @@ public class BankAccountConfiguration
         builder.HasIndex(x => x.PaystackRecipientCode)
             .HasDatabaseName("IX_bank_accounts_RecipientCode");
 
-        builder.HasIndex(x => new { x.UserPublicId, x.IsDefault })
-            .HasDatabaseName("IX_bank_accounts_UserPublicId_IsDefault")
-            .IsUnique()
-            .HasFilter("\"IsDefault\" = true");
-
         builder.HasIndex(x => new { x.UserPublicId, x.Status })
             .HasDatabaseName("IX_bank_accounts_UserPublicId_Status");
 
+        // ✅ 1. Ensure a user can only have ONE active default account at a time
+        builder.HasIndex(x => x.UserPublicId)
+            .HasDatabaseName("IX_bank_accounts_UserPublicId_IsDefault")
+            .IsUnique()
+            .HasFilter("\"IsDefault\" = true AND \"IsDeleted\" = false");
+
+        // ✅ 2. Ensure a user cannot add the exact same Account Number twice
         builder.HasIndex(x => new { x.UserPublicId, x.AccountNumber })
             .HasDatabaseName("IX_bank_accounts_UserPublicId_AccountNumber")
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false"); 
     }
 }
