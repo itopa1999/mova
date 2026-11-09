@@ -1,11 +1,27 @@
+using System.Security.Cryptography;
 using Mova.Application.Interfaces.Security;
 namespace Mova.Infrastructure.Security;
 public sealed class OtpService : IOtpService
 {
-    public string GenerateOtp()
+    private readonly SensitiveIdentifierHasher _hasher;
+
+    public OtpService(SensitiveIdentifierHasher hasher)
     {
-        return Random.Shared
-            .Next(100000, 999999)
-            .ToString();
+        _hasher = hasher;
     }
+
+    public OtpResult GenerateSaltedOtp(string purpose)
+    {
+        var rawOtp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+
+        var hashedOtp = _hasher.Hash(rawOtp, purpose);
+
+        return new OtpResult(rawOtp, hashedOtp);
+    }
+
+    public string Hash(string rawCode, string purpose)
+    {
+        return _hasher.Hash(rawCode, purpose);
+    }
+
 }

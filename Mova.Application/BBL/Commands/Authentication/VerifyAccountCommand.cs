@@ -9,10 +9,11 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Common;
+
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class VerifyAccountCommand
@@ -65,6 +66,7 @@ public sealed class VerifyAccountCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly IJwtTokenGenerator _jwtTokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
+        private readonly IOtpService _otpService;
 
         private static readonly HashSet<string> ValidPlatforms =
             new(StringComparer.OrdinalIgnoreCase)
@@ -80,7 +82,8 @@ public sealed class VerifyAccountCommand
             ILogger<Handler> logger,
             INotificationQueue notificationQueue,
             IJwtTokenGenerator jwtTokenGenerator,
-            IRefreshTokenService refreshTokenService)
+            IRefreshTokenService refreshTokenService,
+            IOtpService otpService)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
@@ -88,6 +91,7 @@ public sealed class VerifyAccountCommand
             _notificationQueue = notificationQueue;
             _jwtTokenGenerator = jwtTokenGenerator;
             _refreshTokenService = refreshTokenService;
+            _otpService = otpService;
         }
 
         public async Task<BaseResult<VerifyAccountResponseDto>> Handle(
@@ -155,7 +159,9 @@ public sealed class VerifyAccountCommand
                     "Invalid OTP. Please request a new one.");
             }
 
-            if (otpVerification.OtpCode != request.OtpCode)
+            var hashedOtp = _otpService.Hash(request.OtpCode, SecuritySaltPurpose.OTPVerification.ToString());
+
+            if (!string.Equals(otpVerification.OtpCode, hashedOtp, StringComparison.OrdinalIgnoreCase))
             {
                 op.Warning($"Invalid OTP code for user {user.PublicId}.");
                 return new BaseResult<VerifyAccountResponseDto>(

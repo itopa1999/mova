@@ -10,6 +10,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
+
 namespace Mova.Tests.AuthenticationTest;
 
 public sealed class VerifyAccountCommandTests : BaseTest
@@ -26,6 +27,14 @@ public sealed class VerifyAccountCommandTests : BaseTest
     private readonly Mock<INotificationQueue> _notifications = new();
     private readonly Mock<IJwtTokenGenerator> _jwtGenerator = new();
     private readonly Mock<IRefreshTokenService> _refreshTokenService = new();
+    private readonly Mock<IOtpService> _otpService = new();
+
+    public VerifyAccountCommandTests()
+    {
+        _otpService
+            .Setup(x => x.Hash(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns<string, string>((code, _) => code);
+    }
 
     private VerifyAccountCommand.Handler CreateHandler()
     {
@@ -35,7 +44,8 @@ public sealed class VerifyAccountCommandTests : BaseTest
             Mock.Of<ILogger<VerifyAccountCommand.Handler>>(),
             _notifications.Object,
             _jwtGenerator.Object,
-            _refreshTokenService.Object);
+            _refreshTokenService.Object,
+            _otpService.Object);
     }
 
     private VerifyAccountCommand.Command CreateCommand(
@@ -151,7 +161,8 @@ public sealed class VerifyAccountCommandTests : BaseTest
         bool isUsed = false,
         bool expired = false,
         string purpose = OtpPurpose.AccountVerification,
-        string publicId = UserPublicId)
+        string publicId = UserPublicId,
+        DateTimeOffset? createdAt = null)
     {
         var otp = new OtpVerification
         {
@@ -161,7 +172,7 @@ public sealed class VerifyAccountCommandTests : BaseTest
             ExpiresAt = expired
                 ? DateTimeOffset.UtcNow.AddMinutes(-1)
                 : DateTimeOffset.UtcNow.AddMinutes(2),
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
             IsUsed = isUsed,
         };
 
@@ -443,14 +454,8 @@ public sealed class VerifyAccountCommandTests : BaseTest
         SetupJwtGeneration();
         SetupRefreshTokenCreation();
 
-        var older = await SeedOtpAsync(otpCode: "111111");
-        var newer = await SeedOtpAsync(otpCode: "222222");
-
-        older.CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
-        newer.CreatedAt = DateTimeOffset.UtcNow;
-        UnitOfWork.Update(older);
-        UnitOfWork.Update(newer);
-        await UnitOfWork.SaveChangesAsync();
+        await SeedOtpAsync(otpCode: "111111", createdAt: DateTimeOffset.UtcNow.AddMinutes(-5));
+        await SeedOtpAsync(otpCode: "222222", createdAt: DateTimeOffset.UtcNow);
 
         var handler = CreateHandler();
         var result = await handler.Handle(
@@ -458,5 +463,4 @@ public sealed class VerifyAccountCommandTests : BaseTest
 
         Assert.True(result.IsSuccess);
     }
-
 }

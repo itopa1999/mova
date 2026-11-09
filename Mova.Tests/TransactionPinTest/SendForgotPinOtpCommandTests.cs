@@ -9,6 +9,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
+using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Xunit;
 namespace Mova.Tests.TransactionPinTest;
@@ -99,8 +100,8 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
     private void SetupOtpGeneration(string otp = GeneratedOtp)
     {
         _otpService
-            .Setup(x => x.GenerateOtp())
-            .Returns(otp);
+            .Setup(x => x.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString()))
+            .Returns(new OtpResult(otp, otp));
     }
 
     private void SetupPermissions(
@@ -222,7 +223,7 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _otpService.Verify(
-            x => x.GenerateOtp(),
+            x => x.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString()),
             Times.Never);
 
         _notifications.Verify(
@@ -265,7 +266,7 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _otpService.Verify(
-            x => x.GenerateOtp(),
+            x => x.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString()),
             Times.Once);
     }
 
@@ -536,7 +537,7 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _otpService.Verify(
-            x => x.GenerateOtp(),
+            x => x.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString()),
             Times.Never);
     }
 
@@ -642,7 +643,7 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _otpService.Verify(
-            x => x.GenerateOtp(),
+            x => x.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString()),
             Times.Never);
     }
 

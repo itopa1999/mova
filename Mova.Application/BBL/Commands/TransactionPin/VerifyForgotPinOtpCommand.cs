@@ -8,12 +8,14 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
+using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
+using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Commands.TransactionPin;
 
 public sealed class VerifyForgotPinOtpCommand
@@ -42,19 +44,22 @@ public sealed class VerifyForgotPinOtpCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
         private readonly ITransactionPinService _transactionPinService;
+        private readonly IOtpService _otpService;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger,
-            ITransactionPinService transactionPinService)
+            ITransactionPinService transactionPinService,
+            IOtpService otpService)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
             _notificationQueue = notificationQueue;
             _logger = logger;
             _transactionPinService = transactionPinService;
+            _otpService = otpService;
         }
 
         public async Task<BaseResult<object>> Handle(
@@ -119,7 +124,9 @@ public sealed class VerifyForgotPinOtpCommand
                     "No verification code found. Please request a new one.");
             }
 
-            if (!string.Equals(otpRecord.OtpCode, request.Otp))
+            var hashedOtp = _otpService.Hash(request.Otp, SecuritySaltPurpose.OTPVerification.ToString());
+
+            if (!string.Equals(otpRecord.OtpCode, hashedOtp, StringComparison.OrdinalIgnoreCase))
             {
                 op.Warning($"Invalid OTP code for user {request.UserPublicId}.");
                 return new BaseResult<object>(

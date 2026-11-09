@@ -1,12 +1,16 @@
-using Microsoft.AspNetCore.Identity;
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Moq;
 using Mova.Application.Behaviors;
-using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Security;
 using Mova.Shared.Constants;
+using Mova.Shared.Common;
+
 namespace Mova.Tests.TransactionPinTest;
 
 public sealed class TransactionPinServiceTests : BaseTest
@@ -14,11 +18,21 @@ public sealed class TransactionPinServiceTests : BaseTest
     private const string UserPublicId = "pin-lockout-user";
     private const string Pin = "123456";
 
+    // 1. Use the REAL hasher with a dummy 32-byte key
+    private readonly SensitiveIdentifierHasher _hasher = 
+        new(Convert.ToBase64String(new byte[32]));
+
+    // 2. Pre-calculate the hash so we can use it for seeding users
+    private readonly string _hashedCorrectPin;
+
     private readonly Mock<IPinChallenge> _pinChallengeMock = new();
 
-    private TransactionPinService CreateService(
-        IPasswordHasher<User> hasher,
-        ITransactionPinAttemptStore attemptStore)
+    public TransactionPinServiceTests()
+    {
+        _hashedCorrectPin = _hasher.Hash(Pin, SecuritySaltPurpose.TransactionPin.ToString());
+    }
+
+    private TransactionPinService CreateService(ITransactionPinAttemptStore attemptStore)
     {
         _pinChallengeMock
             .Setup(x => x.CreateAsync(
@@ -29,9 +43,9 @@ public sealed class TransactionPinServiceTests : BaseTest
 
         return new TransactionPinService(
             Context,
-            hasher,
             attemptStore,
-            _pinChallengeMock.Object);
+            _pinChallengeMock.Object,
+            _hasher); // <-- Pass the real instance
     }
 
     [Fact]
@@ -50,7 +64,6 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public async Task VerifyPinWithStatusAsync_WarnsOnThirdAndLocksOnFourthFailure()
     {
-        var hasher = new PasswordHasher<User>();
         var user = new User
         {
             UserName = "pin-lockout@example.com",
@@ -59,15 +72,15 @@ public sealed class TransactionPinServiceTests : BaseTest
             NormalizedEmail = "PIN-LOCKOUT@EXAMPLE.COM",
             PublicId = UserPublicId,
             FirstName = "Pin",
-            LastName = "Lockout"
+            LastName = "Lockout",
+            TransactionPinHash = _hashedCorrectPin // <-- Use the real hash
         };
-        user.TransactionPinHash = hasher.HashPassword(user, Pin);
 
         Context.Users.Add(user);
         await Context.SaveChangesAsync();
 
         var attemptStore = new InMemoryPinAttemptStore();
-        var service = CreateService(hasher, attemptStore);
+        var service = CreateService(attemptStore);
 
         // 1st failure → Invalid
         Assert.Equal(
@@ -114,7 +127,6 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public async Task VerifyPinWithStatusAsync_ClearsFailuresAfterSuccessfulVerification()
     {
-        var hasher = new PasswordHasher<User>();
         var user = new User
         {
             UserName = "pin-reset@example.com",
@@ -123,9 +135,9 @@ public sealed class TransactionPinServiceTests : BaseTest
             NormalizedEmail = "PIN-RESET@EXAMPLE.COM",
             PublicId = UserPublicId,
             FirstName = "Pin",
-            LastName = "Reset"
+            LastName = "Reset",
+            TransactionPinHash = _hashedCorrectPin
         };
-        user.TransactionPinHash = hasher.HashPassword(user, Pin);
 
         Context.Users.Add(user);
         await Context.SaveChangesAsync();
@@ -133,7 +145,7 @@ public sealed class TransactionPinServiceTests : BaseTest
         var attemptStore = new InMemoryPinAttemptStore();
         await attemptStore.RecordFailureAsync(UserPublicId);
 
-        var service = CreateService(hasher, attemptStore);
+        var service = CreateService(attemptStore);
 
         Assert.Equal(
             TransactionPinVerificationResult.Verified,
@@ -147,16 +159,17 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public async Task VerifyPinWithStatusAsync_LockoutIsIsolatedPerUser()
     {
-        var hasher = new PasswordHasher<User>();
         var firstUser = CreateUser(UserPublicId, "first-pin-user@example.com");
         var secondUser = CreateUser("another-pin-user", "second-pin-user@example.com");
-        firstUser.TransactionPinHash = hasher.HashPassword(firstUser, Pin);
-        secondUser.TransactionPinHash = hasher.HashPassword(secondUser, Pin);
+        
+        firstUser.TransactionPinHash = _hashedCorrectPin;
+        secondUser.TransactionPinHash = _hashedCorrectPin;
+        
         Context.Users.AddRange(firstUser, secondUser);
         await Context.SaveChangesAsync();
 
         var attemptStore = new InMemoryPinAttemptStore();
-        var service = CreateService(hasher, attemptStore);
+        var service = CreateService(attemptStore);
 
         // 4 failures — lock fires on the 4th
         for (var i = 0; i < 4; i++)
@@ -178,9 +191,9 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public async Task VerifyPinWithStatusAsync_DoesNotClearLockCreatedDuringSuccessfulVerification()
     {
-        var hasher = new PasswordHasher<User>();
         var user = CreateUser(UserPublicId, "concurrent-pin-user@example.com");
-        user.TransactionPinHash = hasher.HashPassword(user, Pin);
+        user.TransactionPinHash = _hashedCorrectPin;
+        
         Context.Users.Add(user);
         await Context.SaveChangesAsync();
 
@@ -188,7 +201,7 @@ public sealed class TransactionPinServiceTests : BaseTest
         {
             LockDuringSuccessfulReset = true
         };
-        var service = CreateService(hasher, attemptStore);
+        var service = CreateService(attemptStore);
 
         Assert.Equal(
             TransactionPinVerificationResult.Locked,
@@ -201,9 +214,9 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public async Task VerifyPinWithStatusAsync_WhenChallengeCreationFails_ThrowsPinChallengePersistenceException()
     {
-        var hasher = new PasswordHasher<User>();
         var user = CreateUser(UserPublicId, "challenge-fail@example.com");
-        user.TransactionPinHash = hasher.HashPassword(user, Pin);
+        user.TransactionPinHash = _hashedCorrectPin;
+        
         Context.Users.Add(user);
         await Context.SaveChangesAsync();
 
@@ -218,9 +231,9 @@ public sealed class TransactionPinServiceTests : BaseTest
 
         var service = new TransactionPinService(
             Context,
-            hasher,
             attemptStore,
-            _pinChallengeMock.Object);
+            _pinChallengeMock.Object,
+            _hasher);
 
         await Assert.ThrowsAsync<PinChallengePersistenceException>(
             () => service.VerifyPinWithStatusAsync(
@@ -230,26 +243,14 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public async Task VerifyPinWithStatusAsync_ForwardsChallengeTypeToPinChallenge()
     {
-        var hasher = new PasswordHasher<User>();
         var user = CreateUser(UserPublicId, "challenge-forward@example.com");
-        user.TransactionPinHash = hasher.HashPassword(user, Pin);
+        user.TransactionPinHash = _hashedCorrectPin;
+        
         Context.Users.Add(user);
         await Context.SaveChangesAsync();
 
         var attemptStore = new InMemoryPinAttemptStore();
-
-        _pinChallengeMock
-            .Setup(x => x.CreateAsync(
-                It.IsAny<string>(),
-                It.IsAny<PinChallengeType>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-
-        var service = new TransactionPinService(
-            Context,
-            hasher,
-            attemptStore,
-            _pinChallengeMock.Object);
+        var service = CreateService(attemptStore);
 
         await service.VerifyPinWithStatusAsync(
             UserPublicId, Pin, PinChallengeType.BreakWallet);
@@ -265,14 +266,14 @@ public sealed class TransactionPinServiceTests : BaseTest
     [Fact]
     public async Task VerifyPinWithStatusAsync_DoesNotCreateChallengeOnInvalidPin()
     {
-        var hasher = new PasswordHasher<User>();
         var user = CreateUser(UserPublicId, "no-challenge-on-fail@example.com");
-        user.TransactionPinHash = hasher.HashPassword(user, Pin);
+        user.TransactionPinHash = _hashedCorrectPin;
+        
         Context.Users.Add(user);
         await Context.SaveChangesAsync();
 
         var attemptStore = new InMemoryPinAttemptStore();
-        var service = CreateService(hasher, attemptStore);
+        var service = CreateService(attemptStore);
 
         await service.VerifyPinWithStatusAsync(
             UserPublicId, "000000", PinChallengeType.CreateWallet);
@@ -297,11 +298,6 @@ public sealed class TransactionPinServiceTests : BaseTest
             LastName = "User"
         };
 
-    /// <summary>
-    /// In-memory fake that mirrors the production <c>RedisTransactionPinAttemptStore</c>:
-    /// a separate lock flag (like the <c>lock:</c> Redis key) and a counter that is
-    /// cleared when the lock fires (like <c>DEL KEYS[1]</c> in the Lua script).
-    /// </summary>
     private sealed class InMemoryPinAttemptStore : ITransactionPinAttemptStore
     {
         private const int MaxFailures = 4;
@@ -326,7 +322,6 @@ public sealed class TransactionPinServiceTests : BaseTest
             string userPublicId,
             CancellationToken cancellationToken = default)
         {
-            // Mirrors Lua: "if EXISTS lock then return 1"
             if (IsLocked(userPublicId))
             {
                 return Task.FromResult(TransactionPinFailureOutcome.LockedNow);
@@ -345,7 +340,7 @@ public sealed class TransactionPinServiceTests : BaseTest
             if (outcome == TransactionPinFailureOutcome.LockedNow)
             {
                 _lockedUsers.Add(userPublicId);
-                _failureCounts.Remove(userPublicId);   // mirrors DEL KEYS[1]
+                _failureCounts.Remove(userPublicId);
             }
 
             return Task.FromResult(outcome);

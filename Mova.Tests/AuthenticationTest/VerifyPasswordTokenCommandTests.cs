@@ -4,11 +4,13 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.Authentication;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
+
 namespace Mova.Tests.AuthenticationTest;
 
 public sealed class VerifyPasswordTokenCommandTests : BaseTest
@@ -17,12 +19,21 @@ public sealed class VerifyPasswordTokenCommandTests : BaseTest
     private const long UserId = 42;
 
     private readonly Mock<IIdentityService> _identityService = new();
+    private readonly Mock<IOtpService> _otpService = new();
+
+    public VerifyPasswordTokenCommandTests()
+    {
+        _otpService
+            .Setup(x => x.Hash(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns<string, string>((code, _) => code);
+    }
 
     private VerifyPasswordTokenCommand.Handler CreateHandler()
     {
         return new VerifyPasswordTokenCommand.Handler(
             UnitOfWork,
             _identityService.Object,
+            _otpService.Object,
             Mock.Of<ILogger<VerifyPasswordTokenCommand.Handler>>());
     }
 
@@ -80,7 +91,8 @@ public sealed class VerifyPasswordTokenCommandTests : BaseTest
         string purpose,
         bool isUsed = false,
         DateTimeOffset? expiresAt = null,
-        DateTimeOffset? usedAt = null)
+        DateTimeOffset? usedAt = null,
+        DateTimeOffset? createdAt = null)
     {
         var otp = new OtpVerification
         {
@@ -90,6 +102,7 @@ public sealed class VerifyPasswordTokenCommandTests : BaseTest
             IsUsed = isUsed,
             ExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddMinutes(10),
             UsedAt = usedAt,
+            CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         };
 
         await UnitOfWork.AddAsync(otp);
@@ -284,8 +297,8 @@ public sealed class VerifyPasswordTokenCommandTests : BaseTest
     public async Task Handle_UsesMostRecentOtp_WhenMultipleExist()
     {
         SetupUserExists();
-        await SeedOtpAsync(UserPublicId, "111111", OtpPurpose.PasswordReset);
-        await SeedOtpAsync(UserPublicId, "222222", OtpPurpose.PasswordReset);
+        await SeedOtpAsync(UserPublicId, "111111", OtpPurpose.PasswordReset, createdAt: DateTimeOffset.UtcNow.AddMinutes(-5));
+        await SeedOtpAsync(UserPublicId, "222222", OtpPurpose.PasswordReset, createdAt: DateTimeOffset.UtcNow);
 
         var handler = CreateHandler();
         var result = await handler.Handle(
@@ -349,5 +362,4 @@ public sealed class VerifyPasswordTokenCommandTests : BaseTest
         Assert.Equal(1, UnitOfWork.CommitCount);
         Assert.Equal(0, UnitOfWork.RollbackCount);
     }
-
 }

@@ -179,12 +179,12 @@ public sealed class RegisterCommand
                     roleError);
             }
 
-            var otpCode = _otpService.GenerateOtp();
+            var otpCode = _otpService.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString());
 
             var otp = new OtpVerification
             {
                 UserPublicId = createdPublicId,
-                OtpCode = otpCode,
+                OtpCode = otpCode.HashedOtp,
                 Purpose = OtpPurpose.AccountVerification,
                 ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -201,7 +201,7 @@ public sealed class RegisterCommand
                 firstName,
                 normalizedEmail,
                 normalizedPhoneNumber,
-                otpCode,
+                otpCode.RawOtp,
                 OtpPurpose.AccountVerification.ToString());
 
             return new BaseResult<RegistrationResponseDto>(

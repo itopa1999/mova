@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Identity.Extensions;
@@ -13,16 +14,16 @@ public sealed class IdentityService : IIdentityService
 {
     private readonly UserManager<User> _userManager;
     private readonly ApplicationDbContext _context;
-    private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly SensitiveIdentifierHasher _hasher;
 
     public IdentityService(
         UserManager<User> userManager,
         ApplicationDbContext context,
-        IPasswordHasher<User> passwordHasher)
+        SensitiveIdentifierHasher hasher)
     {
         _userManager = userManager;
         _context = context;
-        _passwordHasher = passwordHasher;
+        _hasher = hasher;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -38,7 +39,6 @@ public sealed class IdentityService : IIdentityService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
         var user = new User
         {
             FirstName = firstName,
@@ -50,10 +50,9 @@ public sealed class IdentityService : IIdentityService
             ProfilePicture = DefaultProfilePictures.PickRandom(),
             Balance = Money.FromNaira(0),
             AccountStatus = UserAccountStatus.Active,
-            OnboardingStage = OnboardingStage.Register
+            OnboardingStage = OnboardingStage.Register,
+            BvnHash = _hasher.Hash(BVN, SecuritySaltPurpose.BvnVerification.ToString())
         };
-
-        user.BvnHash = _passwordHasher.HashPassword(user, BVN);
 
         var result = await _userManager.CreateAsync(user, password);
 
@@ -247,13 +246,14 @@ public sealed class IdentityService : IIdentityService
     }
 
     public async Task<bool> BvnExistsAsync(
-        string bvnHash,
+        string rawBvn,
         long? excludeUserId = null,
         CancellationToken cancellationToken = default)
     {
+        var bvnHash = _hasher.Hash(rawBvn, SecuritySaltPurpose.BvnVerification.ToString());
         var query = _context.Users
             .AsNoTracking()
-            .Where(x => x.BvnHash == bvnHash);
+            .Where(x => string.Equals(x.BvnHash, bvnHash, StringComparison.OrdinalIgnoreCase));
 
         if (excludeUserId.HasValue)
         {

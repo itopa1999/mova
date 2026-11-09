@@ -121,12 +121,12 @@ public sealed class ResendVerificationOtpCommand
                 _unitOfWork.Update(existingOtp);
             }
 
-            var otpCode = _otpService.GenerateOtp();
+            var otpCode = _otpService.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString());
 
             var otp = new OtpVerification
             {
                 UserPublicId = userPublicId,
-                OtpCode = otpCode,
+                OtpCode = otpCode.HashedOtp,
                 Purpose = otpPurpose,
                 ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
                 IsUsed = false,
@@ -142,9 +142,9 @@ public sealed class ResendVerificationOtpCommand
 
             _notificationQueue.QueueOtpDelivery(
                 user.FirstName,
-                user.Email,
+                user.Email!,
                 user.PhoneNumber,
-                otpCode,
+                otpCode.RawOtp,
                 otpPurpose.ToString());
 
             return new BaseResult<ResendVerificationOtpResponseDto>(

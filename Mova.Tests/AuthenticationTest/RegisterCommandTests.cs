@@ -7,6 +7,7 @@ using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
+using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Xunit;
 namespace Mova.Tests.AuthenticationTest;
@@ -126,8 +127,8 @@ public sealed class RegisterCommandTests : BaseTest
     private void SetupOtpGeneration(string otp = GeneratedOtp)
     {
         _otpService
-            .Setup(x => x.GenerateOtp())
-            .Returns(otp);
+            .Setup(x => x.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString()))
+            .Returns(new OtpResult(otp, otp));
     }
 
     private void SetupHappyPath()

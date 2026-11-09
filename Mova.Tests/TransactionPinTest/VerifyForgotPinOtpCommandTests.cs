@@ -10,6 +10,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Constants;
 using Xunit;
+
 namespace Mova.Tests.TransactionPinTest;
 
 public sealed class VerifyForgotPinOtpCommandTests : BaseTest
@@ -24,6 +25,14 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
     private readonly Mock<IIdentityService> _identityService = new();
     private readonly Mock<ITransactionPinService> _pinService = new();
     private readonly Mock<INotificationQueue> _notifications = new();
+    private readonly Mock<IOtpService> _otpService = new();
+
+    public VerifyForgotPinOtpCommandTests()
+    {
+        _otpService
+            .Setup(x => x.Hash(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns<string, string>((code, _) => code);
+    }
 
     private VerifyForgotPinOtpCommand.Handler CreateHandler()
     {
@@ -32,7 +41,8 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
             _identityService.Object,
             _notifications.Object,
             Mock.Of<ILogger<VerifyForgotPinOtpCommand.Handler>>(),
-            _pinService.Object);
+            _pinService.Object,
+            _otpService.Object);
     }
 
     private VerifyForgotPinOtpCommand.Command CreateCommand(
@@ -87,7 +97,8 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
         string code = Otp,
         string purpose = OtpPurpose.TransactionPin,
         bool isUsed = false,
-        DateTimeOffset? expiresAt = null)
+        DateTimeOffset? expiresAt = null,
+        DateTimeOffset? createdAt = null)
     {
         var otp = new OtpVerification
         {
@@ -96,7 +107,7 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
             Purpose = purpose,
             IsUsed = isUsed,
             ExpiresAt = expiresAt ?? DateTimeOffset.UtcNow.AddMinutes(2),
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         };
 
         await UnitOfWork.AddAsync(otp);
@@ -283,8 +294,8 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
         SetupPasswordValid();
         SetupResetPin();
 
-        await SeedOtpAsync(code: "111111");
-        await SeedOtpAsync(code: "222222");
+        await SeedOtpAsync(code: "111111", createdAt: DateTimeOffset.UtcNow.AddMinutes(-5));
+        await SeedOtpAsync(code: "222222", createdAt: DateTimeOffset.UtcNow);
 
         var handler = CreateHandler();
         var result = await handler.Handle(CreateCommand(otp: "222222"), default);
@@ -311,7 +322,6 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal("Unable to reset PIN. Please try again.", result.Message);
     }
-
 
     // ---------------------------------------------------------
     // 5. Happy path
@@ -467,10 +477,4 @@ public sealed class VerifyForgotPinOtpCommandTests : BaseTest
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
-
-    // ---------------------------------------------------------
-    // 7. Regression: notification failure must not fail the request
-    // ---------------------------------------------------------
-
-    
 }
