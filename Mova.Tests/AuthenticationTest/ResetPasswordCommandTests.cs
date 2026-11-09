@@ -4,6 +4,7 @@ using Moq;
 using Mova.Application.BBL.Commands.Authentication;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
 namespace Mova.Tests.AuthenticationTest;
@@ -55,6 +56,7 @@ public sealed class ResetPasswordCommandTests : BaseTest
                 "08050000000",
                 null,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

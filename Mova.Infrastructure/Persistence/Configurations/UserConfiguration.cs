@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 namespace Mova.Infrastructure.Persistence.Configurations;
 
@@ -40,7 +41,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(x => x.BvnHash)
                .HasDatabaseName("ix_users_bvn_hash");
 
-        // ─── Notification preferences ─────────────────
+        builder.Property(x => x.OnboardingStage)
+            .IsRequired()
+            .HasConversion<int>()
+            .HasDefaultValue(OnboardingStage.Register)
+            .HasSentinel((OnboardingStage)0);
+
         builder.Property(x => x.NotifyLoginAlerts)
             .IsRequired()
             .HasDefaultValue(true);
@@ -57,7 +63,6 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasDefaultValue(false);
 
-        // ─── Balance ──────────────────────────────────
         builder.ComplexProperty(
             x => x.Balance,
             money =>

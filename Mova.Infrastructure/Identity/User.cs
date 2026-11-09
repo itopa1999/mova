@@ -54,6 +54,7 @@ public class User : IdentityUser<long>
 
     public Money Balance { get; set; } = Money.FromNaira(0); // The current balance of the user, representing the total amount of funds available for transactions
 
+    public OnboardingStage OnboardingStage { get; set; } = OnboardingStage.Register;
     // ─────────────────────────────────────────────────────────
     // Account status & restriction
     // ─────────────────────────────────────────────────────────

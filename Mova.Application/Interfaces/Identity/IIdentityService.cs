@@ -91,6 +91,12 @@ public interface IIdentityService
         CancellationToken cancellationToken = default);
 
 
+    Task<(bool Success, string Message)> UpdateOnboardingStageAsync(
+        string userPublicId,
+        OnboardingStage newStage,
+        CancellationToken cancellationToken = default);
+
+
 
     // ─────────────────────────────────────────────────────
     // Permissions / feature gates

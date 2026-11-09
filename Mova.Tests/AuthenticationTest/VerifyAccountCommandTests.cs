@@ -72,6 +72,7 @@ public sealed class VerifyAccountCommandTests : BaseTest
                 phone,
                 profilePicture,
                 Money.FromNaira(0),
+                OnboardingStage.Register,
                 string.Empty,
                 false,
                 false,

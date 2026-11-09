@@ -1,3 +1,4 @@
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 namespace Mova.Application.Interfaces.Identity;
 
@@ -11,6 +12,7 @@ public sealed record UserIdentityDto(
     string? PhoneNumber,
     string? ProfilePicture,
     Money Balance,
+    OnboardingStage OnboardingStage,
     string TransactionPinHash,
     bool NotifyLoginAlerts,
     bool NotifyReleaseAlerts,

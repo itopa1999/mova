@@ -60,6 +60,7 @@ public sealed class GetAllWalletsQueryTests : BaseTest
                 "08050000000",
                 null,
                 Money.FromNaira(balanceNaira),
+                OnboardingStage.Completed,
                 string.Empty,
                 true,
                 true,

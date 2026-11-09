@@ -232,6 +232,7 @@ public sealed class UserScopedQueryTests : BaseTest
             "08050000000",
             null,
             Money.FromNaira(456.78m),
+            OnboardingStage.Completed,
             transactionPinHash ?? string.Empty,
             notifyLoginAlerts,
             notifyReleaseAlerts,

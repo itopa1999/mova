@@ -120,5 +120,12 @@ public static class CacheKeys
     public const string CircleRoundsPrefixGlobal = "circle_rounds:";
 
 
+    public static string CurrentLegalDocuments(string? type = null) =>
+        string.IsNullOrWhiteSpace(type)
+            ? "legal:current:all"
+            : $"legal:current:{Norm(type)}";
+
+    public const string LegalDocumentsPrefix = "legal:";
+
     private static string Norm(string s) => s.Trim().ToLowerInvariant();
 }

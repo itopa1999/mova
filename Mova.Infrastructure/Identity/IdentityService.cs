@@ -50,6 +50,7 @@ public sealed class IdentityService : IIdentityService
             ProfilePicture = DefaultProfilePictures.PickRandom(),
             Balance = Money.FromNaira(0),
             AccountStatus = UserAccountStatus.Active,
+            OnboardingStage = OnboardingStage.Register
         };
 
         user.BvnHash = _passwordHasher.HashPassword(user, BVN);
@@ -212,6 +213,7 @@ public sealed class IdentityService : IIdentityService
                 x.PhoneNumber,
                 x.ProfilePicture,
                 x.Balance,
+                x.OnboardingStage,
                 x.TransactionPinHash ?? string.Empty,
                 x.NotifyLoginAlerts,
                 x.NotifyReleaseAlerts,
@@ -322,14 +324,8 @@ public sealed class IdentityService : IIdentityService
 
         existingUser.EmailConfirmed = true;
         existingUser.PhoneNumberConfirmed = true;
-
-        var result = await _userManager.UpdateAsync(existingUser);
-
-        if (!result.Succeeded)
-        {
-            return (false, string.Join(", ", result.Errors.Select(x => x.Description)));
-        }
-
+        existingUser.OnboardingStage = OnboardingStage.Verify;
+        
         return (true, string.Empty);
     }
 
@@ -571,6 +567,35 @@ public sealed class IdentityService : IIdentityService
         await _userManager.ResetAccessFailedCountAsync(user);
 
         await _userManager.SetLockoutEndDateAsync(user, null);
+    }
+
+    public async Task<(bool Success, string Message)> UpdateOnboardingStageAsync(
+        string userPublicId,
+        OnboardingStage newStage,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.IsNullOrWhiteSpace(userPublicId))
+            return (false, "UserPublicId is required.");
+
+        var user = await _context.Users
+            .FirstOrDefaultAsync(x => x.PublicId == userPublicId, cancellationToken);
+
+        if (user is null)
+            return (false, "User not found.");
+
+        if (newStage <= user.OnboardingStage)
+        {
+            return (false,
+                $"Cannot move onboarding stage from {user.OnboardingStage} to {newStage}. " +
+                "Stage must always advance forward.");
+        }
+
+        var previousStage = user.OnboardingStage;
+        user.OnboardingStage = newStage;
+
+        return (true, string.Empty);
     }
 
 

@@ -42,7 +42,9 @@ public sealed class VerifyAccountCommand
         public string? AccessToken { get; set; }
         public string? RefreshToken { get; set; }
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
-        public string NextStep { get; set; } = string.Empty;
+        public string CurrentStage { get; set; } = string.Empty;
+        public int CurrentStageValue { get; set; }
+        public string NextStage { get; set; } = string.Empty;
         public VirtualAccountDto? VirtualAccount { get; set; }
     }
 
@@ -170,7 +172,7 @@ public sealed class VerifyAccountCommand
             }
 
             var (markSuccess, markError) = await _identityService
-                .MarkEmailAndPhoneAsVerifiedAsync(user.Id);
+                .MarkEmailAndPhoneAsVerifiedAsync(user.Id, cancellationToken);
 
             if (!markSuccess)
             {
@@ -203,7 +205,7 @@ public sealed class VerifyAccountCommand
                 virtualAccount = existingVirtualAccount;
             }
 
-            var roles = await _identityService.GetRolesAsync(user.Id);
+            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
 
             var accessToken = _jwtTokenGenerator.GenerateToken(
                 user.Id,
@@ -227,7 +229,8 @@ public sealed class VerifyAccountCommand
 
             op.Success(
                 $"Account verified for user {userPublicId}. " +
-                $"Virtual account: {virtualAccount.AccountNumber} ({virtualAccount.BankName}).");
+                $"Virtual account: {virtualAccount.AccountNumber} ({virtualAccount.BankName}). " +
+                $"Onboarding stage: {OnboardingStage.Verify}. Next: {OnboardingStage.Pin}.");
 
             _notificationQueue.QueueWelcomeEmail(userFirstName, userEmail);
 
@@ -247,7 +250,9 @@ public sealed class VerifyAccountCommand
                     AccessToken = accessToken,
                     RefreshToken = refreshTokenValue,
                     AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
-                    NextStep = NextSteps.CreateTransactionPin,
+                    CurrentStage = OnboardingStage.Verify.ToString(),
+                    CurrentStageValue = (int)OnboardingStage.Verify,
+                    NextStage = OnboardingStage.Pin.ToString(),
                     VirtualAccount = new VirtualAccountDto
                     {
                         AccountNumber = virtualAccount.AccountNumber,

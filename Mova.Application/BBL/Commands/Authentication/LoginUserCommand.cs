@@ -44,6 +44,11 @@ public sealed class LoginUserCommand
         public string? AccessToken { get; set; }
         public string? RefreshToken { get; set; }
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
+
+        public bool IsOnboardingComplete { get; set; }
+        public string OnboardingStage { get; set; } = string.Empty;
+        public int OnboardingStageValue { get; set; }
+        public string NextStage { get; set; } = string.Empty;
     }
 
     public class LoginBlockedDto
@@ -178,9 +183,7 @@ public sealed class LoginUserCommand
                     "Please verify your account before logging in.");
             }
 
-            var passwordIsValid = await _identityService.CheckPasswordAsync(
-                user.Id,
-                request.Password);
+            var passwordIsValid = await _identityService.CheckPasswordAsync(user.Id, request.Password, cancellationToken);
 
             if (!passwordIsValid)
             {
@@ -212,7 +215,7 @@ public sealed class LoginUserCommand
 
             await _identityService.ResetFailedAccessAsync(user.Id, cancellationToken);
 
-            var roles = await _identityService.GetRolesAsync(user.Id);
+            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
 
             var accessToken = _jwtTokenGenerator.GenerateToken(
                 user.Id,
@@ -246,9 +249,12 @@ public sealed class LoginUserCommand
                 hasPreviousDevice &&
                 previousDeviceId != incomingDeviceId;
 
+            var onboarding = ResolveOnboarding(user.OnboardingStage);
+
             op.Success(
                 $"User {user.PublicId} logged in " +
-                $"(Identifier: {request.Identifier}, NewDevice: {isNewDevice}).");
+                $"(Identifier: {request.Identifier}, NewDevice: {isNewDevice}, " +
+                $"Stage: {onboarding.Stage}, OnboardingComplete: {onboarding.IsComplete}).");
 
             if (isNewDevice && user.NotifyLoginAlerts)
             {
@@ -285,11 +291,34 @@ public sealed class LoginUserCommand
                         AccessToken = accessToken,
                         RefreshToken = refreshToken,
                         AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
+                        IsOnboardingComplete = onboarding.IsComplete,
+                        OnboardingStage = onboarding.Stage,
+                        OnboardingStageValue = onboarding.StageValue,
+                        NextStage = onboarding.NextStage,
                     },
                 });
         }
 
-        // ─── Blocked-login DTO builder ────────────────────────
+        private static (bool IsComplete, string Stage, int StageValue, string NextStage) ResolveOnboarding(
+            OnboardingStage stage)
+        {
+            var next = stage switch
+            {
+                OnboardingStage.Register => OnboardingStage.Verify,
+                OnboardingStage.Verify => OnboardingStage.Pin,
+                OnboardingStage.Pin => OnboardingStage.Agreement,
+                OnboardingStage.Agreement => OnboardingStage.Privacy,
+                OnboardingStage.Privacy => OnboardingStage.Terms,
+                OnboardingStage.Terms => OnboardingStage.Completed,
+                _ => OnboardingStage.Completed,
+            };
+
+            return (
+                stage == OnboardingStage.Completed,
+                stage.ToString(),
+                (int)stage,
+                next.ToString());
+        }
 
         private static LoginBlockedDto BuildBlockedDto(
             string userPublicId,
@@ -300,9 +329,6 @@ public sealed class LoginUserCommand
                 UserPublicId = userPublicId,
                 AccountStatus = permissions.AccountStatus.ToString(),
 
-                // Lockout is a different axis than account status. Never
-                // inherit "Active / fully operational" — the FE would render
-                // a success-looking screen on a blocked login.
                 StatusLabel = lockoutEndsAt.HasValue
                     ? "Temporarily Locked"
                     : permissions.StatusLabel,
@@ -343,8 +369,6 @@ public sealed class LoginUserCommand
             return $"Too many failed login attempts. Your account is locked. " +
                    $"Please try again in {timeText}.";
         }
-
-        // ─── Alerts ──────────────────────────────────────────
 
         private void SendNewDeviceAlert(
             string userPublicId,

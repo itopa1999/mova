@@ -40,6 +40,7 @@ public sealed class WithdrawalCommandTests : BaseTestWithPinChallenge
                 "08031234567",
                 null,
                 Money.FromNaira(0m),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

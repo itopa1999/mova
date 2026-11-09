@@ -7,6 +7,7 @@ using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
@@ -54,7 +55,9 @@ public sealed class RegisterCommand
         public string Phone { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Data { get; set; } = string.Empty;
-        public string NextStep { get; set; } = string.Empty;
+        public string CurrentStage { get; set; } = string.Empty;
+        public int CurrentStageValue { get; set; }
+        public string NextStage { get; set; } = string.Empty;
     }
 
     public class Handler : IRequestHandler<Command, BaseResult<RegistrationResponseDto>>
@@ -151,7 +154,9 @@ public sealed class RegisterCommand
                     normalizedEmail,
                     normalizedPhoneNumber,
                     request.Bvn,
-                    request.Password);
+                    request.Password,
+                    cancellationToken: cancellationToken
+                    );
 
             if (!success)
             {
@@ -163,7 +168,8 @@ public sealed class RegisterCommand
 
             var (roleSuccess, roleError) = await _identityService.AddToRoleAsync(
                 userId,
-                Roles.Customer);
+                Roles.Customer,
+                cancellationToken);
 
             if (!roleSuccess)
             {
@@ -189,7 +195,7 @@ public sealed class RegisterCommand
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
 
-            op.Success($"User {createdPublicId} registered successfully.");
+            op.Success($"User {createdPublicId} registered successfully. Stage: {OnboardingStage.Register}.");
 
             _notificationQueue.QueueOtpDelivery(
                 firstName,
@@ -208,7 +214,9 @@ public sealed class RegisterCommand
                     Phone = normalizedPhoneNumber,
                     FullName = $"{firstName} {lastName}",
                     Data = "Account created. Please verify your email/phone with the OTP sent.",
-                    NextStep = NextSteps.EmailVerification,
+                    CurrentStage = OnboardingStage.Register.ToString(),
+                    CurrentStageValue = (int)OnboardingStage.Register,
+                    NextStage = OnboardingStage.Verify.ToString(),
                 });
         }
     }

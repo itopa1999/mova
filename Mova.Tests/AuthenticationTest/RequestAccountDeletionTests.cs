@@ -120,6 +120,7 @@ public sealed class RequestAccountDeletionTests : BaseTestWithPinChallenge
             "08000000000",
             null,
             Money.FromNaira(mainBalanceNaira),
+            OnboardingStage.Completed,
             string.Empty,
             true,
             true,

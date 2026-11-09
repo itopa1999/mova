@@ -60,6 +60,7 @@ public sealed class HomeQueryTests : BaseTest
                 "08050000000",           // PhoneNumber
                 null,                    // ProfilePicture
                 Money.FromNaira(balanceNaira),
+                OnboardingStage.Completed,
                 string.Empty,            // TransactionPinHash
                 true,                    // NotifyLoginAlerts
                 true,                    // NotifyReleaseAlerts

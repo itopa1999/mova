@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Queries.Admin;
 using Mova.Application.Interfaces.Identity;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
@@ -36,6 +37,7 @@ public sealed class GetUserRolesQueryTests
             "+2348000000000",
             "https://example.com/avatar.png",
             Money.FromNaira(0),
+            OnboardingStage.Completed,
             string.Empty,
             true,
             true,

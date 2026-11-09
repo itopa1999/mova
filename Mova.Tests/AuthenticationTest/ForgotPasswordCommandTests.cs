@@ -62,6 +62,7 @@ public sealed class ForgotPasswordCommandTests : BaseTest
                 phone,
                 null,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

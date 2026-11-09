@@ -145,6 +145,7 @@ public sealed class LoginUserCommandTests : BaseTest
                 phone,
                 profilePicture,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

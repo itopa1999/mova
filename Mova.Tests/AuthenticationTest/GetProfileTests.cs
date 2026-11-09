@@ -67,6 +67,7 @@ public sealed class GetProfileTests : BaseTest
                 phone ?? UserPhone,
                 profilePicture,
                 Money.FromNaira(balanceNaira),
+                OnboardingStage.Completed,
                 transactionPinHash ?? string.Empty,
                 notifyLoginAlerts,
                 notifyReleaseAlerts,

@@ -47,6 +47,8 @@ public class ApplicationDbContext
     public DbSet<CircleMember> CircleMembers => Set<CircleMember>();
     public DbSet<CircleRound> CircleRounds => Set<CircleRound>();
     public DbSet<Contribution> Contributions => Set<Contribution>();
+    public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
+    public DbSet<UserConsent> UserConsents => Set<UserConsent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
