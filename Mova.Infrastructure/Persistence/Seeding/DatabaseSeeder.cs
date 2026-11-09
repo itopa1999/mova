@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Payment;
+using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Identity;
@@ -40,6 +41,7 @@ public sealed class DatabaseSeeder
     {
         await SeedWalletCategoriesAsync(cancellationToken);
         await SeedFeatureFlagsAsync(cancellationToken);
+        await SeedLegalDocumentsAsync(cancellationToken);
         await SeedWalletTemplatesAsync(cancellationToken);
         await SeedAdminUserAsync(cancellationToken);
         await SeedBanksIfMissingAsync(cancellationToken);
@@ -135,6 +137,60 @@ public sealed class DatabaseSeeder
         await _cache.DeletePrefixAsync(CacheKeys.FeatureFlagsPrefix, cancellationToken);
 
         op.Success($"Seeded {flagsToAdd.Count} feature flag(s).");
+    }
+
+    private async Task SeedLegalDocumentsAsync(CancellationToken cancellationToken)
+    {
+        using var op = OperationLogger.Start(_logger, "SeedLegalDocuments");
+
+        var nextYear = DateTimeOffset.UtcNow.Year + 1;
+        var version = $"{nextYear}-v1";
+
+        var defaults = new[]
+        {
+            (Type: LegalDocumentType.Agreement, Title: "User Agreement"),
+            (Type: LegalDocumentType.Privacy,   Title: "Privacy Policy"),
+            (Type: LegalDocumentType.Terms,     Title: "Terms of Service"),
+        };
+
+        var existingCurrentTypes = (await _dbContext.LegalDocuments
+            .Where(d => d.IsCurrent)
+            .Select(d => d.Type)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        var toAdd = new List<LegalDocument>();
+
+        foreach (var (type, title) in defaults)
+        {
+            if (existingCurrentTypes.Contains(type))
+                continue;
+
+            toAdd.Add(new LegalDocument
+            {
+                Type = type,
+                Version = version,
+                Title = title,
+                Content = string.Empty,
+                PublishedAt = DateTimeOffset.UtcNow,
+                IsCurrent = true,
+            });
+        }
+
+        if (toAdd.Count == 0)
+        {
+            op.Success("Legal documents already seeded — nothing to do.");
+            return;
+        }
+
+        await _dbContext.LegalDocuments.AddRangeAsync(toAdd, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _cache.DeletePrefixAsync(CacheKeys.LegalDocumentsPrefix, cancellationToken);
+
+        op.Success(
+            $"Seeded {toAdd.Count} legal document(s) with version {version}. " +
+            "Content is empty — publish real text via the admin endpoint when ready.");
     }
 
     private async Task SeedWalletTemplatesAsync(CancellationToken cancellationToken)
@@ -320,7 +376,6 @@ public sealed class DatabaseSeeder
         }
         catch (HttpRequestException ex)
         {
-            // Local dev with no internet, or provider is down.
             _logger.LogWarning(ex, "Bank refresh could not reach the provider.");
             op.Warning(
                 "Bank refresh could not reach the payment provider. " +
@@ -329,7 +384,6 @@ public sealed class DatabaseSeeder
         }
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // HttpClient timeout — treat the same as a network failure.
             _logger.LogWarning(ex, "Bank refresh timed out.");
             op.Warning(
                 "Bank refresh timed out. " +

@@ -77,6 +77,7 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
                 phone,
                 null,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

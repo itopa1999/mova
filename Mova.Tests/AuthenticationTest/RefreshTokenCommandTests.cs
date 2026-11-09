@@ -5,6 +5,7 @@ using Mova.Application.BBL.Commands.Authentication;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 using Xunit;
@@ -111,6 +112,7 @@ public sealed class RefreshTokenCommandTests : BaseTest
                 phone,
                 profilePicture,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

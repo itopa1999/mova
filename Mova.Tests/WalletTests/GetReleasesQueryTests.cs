@@ -59,6 +59,7 @@ public sealed class GetReleasesQueryTests : BaseTest
                 "08050000000",
                 null,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 true,
                 true,

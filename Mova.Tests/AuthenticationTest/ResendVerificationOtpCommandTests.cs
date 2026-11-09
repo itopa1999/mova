@@ -6,6 +6,7 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
+using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Constants;
 namespace Mova.Tests.AuthenticationTest;
@@ -63,6 +64,7 @@ public sealed class ResendVerificationOtpCommandTests : BaseTest
                 phone,
                 null,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

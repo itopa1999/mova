@@ -85,7 +85,7 @@
              .Setup(x => x.GetByIdentifierAsync(OwnerPublicId, It.IsAny<CancellationToken>()))
              .ReturnsAsync(new UserIdentityDto(
                  1, OwnerPublicId, OwnerFirstName, null, "Starboy", 
-                 email, "080", null, Money.FromNaira(0), "", 
+                 email, "080", null, Money.FromNaira(0), OnboardingStage.Completed, "", 
                  true, true, true, false, "", DateTimeOffset.UtcNow));
      }
 

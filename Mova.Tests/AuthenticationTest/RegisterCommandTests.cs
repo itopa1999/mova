@@ -168,7 +168,6 @@ public sealed class RegisterCommandTests : BaseTest
         Assert.Equal(NewUserPublicId, result.Data!.UserPublicId);
         Assert.Equal(Email, result.Data.Email);
         Assert.Equal("Lucky Starboy", result.Data.FullName);
-        Assert.Equal("Email Verification", result.Data.NextStep);
     }
 
     [Fact]

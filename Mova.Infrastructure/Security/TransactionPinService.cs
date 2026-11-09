@@ -43,6 +43,7 @@ public class TransactionPinService : ITransactionPinService
     public async Task SetPinAsync(
         string UserPublicId,
         string pin,
+        bool isOnboarding,
         CancellationToken cancellationToken = default)
     {
         ValidatePin(pin);
@@ -50,12 +51,7 @@ public class TransactionPinService : ITransactionPinService
         var user = await _context.Users
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
-                cancellationToken);
-
-        if (user is null)
-        {
-            throw new KeyNotFoundException("User not found.");
-        }
+                cancellationToken) ?? throw new KeyNotFoundException("User not found.");
 
         if (!string.IsNullOrWhiteSpace(user.TransactionPinHash))
         {
@@ -66,6 +62,11 @@ public class TransactionPinService : ITransactionPinService
         user.TransactionPinHash =
             _passwordHasher.HashPassword(user, pin);
         user.TransactionPinSetAt = DateTimeOffset.UtcNow;
+
+        if (isOnboarding && user.OnboardingStage < OnboardingStage.Pin)
+        {
+            user.OnboardingStage = OnboardingStage.Pin;
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
 

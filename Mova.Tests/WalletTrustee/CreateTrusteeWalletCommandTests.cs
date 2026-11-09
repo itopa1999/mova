@@ -126,6 +126,7 @@
                  "08050000000",
                  null,
                  Money.FromNaira(balance),
+                 OnboardingStage.Completed,
                  string.Empty,
                  true,
                  true,

@@ -28,6 +28,7 @@ public sealed class SetPinCommandTests : BaseTest
             _pinService.Object,
             _identityService.Object,
             _notifications.Object,
+            UnitOfWork,
             Mock.Of<ILogger<SetPinCommand.Handler>>());
     }
 
@@ -48,7 +49,8 @@ public sealed class SetPinCommandTests : BaseTest
 
     private void SetupUserExists(
         long userId = UserId,
-        string publicId = UserPublicId)
+        string publicId = UserPublicId,
+        OnboardingStage stage = OnboardingStage.Verify)
     {
         _identityService
             .Setup(x => x.GetByIdentifierAsync(
@@ -64,13 +66,15 @@ public sealed class SetPinCommandTests : BaseTest
                 "08050000000",
                 null,
                 Money.FromNaira(0),
+                stage,
                 string.Empty,
                 false,
                 false,
                 false,
                 false,
                 string.Empty,
-                DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow
+                ));
     }
 
     private void SetupUserNotFound()
@@ -97,6 +101,7 @@ public sealed class SetPinCommandTests : BaseTest
             .Setup(x => x.SetPinAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
     }
@@ -107,6 +112,7 @@ public sealed class SetPinCommandTests : BaseTest
             .Setup(x => x.SetPinAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(exception);
     }
@@ -204,18 +210,19 @@ public sealed class SetPinCommandTests : BaseTest
             x => x.SetPinAsync(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     // ---------------------------------------------------------
-    // 4. Happy path
+    // 4. Happy path — onboarding
     // ---------------------------------------------------------
 
     [Fact]
     public async Task Handle_WithValidRequest_ReturnsSuccess()
     {
-        SetupUserExists();
+        SetupUserExists(stage: OnboardingStage.Verify);
         SetupHasPin(hasPin: false);
         SetupSetPinSucceeds();
 
@@ -228,9 +235,28 @@ public sealed class SetPinCommandTests : BaseTest
     }
 
     [Fact]
-    public async Task Handle_WithValidRequest_CallsSetPinOnce()
+    public async Task Handle_WithValidRequest_ReturnsStageMetadata()
     {
-        SetupUserExists();
+        SetupUserExists(stage: OnboardingStage.Verify);
+        SetupHasPin(hasPin: false);
+        SetupSetPinSucceeds();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.True(result.IsSuccess);
+        var data = result.Data!;
+        Assert.True(data.IsOnboarding);
+        Assert.True(data.Notification);
+        Assert.Equal(OnboardingStage.Pin.ToString(), data.CurrentStage);
+        Assert.Equal((int)OnboardingStage.Pin, data.CurrentStageValue);
+        Assert.Equal(OnboardingStage.Agreement.ToString(), data.NextStage);
+    }
+
+    [Fact]
+    public async Task Handle_WithValidRequest_CallsSetPinOnce_AsOnboarding()
+    {
+        SetupUserExists(stage: OnboardingStage.Verify);
         SetupHasPin(hasPin: false);
         SetupSetPinSucceeds();
 
@@ -241,6 +267,7 @@ public sealed class SetPinCommandTests : BaseTest
             x => x.SetPinAsync(
                 UserPublicId,
                 Pin,
+                true,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -248,7 +275,7 @@ public sealed class SetPinCommandTests : BaseTest
     [Fact]
     public async Task Handle_WithValidRequest_ChecksHasPin()
     {
-        SetupUserExists();
+        SetupUserExists(stage: OnboardingStage.Verify);
         SetupHasPin(hasPin: false);
         SetupSetPinSucceeds();
 
@@ -262,6 +289,40 @@ public sealed class SetPinCommandTests : BaseTest
             Times.Once);
     }
 
+    // ---------------------------------------------------------
+    // 5. Onboarding detection
+    // ---------------------------------------------------------
+
+    [Theory]
+    [InlineData(OnboardingStage.Register, true)]
+    [InlineData(OnboardingStage.Verify, true)]
+    [InlineData(OnboardingStage.Pin, false)]
+    [InlineData(OnboardingStage.Agreement, false)]
+    [InlineData(OnboardingStage.Privacy, false)]
+    [InlineData(OnboardingStage.Terms, false)]
+    [InlineData(OnboardingStage.Completed, false)]
+    public async Task Handle_PassesCorrectIsOnboardingFlag(
+        OnboardingStage stage,
+        bool expectedIsOnboarding)
+    {
+        SetupUserExists(stage: stage);
+        SetupHasPin(hasPin: false);
+        SetupSetPinSucceeds();
+
+        var handler = CreateHandler();
+        var result = await handler.Handle(CreateCommand(), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(expectedIsOnboarding, result.Data!.IsOnboarding);
+
+        _pinService.Verify(
+            x => x.SetPinAsync(
+                UserPublicId,
+                Pin,
+                expectedIsOnboarding,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
 
     // ---------------------------------------------------------
     // 6. Notifications
@@ -270,7 +331,7 @@ public sealed class SetPinCommandTests : BaseTest
     [Fact]
     public async Task Handle_WithValidRequest_QueuesInAppNotification()
     {
-        SetupUserExists();
+        SetupUserExists(stage: OnboardingStage.Verify);
         SetupHasPin(hasPin: false);
         SetupSetPinSucceeds();
 
@@ -287,5 +348,29 @@ public sealed class SetPinCommandTests : BaseTest
                 null,
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPinServiceThrows_PropagatesAndDoesNotNotify()
+    {
+        SetupUserExists(stage: OnboardingStage.Verify);
+        SetupHasPin(hasPin: false);
+        SetupSetPinThrows(new InvalidOperationException("boom"));
+
+        var handler = CreateHandler();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.Handle(CreateCommand(), default));
+
+        _notifications.Verify(
+            x => x.InAppNotificationAsync(
+                It.IsAny<string>(),
+                It.IsAny<NotificationType>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

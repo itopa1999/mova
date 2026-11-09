@@ -74,6 +74,7 @@ public sealed class ChangePinCommandTests : BaseTest
                 "08050000000",
                 null,
                 Money.FromNaira(0),
+                OnboardingStage.Completed,
                 string.Empty,
                 false,
                 false,

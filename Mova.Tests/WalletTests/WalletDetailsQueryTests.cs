@@ -50,7 +50,7 @@ public sealed class WalletDetailsQueryTests : BaseTest
             .ReturnsAsync(new UserIdentityDto(
                 UserId, publicId, "Lucky", null, "Starboy",
                 "user@mova.app", "08050000000", null,
-                Money.FromNaira(0), string.Empty,
+                Money.FromNaira(0), OnboardingStage.Completed, string.Empty,
                 true, true, true, false,
                 string.Empty, DateTimeOffset.UtcNow));
     }

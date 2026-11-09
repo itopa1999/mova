@@ -324,6 +324,7 @@ public sealed class WalletQueryOwnershipTests : BaseTest
             "08050000001",
             null,
             Money.FromNaira(0m),
+            OnboardingStage.Completed,
             string.Empty,
             false,
             false,

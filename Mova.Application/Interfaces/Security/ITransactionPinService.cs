@@ -10,6 +10,7 @@ public interface ITransactionPinService
     Task SetPinAsync(
         string UserPublicId,
         string pin,
+        bool isOnboarding,
         CancellationToken cancellationToken = default);
 
     Task<bool> VerifyPinAsync(

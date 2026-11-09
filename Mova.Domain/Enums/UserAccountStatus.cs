@@ -34,3 +34,14 @@ public enum UserAction
     ReceivePayout = 4,
     BalanceTopUp = 5,
 }
+
+public enum OnboardingStage
+{
+    Register = 1,
+    Verify = 2,
+    Pin = 3,
+    Agreement = 4,
+    Privacy = 5,
+    Terms = 6,
+    Completed = 7
+}
