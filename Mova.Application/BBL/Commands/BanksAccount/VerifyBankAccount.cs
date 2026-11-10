@@ -132,17 +132,32 @@ public sealed class VerifyBankAccount
                     "Invalid bank selected.");
             }
 
-            var account = await _paystackService.ResolveBankAccountAsync(
-                accountNumber,
-                bankCode,
-                cancellationToken);
-
-            if (account is null)
+            ResolveBankAccountResult account;
+            try
             {
-                op.Warning($"Provider could not resolve account: {accountNumber} at {bankCode}.");
+                account = await _paystackService.ResolveBankAccountAsync(
+                    accountNumber,
+                    bankCode,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                op.Error($"Paystack resolve threw for {accountNumber} at {bankCode}: {ex.Message}");
+                return new BaseResult<VerifyBankAccountDto>(
+                    HttpStatusCode.BadGateway,
+                    "Unable to verify bank account. Please try again.");
+            }
+
+            if (account is null ||
+                !account.CallSucceeded ||
+                string.IsNullOrWhiteSpace(account.AccountName) ||
+                string.IsNullOrWhiteSpace(account.AccountNumber))
+            {
+                op.Warning(
+                    $"Provider could not resolve account: {accountNumber} at {bankCode}. Reason: {account?.Message ?? "unknown"}");
                 return new BaseResult<VerifyBankAccountDto>(
                     HttpStatusCode.BadRequest,
-                    "Unable to verify bank account.");
+                    "Unable to verify bank account. Please check the account details.");
             }
 
             op.Success(

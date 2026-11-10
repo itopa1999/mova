@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
@@ -7,6 +8,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Identity.Extensions;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Identity;
 
@@ -15,15 +17,19 @@ public sealed class IdentityService : IIdentityService
     private readonly UserManager<User> _userManager;
     private readonly ApplicationDbContext _context;
     private readonly SensitiveIdentifierHasher _hasher;
+    private readonly ICacheService _cacheService;
+    private static readonly TimeSpan UserIdentityCacheDuration = TimeSpan.FromMinutes(5);
 
     public IdentityService(
         UserManager<User> userManager,
         ApplicationDbContext context,
-        SensitiveIdentifierHasher hasher)
+        SensitiveIdentifierHasher hasher,
+        ICacheService cacheService)
     {
         _userManager = userManager;
         _context = context;
         _hasher = hasher;
+        _cacheService = cacheService;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -199,28 +205,41 @@ public sealed class IdentityService : IIdentityService
         long userId,
         CancellationToken cancellationToken)
     {
+        var cacheKey = CacheKeys.UserIdentity(userId);
+
+        return await _cacheService.GetOrSetAsync<UserIdentityDto>(
+        cacheKey,
+        async ct => await GetByIdFromDbAsync(userId, ct),
+        timeout: UserIdentityCacheDuration,
+        cancellationToken: cancellationToken);
+
+    }
+    private async Task<UserIdentityDto?> GetByIdFromDbAsync(
+        long userId,
+        CancellationToken cancellationToken)
+    {
         return await _context.Users
-            .AsNoTracking()
-            .Where(x => x.Id == userId)
-            .Select(x => new UserIdentityDto(
-                x.Id,
-                x.PublicId,
-                x.FirstName,
-                x.OtherNames,
-                x.LastName,
-                x.Email,
-                x.PhoneNumber,
-                x.ProfilePicture,
-                x.Balance,
-                x.OnboardingStage,
-                x.TransactionPinHash ?? string.Empty,
-                x.NotifyLoginAlerts,
-                x.NotifyReleaseAlerts,
-                x.NotifyProductUpdates,
-                x.NotifyPromotions,
-                x.LastKnownDeviceId ?? string.Empty,
-                x.CreatedAt ?? DateTimeOffset.UtcNow))
-            .FirstOrDefaultAsync(cancellationToken);
+        .AsNoTracking()
+        .Where(x => x.Id == userId)
+        .Select(x => new UserIdentityDto(
+            x.Id,
+            x.PublicId,
+            x.FirstName,
+            x.OtherNames,
+            x.LastName,
+            x.Email,
+            x.PhoneNumber,
+            x.ProfilePicture,
+            x.Balance,
+            x.OnboardingStage,
+            x.TransactionPinHash ?? string.Empty,
+            x.NotifyLoginAlerts,
+            x.NotifyReleaseAlerts,
+            x.NotifyProductUpdates,
+            x.NotifyPromotions,
+            x.LastKnownDeviceId ?? string.Empty,
+            x.CreatedAt ?? DateTimeOffset.UtcNow))
+        .FirstOrDefaultAsync(cancellationToken);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -325,6 +344,8 @@ public sealed class IdentityService : IIdentityService
         existingUser.EmailConfirmed = true;
         existingUser.PhoneNumberConfirmed = true;
         existingUser.OnboardingStage = OnboardingStage.Verify;
+
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(existingUser.Id), cancellationToken);
         
         return (true, string.Empty);
     }
@@ -404,7 +425,7 @@ public sealed class IdentityService : IIdentityService
 
         user.Balance = Money.FromNaira(user.Balance.ToDecimal() + amount);
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
 
         return true;
     }
@@ -425,7 +446,7 @@ public sealed class IdentityService : IIdentityService
 
         user.Balance = Money.FromNaira(user.Balance.ToDecimal() - amount);
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
 
         return true;
     }
@@ -479,6 +500,8 @@ public sealed class IdentityService : IIdentityService
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
+
         return true;
     }
 
@@ -515,6 +538,8 @@ public sealed class IdentityService : IIdentityService
 
         user.LastKnownDeviceId = deviceId;
         await _context.SaveChangesAsync(cancellationToken);
+
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
 
         return true;
     }
@@ -594,6 +619,8 @@ public sealed class IdentityService : IIdentityService
 
         var previousStage = user.OnboardingStage;
         user.OnboardingStage = newStage;
+
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
 
         return (true, string.Empty);
     }

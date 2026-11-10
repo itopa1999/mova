@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Mova.Domain.ValueObjects;
 
 public readonly record struct Money
@@ -8,6 +10,7 @@ public readonly record struct Money
 
     public string Currency { get; }
 
+    [JsonConstructor] 
     private Money(long minorUnits, string currency)
     {
         if (string.IsNullOrWhiteSpace(currency))

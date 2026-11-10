@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Behaviors;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Security;
 
@@ -15,17 +17,20 @@ public class TransactionPinService : ITransactionPinService
     private readonly ITransactionPinAttemptStore _pinAttemptStore;
     private readonly IPinChallenge _pinChallenge;
     private readonly SensitiveIdentifierHasher _hasher;
+    private readonly ICacheService _cacheService;
 
     public TransactionPinService(
         ApplicationDbContext context,
         ITransactionPinAttemptStore pinAttemptStore,
         IPinChallenge pinChallenge,
-        SensitiveIdentifierHasher hasher)
+        SensitiveIdentifierHasher hasher,
+        ICacheService cacheService)
     {
         _context = context;
         _pinAttemptStore = pinAttemptStore;
         _pinChallenge = pinChallenge;
         _hasher = hasher;
+        _cacheService = cacheService;
     }
 
     public async Task<bool> HasPinAsync(
@@ -69,6 +74,7 @@ public class TransactionPinService : ITransactionPinService
 
         await _context.SaveChangesAsync(cancellationToken);
 
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
         await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
     }
 
@@ -197,6 +203,7 @@ public class TransactionPinService : ITransactionPinService
         user.TransactionPinChangedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
 
         await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
     }
@@ -216,7 +223,7 @@ public class TransactionPinService : ITransactionPinService
         user.TransactionPinResetAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
-
+        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
         await _pinAttemptStore.ResetAsync(UserPublicId, cancellationToken);
 
         return true;
