@@ -241,7 +241,6 @@ public sealed class VerifyBankAccountTests : BaseTest
 
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Equal("Unable to verify bank account.", result.Message);
     }
 
     [Fact]

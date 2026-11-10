@@ -106,7 +106,8 @@ public sealed class PayContributionCommand
                 }
             }
 
-            // Debit User Wallet
+            await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
+
             bool paid = await _identityService.DebitBalanceAsync(member.UserPublicId!, totalAmountDue, cancellationToken);
 
             if (!paid)
@@ -170,6 +171,7 @@ public sealed class PayContributionCommand
             }, cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
 
             // Success Log
             op.Success($"User {request.UserPublicId} manually paid contribution for Circle {circle.Id}, Round {currentRound.RoundNumber}. Amount: {totalAmountDue}, Total Penalty Applied: {penaltyFromRound + penaltyFromDeposit}");

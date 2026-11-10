@@ -3,10 +3,10 @@ namespace Mova.Shared.Constants;
 public static class CacheKeys
 {
     // ── Profile ────────────────────────────────────────────────
-    public static string Profile(long userId) => $"profile:byid:{userId}";
-    public static string ProfileIndex(string identifier) =>
-        $"profile:idx:{Norm(identifier)}";
-    public const string ProfilePrefix = "profile:";
+    public static string UserIdentity(long userId) =>
+        $"user_identity:byid:{userId}";
+
+    public const string UserIdentityPrefix = "user_identity:";
 
 
     // ── Banks ──────────────────────────────────────────────────

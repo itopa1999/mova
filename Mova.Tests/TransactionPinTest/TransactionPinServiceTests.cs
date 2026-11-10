@@ -10,6 +10,7 @@ using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Security;
 using Mova.Shared.Constants;
 using Mova.Shared.Common;
+using Mova.Application.Interfaces.Caching;
 
 namespace Mova.Tests.TransactionPinTest;
 
@@ -26,6 +27,7 @@ public sealed class TransactionPinServiceTests : BaseTest
     private readonly string _hashedCorrectPin;
 
     private readonly Mock<IPinChallenge> _pinChallengeMock = new();
+    private readonly Mock<ICacheService> _cacheServiceMock = new();
 
     public TransactionPinServiceTests()
     {
@@ -45,7 +47,8 @@ public sealed class TransactionPinServiceTests : BaseTest
             Context,
             attemptStore,
             _pinChallengeMock.Object,
-            _hasher); // <-- Pass the real instance
+            _hasher,
+            _cacheServiceMock.Object); // <-- Pass the real instance
     }
 
     [Fact]
@@ -233,7 +236,8 @@ public sealed class TransactionPinServiceTests : BaseTest
             Context,
             attemptStore,
             _pinChallengeMock.Object,
-            _hasher);
+            _hasher,
+            _cacheServiceMock.Object);
 
         await Assert.ThrowsAsync<PinChallengePersistenceException>(
             () => service.VerifyPinWithStatusAsync(

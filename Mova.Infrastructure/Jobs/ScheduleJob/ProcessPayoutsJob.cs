@@ -328,48 +328,41 @@ public sealed class ProcessPayoutsJob
 
         await using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-        try
-        {
-            var credited = await _identityService.CreditBalanceAsync(
-                payout.UserPublicId,
-                payout.Amount.ToDecimal(),
-                cancellationToken);
 
-            if (!credited)
-            {
-                await tx.RollbackAsync(cancellationToken);
-                await MarkFailedAsync(payout, "Failed to credit main MOVA balance.", cancellationToken);
-                return;
-            }
+        var credited = await _identityService.CreditBalanceAsync(
+            payout.UserPublicId,
+            payout.Amount.ToDecimal(),
+            cancellationToken);
 
-            payout.MainCreditedAt = DateTimeOffset.UtcNow;
-            payout.Provider = "MainBalance";
-            payout.ProviderReference = $"main-credit:{payout.Id}";
-
-            if (payout.Wallet is not null)
-            {
-                payout.Wallet.TotalWithdrawnAmount = Money.FromMinorUnits(
-                    checked(payout.Wallet.TotalWithdrawnAmount.MinorUnits + payout.Amount.MinorUnits),
-                    payout.Wallet.TotalWithdrawnAmount.Currency);
-            }
-
-            if (payout.Status != PayoutStatus.Successful)
-            {
-                payout.Status = PayoutStatus.Successful;
-                payout.CompletedAt = DateTimeOffset.UtcNow;
-            }
-
-            await _context.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
-
-            op.Success("Release credited to main MOVA balance.");
-        }
-        catch (Exception ex)
+        if (!credited)
         {
             await tx.RollbackAsync(cancellationToken);
-            op.Error($"Error processing main payout {payout.Id}.", ex);
-            throw;
+            await MarkFailedAsync(payout, "Failed to credit main MOVA balance.", cancellationToken);
+            return;
         }
+
+        payout.MainCreditedAt = DateTimeOffset.UtcNow;
+        payout.Provider = "MainBalance";
+        payout.ProviderReference = $"main-credit:{payout.Id}";
+
+        if (payout.Wallet is not null)
+        {
+            payout.Wallet.TotalWithdrawnAmount = Money.FromMinorUnits(
+                checked(payout.Wallet.TotalWithdrawnAmount.MinorUnits + payout.Amount.MinorUnits),
+                payout.Wallet.TotalWithdrawnAmount.Currency);
+        }
+
+        if (payout.Status != PayoutStatus.Successful)
+        {
+            payout.Status = PayoutStatus.Successful;
+            payout.CompletedAt = DateTimeOffset.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
+        op.Success("Release credited to main MOVA balance.");
+        
     }
 
     // ─── UTILITIES ─────────────────────────────────────────────

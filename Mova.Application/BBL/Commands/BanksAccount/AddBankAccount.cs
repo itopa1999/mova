@@ -54,6 +54,8 @@ public sealed class AddBankAccount
     public sealed class Handler
         : IRequestHandler<Command, BaseResult<AddBankAccountDto>>
     {
+        private const int MaxBankAccountsPerUser = 10;
+
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPaystackService _paystackService;
         private readonly INotificationQueue _notificationQueue;
@@ -184,7 +186,6 @@ public sealed class AddBankAccount
                     "Invalid bank.");
             }
 
-            // 1. Look for ANY account (including soft-deleted ones)
             var existingAccount = await _unitOfWork.Query<BankAccount>()
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(
@@ -192,13 +193,29 @@ public sealed class AddBankAccount
                          && x.AccountNumber == accountNumber,
                     cancellationToken);
 
-            // If it exists and is NOT deleted, block it
             if (existingAccount is not null && !existingAccount.IsDeleted)
             {
                 op.Warning($"Bank account already exists: {accountNumber}");
                 return new BaseResult<AddBankAccountDto>(
                     HttpStatusCode.Conflict,
                     "This bank account has already been added.");
+            }
+
+            var activeBankAccountCount = await _unitOfWork.Query<BankAccount>()
+                .CountAsync(
+                    x => x.UserPublicId == request.UserPublicId
+                         && !x.IsDeleted
+                         && x.Status == BankAccountStatus.Active,
+                    cancellationToken);
+
+            if (activeBankAccountCount >= MaxBankAccountsPerUser)
+            {
+                op.Warning(
+                    $"Bank account limit reached for user {request.UserPublicId}. " +
+                    $"Current active count: {activeBankAccountCount}, limit: {MaxBankAccountsPerUser}.");
+                return new BaseResult<AddBankAccountDto>(
+                    HttpStatusCode.BadRequest,
+                    $"You can only have up to {MaxBankAccountsPerUser} linked bank accounts. Please remove one before adding another.");
             }
 
             var verifiedAccount = await _paystackService.ResolveBankAccountAsync(
@@ -223,10 +240,8 @@ public sealed class AddBankAccount
 
             BankAccount bankAccount;
 
-            // 2. If it exists but IS deleted, reactivate it
             if (existingAccount is not null && existingAccount.IsDeleted)
             {
-
                 existingAccount.IsDeleted = false;
                 existingAccount.DeletedAt = null;
                 existingAccount.DeletedBy = null;
