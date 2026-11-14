@@ -49,6 +49,7 @@ public class ApplicationDbContext
     public DbSet<Contribution> Contributions => Set<Contribution>();
     public DbSet<LegalDocument> LegalDocuments => Set<LegalDocument>();
     public DbSet<UserConsent> UserConsents => Set<UserConsent>();
+    public DbSet<RequestProfileChange> RequestProfileChanges => Set<RequestProfileChange>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

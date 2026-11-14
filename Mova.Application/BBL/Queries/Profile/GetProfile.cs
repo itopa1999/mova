@@ -1,10 +1,13 @@
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Persistence;
+using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Queries.Profile;
 
 public sealed class GetProfile
@@ -31,6 +34,8 @@ public sealed class GetProfile
         public NotificationPreferencesDto Notifications { get; set; } = new();
 
         public AccountStatusDto AccountStatus { get; set; } = new();
+
+        public PendingProfileChangeDto? PendingProfileChange { get; set; }
     }
 
     public sealed class NotificationPreferencesDto
@@ -53,13 +58,25 @@ public sealed class GetProfile
         public bool IsHealthy { get; set; }
     }
 
+    public sealed class PendingProfileChangeDto
+    {
+        public long Id { get; set; }
+        public string RequestReason { get; set; } = string.Empty;
+        public string? RequestComment { get; set; }
+        public string? RejectionReason { get; set; }
+        public DateTimeOffset? RejectedAt { get; set; }
+        public DateTimeOffset SubmittedAt { get; set; }
+    }
+
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetProfileDto>>
     {
         private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public Handler(IIdentityService identityService)
+        public Handler(IIdentityService identityService, IUnitOfWork unitOfWork)
         {
             _identityService = identityService;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<BaseResult<GetProfileDto>> Handle(
@@ -90,6 +107,21 @@ public sealed class GetProfile
                 request.UserPublicId,
                 cancellationToken);
 
+            var pendingChange = await _unitOfWork
+                .Query<RequestProfileChange>()
+                .Where(x => x.UserPublicId == user.PublicId && !x.IsApproved)
+                .OrderByDescending(x => x.CreatedAt)
+                .Select(x => new PendingProfileChangeDto
+                {
+                    Id = x.Id,
+                    RequestReason = x.RequestReason,
+                    RequestComment = x.RequestComment,
+                    RejectionReason = x.RejectionReason,
+                    RejectedAt = x.RejectedAt,
+                    SubmittedAt = x.CreatedAt,
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
             var profile = new GetProfileDto
             {
                 FirstName = user.FirstName ?? string.Empty,
@@ -112,6 +144,7 @@ public sealed class GetProfile
                 },
 
                 AccountStatus = BuildAccountStatus(permissions),
+                PendingProfileChange = pendingChange,
             };
 
             return new BaseResult<GetProfileDto>(

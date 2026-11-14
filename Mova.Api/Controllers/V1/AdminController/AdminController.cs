@@ -2,30 +2,41 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Security.Claims;
 using MediatR;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.Admin;
 using Mova.Application.BBL.Queries.Admin;
-using Mova.Shared.Common;
-using Mova.Shared.Constants;
 using static Mova.Application.BBL.Commands.Admin.CreateVirtualAccountForUserCommand;
 using static Mova.Application.BBL.Commands.Admin.ToggleFeatureFlag;
 using static Mova.Application.BBL.Queries.Admin.GetFeatureFlags;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
-namespace Mova.Api.Controllers.V1;
+using Mova.Application.BBL.Queries.Admin.User;
+using static Mova.Application.BBL.Queries.Admin.User.GetUsers;
+namespace Mova.Api.Controllers.V1.AdminController;
 
 [ApiController]
-[Authorize(Roles = Roles.AllAdmins)]
+// [Authorize(Roles = Roles.AllAdmins)]
 [Route("api/v{version:apiVersion}/admin")]
 [ApiVersion("1.0")]
 public class AdminController(
     IMediator mediator) : BaseController
 {
     private readonly IMediator _mediator = mediator;
+
+    [HttpGet("users")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<BasePaginationResponse<UserListItemDto>>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUsers(
+        [FromQuery] GetUsers.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
 
     [HttpGet("feature-flags")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
