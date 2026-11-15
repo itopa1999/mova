@@ -1,5 +1,6 @@
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
+
 namespace Mova.Application.Interfaces.Notification;
 
 public interface INotificationQueue
@@ -19,6 +20,15 @@ public interface INotificationQueue
     void QueueWelcomeEmail(
         string firstName,
         string email);
+
+    void QueueTransactionEmail(
+        string firstName,
+        string email,
+        string amount,
+        string transactionType,
+        string walletName,
+        string referenceNumber,
+        string date);
 
     void QueueNotificationEmail(
         string firstName,

@@ -1,7 +1,7 @@
-
-
 using Mova.Application.Models;
+
 namespace Mova.Application.Interfaces.Notification;
+
 public interface IEmailService
 {
     Task SendOtpAsync(
@@ -21,6 +21,17 @@ public interface IEmailService
     Task SendWelcomeEmailAsync(
         string firstName,
         string email,
+        CancellationToken cancellationToken = default
+    );
+
+    Task SendTransactionEmailAsync(
+        string firstName,
+        string email,
+        string amount,
+        string transactionType,
+        string walletName,
+        string referenceNumber,
+        string date,
         CancellationToken cancellationToken = default
     );
 

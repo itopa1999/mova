@@ -9,8 +9,10 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
 using Mova.Api.RateLimiting;
+using Mova.Application.BBL.Commands.Admin;
 using Mova.Infrastructure.Authentication.Jwt;
 using Mova.Shared.Common.Results;
+using static Mova.Application.BBL.Commands.Admin.LoginCommand;
 
 namespace Mova.Api.Controllers.V1.AdminController;
 
@@ -28,15 +30,15 @@ public class AdminAuth(
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
-    [ProducesResponseType(typeof(BaseResult<LoginResultDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult<LoginResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> AdminLogin(
-        [FromBody] LoginUserCommand.Command command,
+        [FromBody] LoginCommand.Command command,
         CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(command, cancellationToken);
 
-        var loginData = result.Data?.Data;
+        var loginData = result.Data;
 
         if (loginData is not null)
         {

@@ -51,7 +51,7 @@ public sealed partial class PaystackService
             return new ResolveBankAccountResult
             {
                 CallSucceeded = false,
-                Message = "No response from Paystack."
+                Message = "Cannot resolve bank account. No response from provider."
             };
         }
 

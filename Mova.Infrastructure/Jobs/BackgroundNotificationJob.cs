@@ -101,6 +101,29 @@ public sealed class BackgroundNotificationJob
             cancellationToken);
     }
 
+    // ADDED TRANSACTION JOB HERE
+    [AutomaticRetry(Attempts = 3)]
+    public async Task SendTransactionEmailAsync(
+        string firstName,
+        string email,
+        string amount,
+        string transactionType,
+        string walletName,
+        string referenceNumber,
+        string date,
+        CancellationToken cancellationToken)
+    {
+        await _emailService.SendTransactionEmailAsync(
+            string.IsNullOrWhiteSpace(firstName) ? "Customer" : firstName,
+            email,
+            amount,
+            transactionType,
+            walletName,
+            referenceNumber,
+            date,
+            cancellationToken);
+    }
+
     [AutomaticRetry(Attempts = 3)]
     public async Task SendNotificationEmailAsync(
         string firstName,

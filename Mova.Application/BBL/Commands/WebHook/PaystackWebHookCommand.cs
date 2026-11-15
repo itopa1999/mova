@@ -13,6 +13,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Commands.WebHook;
 
 public sealed class PaystackWebHookCommand
@@ -241,12 +242,12 @@ public sealed class PaystackWebHookCommand
                 $"Paystack webhook processed. Reference: {webhookData.Reference}, " +
                 $"Amount: ₦{amount:N2}, User: {freshTransaction.UserPublicId}.");
 
-            SendDepositNotifications(user, amount);
+            SendDepositNotifications(user, amount, freshTransaction.Reference);
 
             return Ok("Webhook processed successfully.", webhook);
         }
 
-        private void SendDepositNotifications(UserIdentityDto user, decimal amount)
+        private void SendDepositNotifications(UserIdentityDto user, decimal amount, string reference)
         {
             var inAppMessage = $"₦{amount:N0} has been added to your available balance.";
 
@@ -261,14 +262,15 @@ public sealed class PaystackWebHookCommand
 
             if (!string.IsNullOrWhiteSpace(user.Email))
             {
-                _notificationQueue.QueueNotificationEmail(
+                _notificationQueue.QueueTransactionEmail(
                     user.FirstName,
                     user.Email,
-                    "# Deposit successful\n\n" +
-                    $"**₦{amount:N0} has been added to your MOVA available balance.**\n\n" +
-                    "- You can now allocate it to wallets or use it as you wish.\n" +
-                    "- Your balance is ready for your next move.",
-                    "Your MOVA deposit is complete");
+                    amount.ToString("N2"),
+                    "Credit",
+                    "Available Balance",
+                    reference,
+                    DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+                );
             }
         }
 

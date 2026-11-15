@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>MOVA · Transaction Alert</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin: 0; padding: 0; background-color: #F7F8FA; -webkit-font-smoothing: antialiased;">
+  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #F7F8FA; padding: 40px 0;">
+    <tr>
+      <td align="center">
+        <table width="100%" max-width="600" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #FFFFFF; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+          <tr><td height="6" style="background-color: #1B6B3A; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
+          <tr>
+            <td style="padding: 24px 32px; border-bottom: 1px solid #E8EAED;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="left" valign="middle"><img src="https://res.cloudinary.com/et0r3out/image/upload/v1789426234/9.png" alt="MOVA" width="auto" height="48" style="display: block; border: 0; height: 48px; width: auto;"></td>
+                  <td align="right" valign="middle" style="font-family: 'DM Sans', Arial, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #6B7280; text-transform: uppercase;">ACCOUNT EMAIL</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #F3FAF6; padding: 40px 32px; border-bottom: 1px solid #E8EAED;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-family: 'DM Sans', Arial, sans-serif;">
+                    <div style="font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #1B6B3A; text-transform: uppercase; margin-bottom: 12px;">TRANSACTION ALERT</div>
+                    <h1 style="margin: 0 0 12px 0; font-size: 32px; font-weight: 700; color: #111827; line-height: 1.2; letter-spacing: -0.5px;">{TransactionTitle}</h1>
+                    <p style="margin: 0; font-size: 16px; color: #4B5563; line-height: 1.5;">Your MOVA wallet balance has been updated.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 32px; font-family: 'DM Sans', Arial, sans-serif;">
+              <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 700; color: #111827; line-height: 1.3;">Hello {Name},</h2>
+              <p style="margin: 0 0 28px 0; font-size: 16px; color: #4B5563; line-height: 1.6;">A recent transaction has occurred on your account. Here are the details:</p>
+              
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #F3FAF6; border: 1px solid #D1E7DD; border-radius: 12px; margin-bottom: 28px;">
+                <tr>
+                  <td align="center" style="padding: 32px 20px;">
+                    <div style="font-family: 'DM Sans', Arial, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #4B5563; text-transform: uppercase; margin-bottom: 12px;">{AmountLabel}</div>
+                    <div style="font-family: 'DM Mono', 'Courier New', monospace; font-size: 38px; font-weight: 700; color: {AmountColor}; letter-spacing: -1px; line-height: 1; margin-bottom: 12px;">{AmountPrefix}{Amount}</div>
+                    <div style="font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; color: #6B7280;">{Date}</div>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 28px;">
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; color: #6B7280;">Type</td>
+                  <td align="right" style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; font-weight: 700; color: #111827;">{TransactionType}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; color: #6B7280;">Status</td>
+                  <td align="right" style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; font-weight: 700; color: #1B6B3A;">{Status}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; color: #6B7280;">Reference</td>
+                  <td align="right" style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Mono', 'Courier New', monospace; font-size: 13px; color: #111827;">{Reference_Number}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; color: #6B7280;">Account/Wallet</td>
+                  <td align="right" style="padding: 12px 0; border-bottom: 1px solid #E8EAED; font-family: 'DM Sans', Arial, sans-serif; font-size: 14px; color: #111827;">{Wallet_Name}</td>
+                </tr>
+              </table>
+
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 28px;">
+                <tr>
+                  <td align="center">
+                    <table border="0" cellpadding="0" cellspacing="0" style="border-radius: 8px; background-color: #1B6B3A;">
+                      <tr>
+                        <td align="center" style="padding: 16px 32px;">
+                          <a href="{Dashboard_Link}" style="font-family: 'DM Sans', Arial, sans-serif; font-size: 16px; font-weight: 700; color: #FFFFFF; text-decoration: none; display: inline-block;">View Transaction</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0 0 32px 0; font-size: 14px; color: #6B7280; line-height: 1.6; text-align: center;">
+                If you did not authorize this transaction, please <a href="{Support_Link}" style="color: #1B6B3A; text-decoration: underline; font-weight: 500;">contact support</a> immediately.
+              </p>
+
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;"><tr><td height="1" style="background-color: #E8EAED; font-size: 1px; line-height: 1px;">&nbsp;</td></tr></table>
+              <p style="margin: 0; font-size: 15px; color: #6B7280; line-height: 1.6;">Regards,<br><strong style="color: #111827; font-weight: 700;">The MOVA Team</strong></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
