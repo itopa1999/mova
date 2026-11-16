@@ -14,6 +14,8 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
+
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
 public sealed class CreateTrusteeWalletCommand
@@ -352,6 +354,19 @@ public sealed class CreateTrusteeWalletCommand
                 cancellationToken);
 
             var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                _notificationQueue.QueueTransactionEmail(
+                    request.FirstName,
+                    request.Email,
+                    totalUpfrontCharge.ToString("N2"),
+                    EmailTemplateTransaction.Debit,
+                    "MOVA Main Balance",
+                    walletTransaction.Reference,
+                    DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+                );
+            }
 
             op.Success(
                 $"Trustee wallet created. WalletId: {wallet.Id}, " +

@@ -10,6 +10,14 @@ public static class Roles
     public const string AllAdmins = $"{Admin},{SuperAdmin}";
 }
 
+public static class EmailTemplateTransaction
+{
+    public const string Debit = "DEBIT";
+    public const string Credit = "CREDIT";
+}
+
+
+
 public static class OtpPurpose
 {
     public const string AccountVerification = "ACCOUNT_VERIFICATION";

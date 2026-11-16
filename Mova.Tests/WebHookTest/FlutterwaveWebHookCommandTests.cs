@@ -11,6 +11,7 @@ using Mova.Application.Interfaces.Payment;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
+using Mova.Shared.Constants;
 using Xunit;
 namespace Mova.Tests.WebHookTest;
 
@@ -619,11 +620,14 @@ public sealed class FlutterwaveWebHookCommandTests : BaseTest
         await handler.Handle(CreateCommand(), default);
 
         _notifications.Verify(
-            x => x.QueueNotificationEmail(
+            x => x.QueueTransactionEmail(
                 UserFirstName,
                 UserEmail,
-                It.Is<string>(m => m.Contains("5,000")),
-                "Your MOVA deposit is complete"),
+                "5,000.00",
+                EmailTemplateTransaction.Credit,
+                "Available Balance",
+                It.IsAny<string>(),
+                It.IsAny<string>()),
             Times.Once);
     }
 

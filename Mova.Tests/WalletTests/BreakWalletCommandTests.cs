@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.AccountWallet;
+using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
@@ -19,6 +20,7 @@ public sealed class BreakWalletCommandTests : BaseTest
 
     private readonly Mock<INotificationQueue> _notifications = new();
     private readonly Mock<IPinChallenge> _pinChallenge = new();
+    private readonly Mock<IIdentityService> _identityService = new();
 
     public BreakWalletCommandTests()
     {
@@ -36,7 +38,8 @@ public sealed class BreakWalletCommandTests : BaseTest
             UnitOfWork,
             Mock.Of<ILogger<BreakWalletCommand.Handler>>(),
             _notifications.Object,
-            _pinChallenge.Object);
+            _pinChallenge.Object,
+            _identityService.Object);
     }
     private BreakWalletCommand.Command CreateCommand(long walletId)
     {
@@ -113,7 +116,7 @@ public sealed class BreakWalletCommandTests : BaseTest
     // 1. Happy path
     // ---------------------------------------------------------
 
-    [Fact]
+        [Fact]
     public async Task Handle_WithActiveWallet_MarksWalletBroken()
     {
         var wallet = await SeedActiveWalletAsync(locked: 30_000m);
@@ -129,7 +132,8 @@ public sealed class BreakWalletCommandTests : BaseTest
 
         Assert.Equal(WalletStatus.Broken, updated.Status);
         Assert.Equal(0, updated.LockedAmount.MinorUnits);
-        Assert.Equal(0, updated.AvailableAmount.MinorUnits);
+        // 2% of 30,000 = 600. Remaining = 29,400. This is added to AvailableAmount.
+        Assert.Equal(2_940_000L, updated.AvailableAmount.MinorUnits);
     }
 
     [Fact]
@@ -145,16 +149,12 @@ public sealed class BreakWalletCommandTests : BaseTest
             .Where(x => x.WalletId == wallet.Id)
             .ToListAsync();
 
-        Assert.Equal(2, transactions.Count);
+        // We now only create 1 transaction (the refund), no separate fee transaction.
+        Assert.Equal(1, transactions.Count);
 
         var breakTx = transactions.Single(x => x.Reference == $"wallet_break_{wallet.Id:D12}".ToLowerInvariant());
         Assert.Equal(TransactionType.Refund, breakTx.Type);
         Assert.Equal(29_400m, breakTx.Amount.ToDecimal());
-
-        var feeTx = transactions.Single(x => x.Reference == $"wallet-break-fee_{wallet.Id:D12}".ToLowerInvariant());
-        Assert.Equal(TransactionType.Fee, feeTx.Type);
-        Assert.Equal(600m, feeTx.Amount.ToDecimal());
-        Assert.Equal(TransactionStatus.Completed, feeTx.Status);
     }
 
     [Fact]

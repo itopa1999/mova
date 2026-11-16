@@ -140,7 +140,7 @@ public sealed class EmailService : IEmailService
         var dashboardUrl = $"{baseUrl}/dashboard";
         var supportLink = $"{baseUrl}/support";
 
-        bool isCredit = transactionType.Equals("Credit", StringComparison.OrdinalIgnoreCase);
+        bool isCredit = transactionType.Equals(EmailTemplateTransaction.Credit, StringComparison.OrdinalIgnoreCase);
 
         var title = isCredit ? "You have a new credit." : "You have a new debit.";
         var amountLabel = isCredit ? "AMOUNT RECEIVED" : "AMOUNT DEBITED";

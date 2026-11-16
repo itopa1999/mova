@@ -18,6 +18,8 @@ using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 using Mova.Application.Models;
+using Mova.Shared.Constants;
+
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class CreateWalletCommand
@@ -548,6 +550,19 @@ public sealed class CreateWalletCommand
                 cancellationToken);
 
             var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                _notificationQueue.QueueTransactionEmail(
+                    request.FirstName,
+                    request.Email,
+                    totalUpfrontCharge.ToString("N2"),
+                    EmailTemplateTransaction.Debit,
+                    $"Create Wallet: {walletName}",
+                    walletTransaction.Reference,
+                    DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+                );
+            }
 
             op.Success(
                 $"Wallet created. WalletId: {wallet.Id}, " +

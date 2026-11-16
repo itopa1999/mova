@@ -13,6 +13,7 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.Commands.WebHook;
 
@@ -266,7 +267,7 @@ public sealed class PaystackWebHookCommand
                     user.FirstName,
                     user.Email,
                     amount.ToString("N2"),
-                    "Credit",
+                    EmailTemplateTransaction.Credit,
                     "Available Balance",
                     reference,
                     DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")

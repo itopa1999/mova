@@ -134,6 +134,7 @@ public sealed class RemoveCircleMemberCommand
             }
 
             var refundAmount = member.DepositHeld.ToDecimal();
+            string? refundReference = null;
 
             await using var tx = await _unitOfWork.BeginAtomicSerializableAsync(
                 cancellationToken);
@@ -189,6 +190,9 @@ public sealed class RemoveCircleMemberCommand
 
             if (refundAmount > 0)
             {
+                refundReference = $"circle-member-removal-refund-{circle.Id}-" +
+                                  $"{request.TargetUserPublicId}-{Guid.NewGuid():N}";
+
                 var refund = new Transaction
                 {
                     UserPublicId = request.TargetUserPublicId,
@@ -198,9 +202,7 @@ public sealed class RemoveCircleMemberCommand
                     Amount = Money.FromNaira(refundAmount),
                     Type = TransactionType.Refund,
                     Status = TransactionStatus.Completed,
-                    Reference =
-                        $"circle-member-removal-refund-{circle.Id}-" +
-                        $"{request.TargetUserPublicId}-{Guid.NewGuid():N}",
+                    Reference = refundReference,
                     CompletedAt = DateTimeOffset.UtcNow
                 };
 
@@ -239,14 +241,28 @@ public sealed class RemoveCircleMemberCommand
 
             if (!string.IsNullOrWhiteSpace(member.Identifier))
             {
-                _notificationQueue.QueueNotificationEmail(
-                    member.DisplayName ?? "Member",
-                    member.Identifier,
-                    $"# Removed from {circle.Name}\n\n" +
-                    $"**You have been removed from the circle '{circle.Name}' by the organizer.**\n\n" +
-                    (refundAmount > 0 ? $"- Your deposit of ₦{refundAmount:N0} has been refunded to your balance.\n" : "") +
-                    $"- If you believe this is a mistake, please contact the organizer.",
-                    $"Removed from {circle.Name}");
+                if (refundAmount > 0 && refundReference != null)
+                {
+                    _notificationQueue.QueueTransactionEmail(
+                        member.DisplayName ?? "Member",
+                        member.Identifier,
+                        refundAmount.ToString("N2"),
+                        EmailTemplateTransaction.Credit,
+                        "MOVA Main Balance",
+                        refundReference,
+                        DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+                    );
+                }
+                else
+                {
+                    _notificationQueue.QueueNotificationEmail(
+                        member.DisplayName ?? "Member",
+                        member.Identifier,
+                        $"# Removed from {circle.Name}\n\n" +
+                        $"**You have been removed from the circle '{circle.Name}' by the organizer.**\n\n" +
+                        $"- If you believe this is a mistake, please contact the organizer.",
+                        $"Removed from {circle.Name}");
+                }
             }
 
             // 2. Notify all remaining active members
