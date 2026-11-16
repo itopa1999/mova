@@ -22,6 +22,8 @@ using StackExchange.Redis;
 using Mova.Infrastructure.ExternalAPI;
 using Mova.Application.ExternalAPI;
 using Mova.Infrastructure.Persistence.Seeding;
+using Mova.Application.Interfaces.Admin;
+using Mova.Infrastructure.AdminServices;
 
 namespace Mova.Infrastructure;
 
@@ -90,6 +92,10 @@ public static class DependencyInjection
         services.AddNotificationServices(configuration);
         services.AddSingleton<TemplateRenderer>();
         services.AddSingleton(new SensitiveIdentifierHasher(hmacKey));
+
+
+        // ADMIN DEPENDENCY INJECTION
+        services.AddScoped<IAdminIdentityService, AdminIdentityService>();
 
         services.Configure<ExternalApiSettings>(
             configuration.GetSection(ExternalApiSettings.SectionName));

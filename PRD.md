@@ -164,6 +164,38 @@ Priorities: **P0** = essential financial/product flow; **P1** = supporting capab
 
 **Acceptance:** Inactive templates are not offered for new wallets. A feature disabled by a flag cannot be newly invoked through a direct API call.
 
+### FR-11: Trustee wallets — P1
+
+A Trustee Wallet is a controlled-access wallet associated with a beneficiary/trusted person. It is distinct from a customer's personal Scheduled Wallet and from a Circle/AJo collective pool.
+
+- A customer can create a Trustee Wallet for an eligible beneficiary/trusted person.
+- The creator defines the target amount, release amount, schedule, purpose/category, and configured destination.
+- Trustee money remains subject to the wallet's release rules rather than becoming unrestricted immediately available funds.
+- Releases may be directed to the configured beneficiary destination, subject to the supported payout and authorization model.
+- The creator can inspect trustee wallet funding, upcoming releases, completed releases, payout history, and lifecycle status.
+- Trustee wallets must preserve the same financial integrity requirements as ordinary wallets: atomic balance changes, transaction/ledger records, idempotent release processing, and explicit payout outcomes.
+- The product must clearly distinguish the wallet creator, trustee/beneficiary, funding owner, and payout recipient where those roles differ.
+- Eligibility, consent, KYC requirements, beneficiary ownership, payout authorization, and legal/regulatory treatment must be finalized before this feature is treated as generally available.
+
+**Acceptance:** A trustee wallet cannot release more than its remaining target, cannot be accessed or modified by an unauthorized customer, and every trustee-related balance movement is attributable to the creator, beneficiary, wallet, transaction, and payout records involved.
+
+### FR-12: Circle / AJo — P1
+
+Circle/AJo is a multi-member collective contribution feature based on a defined contribution cycle and payout order. It is distinct from Trustee and personal Scheduled Wallets.
+
+- A moderator/creator can create a Circle and define its contribution rules, cycle frequency, contribution amount, member limits, and payout/rotation configuration.
+- The moderator can add eligible members before they are allowed to join.
+- An invitation or join flow must verify that the accepting user was authorized by the moderator; possession of a generic Circle code alone must not grant unrestricted membership.
+- Members can view Circle rules, membership, their contribution obligations, contribution history, current cycle, payout order, and Circle activity.
+- The Circle maintains a defined contribution schedule and payout rotation. Each cycle identifies the expected contributions and the member/beneficiary scheduled to receive the payout.
+- The system records each member's contribution status and prevents duplicate contribution crediting.
+- The product must define behavior for missed contributions, late contributions, member removal, voluntary exit, replacement members, failed payouts, and an incomplete Circle before production launch.
+- Circle financial operations must be represented with explicit transaction/ledger records and must remain idempotent under retries or duplicate provider events.
+- The product must not represent a Circle merely as a shared wallet. Contribution ownership, pooled-fund custody, payout authority, and settlement responsibilities must be explicitly defined before production launch.
+- Any regulatory, licensing, custody, or payment-provider requirements arising from pooled contributions and rotating payouts must be resolved before the feature is enabled for real customer funds.
+
+**Acceptance:** Only moderator-authorized members can join. A contribution is credited at most once, every cycle has an auditable contribution and payout state, and a member cannot receive a payout outside the configured rotation or authorization rules.
+
 ## 7. Data model and domain boundaries
 
 The EF Core model uses PostgreSQL as the system of record. Important entities and relationships include:
@@ -177,6 +209,8 @@ The EF Core model uses PostgreSQL as the system of record. Important entities an
 | Accounting | Transactions and ledger entries; payout records linked to wallets and optionally bank accounts |
 | Automation | Renewal policies and renewal events |
 | Product operations | In-app notifications and feature flags |
+| Trustee | Trustee wallets, beneficiary/trusted-person association, trustee release rules and payout records |
+| Circle / AJo | Circles, moderator/member relationships, invitations, contribution cycles, contribution records, payout rotation and settlement records |
 
 The `Money` value object stores integer minor units plus a currency code; financial calculations must not use floating-point storage. Wallet amounts are represented by explicit balance fields, and the transaction/ledger history explains movements. Most domain records inherit audit timestamps and soft-delete metadata. Provider events and job processing must be idempotent, with PostgreSQL remaining authoritative for financial state; Redis is a cache/coordination aid, never the sole record of a balance or transaction.
 
@@ -237,8 +271,16 @@ These are contract questions to resolve while converting this draft into a launc
 5. **Payout initiation and failed-payout recovery:** The schema and background job support payout processing, but the precise customer initiation and recovery contract needs to be documented, including fee disclosure, authorization/PIN requirements, reversal/refund behavior, and reconciliation.
 6. **Wallet break and restart:** Define exactly how locked, available, unused, and already-paid-out funds behave for each operation, and what fees or customer confirmation apply.
 7. **Eligibility and limits:** Confirm onboarding/KYC requirements, permitted customer jurisdictions, minimum/maximum funding and wallet amounts, and withdrawal restrictions with product, risk, and compliance owners.
-8. **Roadmap vs. current implementation:** Redis, notification integrations, templates, renewal policies, and payout handling have code-level representations; validate their production configuration, access controls, failure handling, and supported customer-facing flows before describing them as generally available.
+8. **Roadmap vs. current implementation:** Redis, notification integrations, templates, renewal policies, payout handling, Trustee wallets, and Circle/AJo have or may have product/domain representations; validate their production configuration, access controls, failure handling, supported customer-facing flows, and regulatory requirements before describing them as generally available.
+9. **Trustee product contract:** Define beneficiary identity, consent, ownership of funds, destination authorization, creator permissions, trustee permissions, and what happens when the beneficiary is unavailable or changes.
+10. **Circle/AJo financial contract:** Define contribution ownership, custody model, payout authority, contribution deadline, missed-payment handling, member exit/replacement, dispute handling, and final settlement behavior before enabling pooled customer funds.
 
-## 11. Source basis
+## 11. Product vocabulary
 
-This draft was derived from [PROJECT_WALKTHROUGH.md](./PROJECT_WALKTHROUGH.md), the API controllers and application commands/queries, the domain entities and enums, EF Core configurations under `Mova.Infrastructure/Persistence/Configurations`, and the existing test suite. In particular, the core data model is defined by `ApplicationDbContext` and entities including `Wallet`, `WalletRule`, `ScheduledRelease`, `Transaction`, `LedgerEntry`, `Payout`, `RenewalPolicy`, and `RenewalEvent`.
+MOVA uses three distinct controlled-money primitives:
+
+- **Scheduled Wallet:** control access to the customer's own money through release rules and schedules.
+- **Trustee Wallet:** control the release/allocation of money associated with a designated beneficiary or trusted person.
+- **Circle / AJo:** coordinate contributions from multiple authorized members and distribute a defined cycle payout according to a configured rotation.
+
+These are intentionally separate concepts. A Trustee Wallet is not a group contribution pool, and a Circle/AJo is not simply another name for a personal Scheduled Wallet.

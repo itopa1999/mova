@@ -784,3 +784,89 @@ The following are not fully implemented or exposed by the current API and should
 - `ProcessPendingProcessingTransactions` is not registered as a recurring job in startup.
 - The feature-flag and admin-named virtual-account endpoints are on an `[Authorize]` controller, but do not declare a more specific role requirement in that controller.
 - The current scheduled-release worker ignores `ScheduledFor` because its due-time checks are commented out.
+
+
+## 23. Planned Product Concepts: Trustee and Circle / AJo
+
+**Important status note:** Trustee and Circle/AJo are product concepts for the MOVA roadmap. The current implementation described in this walkthrough does not establish that either feature is implemented, exposed through an API, or ready to handle real customer funds. Do not infer implementation from this documentation.
+
+These concepts are separate from the existing personal Scheduled Wallet flow.
+
+### 23.1 Trustee Wallet
+
+A Trustee Wallet is intended for controlled allocation/release of money associated with a designated beneficiary or trusted person.
+
+The product distinction is:
+
+- **Scheduled Wallet:** the customer controls access to their own allocated money.
+- **Trustee Wallet:** a creator sets rules for money associated with a designated beneficiary/trusted person.
+
+A future Trustee flow may allow the creator to define the target amount, release amount, schedule, purpose, beneficiary, and permitted payout destination. Releases would remain subject to the configured rules rather than giving the beneficiary unrestricted access to the full target immediately.
+
+Before implementation, the product and engineering teams must specify:
+
+- The identities and responsibilities of the creator, funding owner, trustee, beneficiary, and payout recipient. These roles must not be assumed to be the same person.
+- Whether the trustee is a controller, an approver, a beneficiary, or a combination of these.
+- How beneficiary identity, consent, account ownership, and destination verification are established.
+- Who can create, amend, pause, break, resume, or cancel the wallet.
+- What happens if a beneficiary changes, becomes unavailable, rejects the arrangement, or cannot receive a payout.
+- How fees, refunds, failed payouts, disputes, and account closure are handled.
+- Applicable KYC, custody, payment-provider, and regulatory requirements.
+
+Trustee must reuse the platform's financial-integrity principles where appropriate: integer minor-unit money, atomic balance and ledger changes, idempotent processing, explicit payout states, authorization checks, and auditable activity. Its exact relationship to the existing `Wallet`, `WalletRule`, `ScheduledRelease`, and `Payout` entities remains an implementation decision; do not force the feature into those entities until the role and money-flow model is settled.
+
+### 23.2 Circle / AJo
+
+Circle/AJo is intended for multiple authorized members who contribute according to shared rules and receive a cycle payout according to a defined rotation. It is conceptually similar to a rotating contribution arrangement.
+
+Example product scenario:
+
+```text
+Circle: Friends AJo
+Members: 5
+Contribution: ₦20,000 per member, per month
+Expected cycle pool: ₦100,000
+
+Cycle 1: Member A is scheduled to receive the payout
+Cycle 2: Member B is scheduled to receive the payout
+Cycle 3: Member C is scheduled to receive the payout
+Cycle 4: Member D is scheduled to receive the payout
+Cycle 5: Member E is scheduled to receive the payout
+```
+
+This is an illustrative product example, not a statement that the current codebase supports these operations.
+
+The intended membership rule is moderator-controlled:
+
+1. A moderator creates a Circle and defines its initial rules.
+2. The moderator adds or authorizes eligible members.
+3. An authorized member receives an invitation.
+4. The invited member accepts and joins.
+5. The Circle becomes active only when its activation conditions are met.
+6. Members contribute according to the cycle schedule.
+7. The system records contributions and identifies the scheduled payout recipient for each cycle.
+8. The payout is processed according to the Circle's approved settlement rules.
+
+Possession of a generic Circle code must not, by itself, allow an unapproved person to join. Membership acceptance must be checked against the moderator-authorized invitation/member record.
+
+Before implementation, specify:
+
+- Moderator powers, member permissions, membership limits, invitation expiry, and approval/revocation behavior.
+- Contribution amount, frequency, deadlines, grace periods, and cycle activation requirements.
+- Payout order selection, whether it can be changed, and how changes are approved and audited.
+- Handling of late or missed contributions, defaults, disputes, member exit/removal, replacement members, and incomplete cycles.
+- Whether payouts are conditional on all contributions being received and what happens when a cycle is short.
+- Who legally owns contributed funds while pooled, who controls them, and who is responsible for settlement.
+- Provider integration, reconciliation, refunds, failed payouts, fraud controls, and regulatory/licensing requirements.
+
+Circle/AJo must not be modelled as merely a shared `Wallet`. It introduces multi-party membership, contribution obligations, cycle accounting, payout rotation, and potentially pooled-fund custody. These are separate domain concerns that require an explicit money-flow and ownership model before database entities, APIs, or background jobs are designed.
+
+### 23.3 Product boundary
+
+| Product primitive | Intended purpose | Status in this walkthrough |
+|---|---|---|
+| Scheduled Wallet | Control the release of a customer's own allocated money | Existing core product flow described in this document |
+| Trustee Wallet | Apply controlled release rules to money associated with a designated beneficiary/trusted person | Planned concept; implementation not established here |
+| Circle / AJo | Coordinate authorized members' contributions and rotating cycle payouts | Planned concept; implementation not established here |
+
+Do not expose Trustee or Circle/AJo as available customer features until their product rules, domain model, API contracts, authorization model, operational workflows, and compliance requirements have been designed and verified.

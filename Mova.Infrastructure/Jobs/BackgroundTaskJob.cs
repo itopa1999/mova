@@ -11,6 +11,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 using static Mova.Application.Interfaces.Notification.INotificationQueue;
 
 namespace Mova.Infrastructure.Jobs;
@@ -253,6 +254,23 @@ public sealed class BackgroundTaskJob
 
             await _context.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
+
+            var user = await _identityService.GetByIdentifierAsync(UserPublicId, cancellationToken);
+            if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+            {
+                var mainReference = debitTransactions.FirstOrDefault()?.Reference ?? $"circle-join-{SavingsCircleId}";
+                
+                _notificationQueue.QueueTransactionEmail(
+                    user.FirstName,
+                    user.Email,
+                    TotalUpfrontCharge.ToString("N2"),
+                    EmailTemplateTransaction.Debit,
+                    "MOVA Main Balance",
+                    mainReference,
+                    DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+                );
+            }
+            // ─────────────────────────────────────
 
             _logger.LogInformation("Circle wallet created. WalletId: {WalletId}, User: {UserPublicId}, Circle: {SavingsCircleId}, Debited: {TotalUpfrontCharge}, Fees: {TotalMovaFees}, Deposit: {DepositAmount}.", wallet.Id, UserPublicId, SavingsCircleId, TotalUpfrontCharge, TotalMovaFees, DepositAmount);
         }

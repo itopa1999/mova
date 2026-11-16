@@ -8,7 +8,9 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
+
 namespace Mova.Infrastructure.Service;
 
 public sealed class RenewalService : IRenewalService
@@ -334,6 +336,19 @@ public sealed class RenewalService : IRenewalService
                     wallet, refillAmount, failureReason, cancellationToken);
 
                 return new RenewalOutcome { Skipped = true, SkipReason = failureReason };
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                _notificationQueue.QueueTransactionEmail(
+                    user.FirstName,
+                    user.Email,
+                    totalDebit.ToString("N2"),
+                    EmailTemplateTransaction.Debit,
+                    "MOVA Main Balance",
+                    $"renewal-debit-{wallet.Id:D12}".ToLowerInvariant(),
+                    DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+                );
             }
 
             // ─── Refill wallet: add on top of existing locked ──

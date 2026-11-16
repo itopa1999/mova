@@ -1,4 +1,7 @@
+
+using System.Net;
 using DotNetEnv;
+using Microsoft.AspNetCore.HttpOverrides;
 using Mova.Api;
 using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence.Seeding;
@@ -31,6 +34,7 @@ if (builder.Environment.IsProduction())
         options.Debug = false;
         options.EnableLogs = true;
     });
+
     builder.Logging.AddSentry(options =>
     {
         options.Dsn = builder.Configuration["Sentry:Dsn"];
@@ -40,17 +44,27 @@ if (builder.Environment.IsProduction())
     });
 }
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto;
+
+    options.KnownProxies.Add(IPAddress.Loopback);
+});
+
 var startup = new Startup(builder.Configuration, builder.Environment);
 
 startup.ConfigureServices(builder.Services);
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
     await app.Services.SeedIdentityAsync();
-    
+
     var seeder = scope.ServiceProvider
         .GetRequiredService<DatabaseSeeder>();
 

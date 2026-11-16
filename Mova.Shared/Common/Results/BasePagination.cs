@@ -1,8 +1,6 @@
-using System.Text.Json.Serialization;
-using Mova.Shared.Common.Results;
 namespace Mova.Shared.Common.Results;
 
-public abstract class BasePaginationResponse<T>
+public class BasePaginationResponse<T>
 {
     public int Page { get; set; }
     public int PageSize { get; set; }

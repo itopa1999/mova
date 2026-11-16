@@ -5,12 +5,14 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
 
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
@@ -28,15 +30,18 @@ public sealed class PayContributionCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IIdentityService _identityService;
+        private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
             IIdentityService identityService,
+            INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _identityService = identityService;
+            _notificationQueue = notificationQueue;
             _logger = logger;
         }
 
@@ -172,6 +177,20 @@ public sealed class PayContributionCommand
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
+
+            var user = await _identityService.GetByIdentifierAsync(member.UserPublicId!, cancellationToken);
+            if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+            {
+                _notificationQueue.QueueTransactionEmail(
+                    user.FirstName,
+                    user.Email,
+                    totalAmountDue.ToString("N2"),
+                    EmailTemplateTransaction.Debit,
+                    "MOVA Main Balance",
+                    paymentRef,
+                    now.ToString("MMM dd, yyyy · HH:mm")
+                );
+            }
 
             // Success Log
             op.Success($"User {request.UserPublicId} manually paid contribution for Circle {circle.Id}, Round {currentRound.RoundNumber}. Amount: {totalAmountDue}, Total Penalty Applied: {penaltyFromRound + penaltyFromDeposit}");

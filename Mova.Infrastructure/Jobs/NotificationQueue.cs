@@ -5,6 +5,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Shared.Logging;
 using static Mova.Application.Interfaces.Notification.INotificationQueue;
+
 namespace Mova.Infrastructure.Jobs;
 
 public sealed class NotificationQueue : INotificationQueue
@@ -53,6 +54,26 @@ public sealed class NotificationQueue : INotificationQueue
                 job => job.SendWelcomeEmailAsync(
                     firstName, email, CancellationToken.None)),
             ("Email", email));
+    }
+
+    // ADDED TRANSACTION QUEUE IMPLEMENTATION HERE
+    public void QueueTransactionEmail(
+        string firstName,
+        string email,
+        string amount,
+        string transactionType,
+        string walletName,
+        string referenceNumber,
+        string date)
+    {
+        TryEnqueue(
+            "QueueTransactionEmail",
+            () => _backgroundJobClient.Enqueue<BackgroundNotificationJob>(
+                job => job.SendTransactionEmailAsync(
+                    firstName, email, amount, transactionType, walletName, referenceNumber, date, CancellationToken.None)),
+            ("Email", email),
+            ("TransactionType", transactionType),
+            ("Reference", referenceNumber));
     }
 
     public void QueueForgotPasswordOtp(

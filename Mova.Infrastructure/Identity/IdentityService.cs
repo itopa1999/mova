@@ -272,7 +272,7 @@ public sealed class IdentityService : IIdentityService
         var bvnHash = _hasher.Hash(rawBvn, SecuritySaltPurpose.BvnVerification.ToString());
         var query = _context.Users
             .AsNoTracking()
-            .Where(x => string.Equals(x.BvnHash, bvnHash, StringComparison.OrdinalIgnoreCase));
+            .Where(x => x.BvnHash == bvnHash);
 
         if (excludeUserId.HasValue)
         {

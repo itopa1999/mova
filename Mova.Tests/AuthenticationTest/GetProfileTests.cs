@@ -2,9 +2,10 @@ using System.Net;
 using Moq;
 using Mova.Application.BBL.Queries.Profile;
 using Mova.Application.Interfaces.Identity;
+using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Xunit;
+
 namespace Mova.Tests.AuthenticationTest;
 
 public sealed class GetProfileTests : BaseTest
@@ -19,9 +20,10 @@ public sealed class GetProfileTests : BaseTest
 
     private readonly Mock<IIdentityService> _identityService = new();
 
+    // We no longer mock IUnitOfWork. We use the real UnitOfWork from BaseTest.
     private GetProfile.Handler CreateHandler()
     {
-        return new GetProfile.Handler(_identityService.Object);
+        return new GetProfile.Handler(_identityService.Object, UnitOfWork);
     }
 
     private GetProfile.Query CreateQuery(string? userPublicId = null)
@@ -31,10 +33,6 @@ public sealed class GetProfileTests : BaseTest
             UserPublicId = userPublicId ?? UserPublicId,
         };
     }
-
-    // ---------------------------------------------------------
-    // Mock setups
-    // ---------------------------------------------------------
 
     private void SetupUserExists(
         decimal balanceNaira = 0m,
@@ -131,17 +129,11 @@ public sealed class GetProfileTests : BaseTest
             .ReturnsAsync((UserPermissionsDto?)null);
     }
 
-    // =========================================================
-    // 1. Validation
-    // =========================================================
-
     [Fact]
     public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
     {
         var handler = CreateHandler();
-        var result = await handler.Handle(
-            CreateQuery(userPublicId: ""),
-            default);
+        var result = await handler.Handle(CreateQuery(userPublicId: ""), default);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
@@ -152,9 +144,7 @@ public sealed class GetProfileTests : BaseTest
     public async Task Handle_WithWhitespaceUserPublicId_ReturnsBadRequest()
     {
         var handler = CreateHandler();
-        var result = await handler.Handle(
-            CreateQuery(userPublicId: "   "),
-            default);
+        var result = await handler.Handle(CreateQuery(userPublicId: "   "), default);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
@@ -167,11 +157,7 @@ public sealed class GetProfileTests : BaseTest
         var handler = CreateHandler();
         await handler.Handle(CreateQuery(userPublicId: ""), default);
 
-        _identityService.Verify(
-            x => x.GetByIdentifierAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
+        _identityService.Verify(x => x.GetByIdentifierAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -180,16 +166,8 @@ public sealed class GetProfileTests : BaseTest
         var handler = CreateHandler();
         await handler.Handle(CreateQuery(userPublicId: ""), default);
 
-        _identityService.Verify(
-            x => x.GetPermissionsAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
+        _identityService.Verify(x => x.GetPermissionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
-
-    // =========================================================
-    // 2. User lookup
-    // =========================================================
 
     [Fact]
     public async Task Handle_WithUnknownUser_ReturnsNotFound()
@@ -212,11 +190,7 @@ public sealed class GetProfileTests : BaseTest
         var handler = CreateHandler();
         await handler.Handle(CreateQuery(), default);
 
-        _identityService.Verify(
-            x => x.GetPermissionsAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
+        _identityService.Verify(x => x.GetPermissionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -228,16 +202,8 @@ public sealed class GetProfileTests : BaseTest
         var handler = CreateHandler();
         await handler.Handle(CreateQuery(), default);
 
-        _identityService.Verify(
-            x => x.GetByIdentifierAsync(
-                UserPublicId,
-                It.IsAny<CancellationToken>()),
-            Times.Once);
+        _identityService.Verify(x => x.GetByIdentifierAsync(UserPublicId, It.IsAny<CancellationToken>()), Times.Once);
     }
-
-    // =========================================================
-    // 3. Personal field mapping
-    // =========================================================
 
     [Fact]
     public async Task Handle_MapsAllPersonalFields()
@@ -293,8 +259,7 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_ReturnsCreatedAt()
     {
-        var createdAt = new DateTimeOffset(
-            2024, 6, 15, 10, 30, 0, TimeSpan.Zero);
+        var createdAt = new DateTimeOffset(2024, 6, 15, 10, 30, 0, TimeSpan.Zero);
 
         SetupUserExists(createdAt: createdAt);
         SetupPermissions();
@@ -305,18 +270,10 @@ public sealed class GetProfileTests : BaseTest
         Assert.Equal(createdAt, result.Data!.CreatedAt);
     }
 
-    // =========================================================
-    // 4. Notification preferences
-    // =========================================================
-
     [Fact]
     public async Task Handle_MapsNotificationPreferences_AllEnabled()
     {
-        SetupUserExists(
-            notifyLoginAlerts: true,
-            notifyReleaseAlerts: true,
-            notifyProductUpdates: true,
-            notifyPromotions: true);
+        SetupUserExists(notifyLoginAlerts: true, notifyReleaseAlerts: true, notifyProductUpdates: true, notifyPromotions: true);
         SetupPermissions();
 
         var handler = CreateHandler();
@@ -332,11 +289,7 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_MapsNotificationPreferences_AllDisabled()
     {
-        SetupUserExists(
-            notifyLoginAlerts: false,
-            notifyReleaseAlerts: false,
-            notifyProductUpdates: false,
-            notifyPromotions: false);
+        SetupUserExists(notifyLoginAlerts: false, notifyReleaseAlerts: false, notifyProductUpdates: false, notifyPromotions: false);
         SetupPermissions();
 
         var handler = CreateHandler();
@@ -352,11 +305,7 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_MapsNotificationPreferences_MixedValues()
     {
-        SetupUserExists(
-            notifyLoginAlerts: true,
-            notifyReleaseAlerts: false,
-            notifyProductUpdates: true,
-            notifyPromotions: false);
+        SetupUserExists(notifyLoginAlerts: true, notifyReleaseAlerts: false, notifyProductUpdates: true, notifyPromotions: false);
         SetupPermissions();
 
         var handler = CreateHandler();
@@ -368,10 +317,6 @@ public sealed class GetProfileTests : BaseTest
         Assert.True(notifications.Updates);
         Assert.False(notifications.Promotions);
     }
-
-    // =========================================================
-    // 5. PIN status
-    // =========================================================
 
     [Fact]
     public async Task Handle_WithPinHashSet_HasPinSetIsTrue()
@@ -409,10 +354,6 @@ public sealed class GetProfileTests : BaseTest
         Assert.False(result.Data!.HasPinSet);
     }
 
-    // =========================================================
-    // 6. Account status
-    // =========================================================
-
     [Fact]
     public async Task Handle_AlwaysIncludesAccountStatus()
     {
@@ -430,11 +371,7 @@ public sealed class GetProfileTests : BaseTest
     public async Task Handle_WithActiveAccount_StatusIsHealthy()
     {
         SetupUserExists();
-        SetupPermissions(BuildPermissions(
-            status: UserAccountStatus.Active,
-            statusLabel: "Active",
-            statusDescription: "Your account is in good standing and fully operational.",
-            restrictionExpiresAt: null));
+        SetupPermissions(BuildPermissions(status: UserAccountStatus.Active, statusLabel: "Active", statusDescription: "Your account is in good standing and fully operational.", restrictionExpiresAt: null));
 
         var handler = CreateHandler();
         var result = await handler.Handle(CreateQuery(), default);
@@ -454,15 +391,7 @@ public sealed class GetProfileTests : BaseTest
         var expiresAt = DateTimeOffset.UtcNow.AddDays(7);
 
         SetupUserExists();
-        SetupPermissions(BuildPermissions(
-            status: UserAccountStatus.Restricted,
-            statusLabel: "Restricted",
-            statusDescription: "Some features are temporarily limited.",
-            canCreateWallets: false,
-            canPerformSensitiveOperations: false,
-            restrictionReason: "TermsViolation",
-            restrictionReasonDetails: "Three warnings in 30 days.",
-            restrictionExpiresAt: expiresAt));
+        SetupPermissions(BuildPermissions(status: UserAccountStatus.Restricted, statusLabel: "Restricted", statusDescription: "Some features are temporarily limited.", canCreateWallets: false, canPerformSensitiveOperations: false, restrictionReason: "TermsViolation", restrictionReasonDetails: "Three warnings in 30 days.", restrictionExpiresAt: expiresAt));
 
         var handler = CreateHandler();
         var result = await handler.Handle(CreateQuery(), default);
@@ -480,16 +409,7 @@ public sealed class GetProfileTests : BaseTest
     public async Task Handle_WithSuspendedAccount_IsNotHealthy()
     {
         SetupUserExists();
-        SetupPermissions(BuildPermissions(
-            status: UserAccountStatus.Suspended,
-            statusLabel: "Suspended",
-            statusDescription: "Your account is suspended.",
-            canLogin: false,
-            canCreateWallets: false,
-            canPerformSensitiveOperations: false,
-            canReceivePayouts: false,
-            restrictionReason: "SuspectedFraud",
-            restrictionReasonDetails: "Chargebacks from 4 cards."));
+        SetupPermissions(BuildPermissions(status: UserAccountStatus.Suspended, statusLabel: "Suspended", statusDescription: "Your account is suspended.", canLogin: false, canCreateWallets: false, canPerformSensitiveOperations: false, canReceivePayouts: false, restrictionReason: "SuspectedFraud", restrictionReasonDetails: "Chargebacks from 4 cards."));
 
         var handler = CreateHandler();
         var result = await handler.Handle(CreateQuery(), default);
@@ -504,15 +424,7 @@ public sealed class GetProfileTests : BaseTest
     public async Task Handle_WithClosedAccount_IsNotHealthy()
     {
         SetupUserExists();
-        SetupPermissions(BuildPermissions(
-            status: UserAccountStatus.Closed,
-            statusLabel: "Closed",
-            statusDescription: "Your account is permanently closed.",
-            canLogin: false,
-            canCreateWallets: false,
-            canPerformSensitiveOperations: false,
-            canReceivePayouts: false,
-            restrictionReason: "UserRequestedDeactivation"));
+        SetupPermissions(BuildPermissions(status: UserAccountStatus.Closed, statusLabel: "Closed", statusDescription: "Your account is permanently closed.", canLogin: false, canCreateWallets: false, canPerformSensitiveOperations: false, canReceivePayouts: false, restrictionReason: "UserRequestedDeactivation"));
 
         var handler = CreateHandler();
         var result = await handler.Handle(CreateQuery(), default);
@@ -526,13 +438,7 @@ public sealed class GetProfileTests : BaseTest
     public async Task Handle_WithDeactivatedAccount_IsNotHealthy()
     {
         SetupUserExists();
-        SetupPermissions(BuildPermissions(
-            status: UserAccountStatus.Deactivated,
-            statusLabel: "Deactivated",
-            statusDescription: "Your account is deactivated.",
-            canLogin: false,
-            canCreateWallets: false,
-            canPerformSensitiveOperations: false));
+        SetupPermissions(BuildPermissions(status: UserAccountStatus.Deactivated, statusLabel: "Deactivated", statusDescription: "Your account is deactivated.", canLogin: false, canCreateWallets: false, canPerformSensitiveOperations: false));
 
         var handler = CreateHandler();
         var result = await handler.Handle(CreateQuery(), default);
@@ -545,16 +451,10 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WithActiveStatusButExpiredRestriction_IsNotHealthy()
     {
-        // Edge case: status says Active but restriction expiry is in the past.
-        // The FE should still see the banner, so IsHealthy must be false.
         var expiredAt = DateTimeOffset.UtcNow.AddMinutes(-5);
 
         SetupUserExists();
-        SetupPermissions(BuildPermissions(
-            status: UserAccountStatus.Active,
-            statusLabel: "Active",
-            statusDescription: "Your account is in good standing.",
-            restrictionExpiresAt: expiredAt));
+        SetupPermissions(BuildPermissions(status: UserAccountStatus.Active, statusLabel: "Active", statusDescription: "Your account is in good standing.", restrictionExpiresAt: expiredAt));
 
         var handler = CreateHandler();
         var result = await handler.Handle(CreateQuery(), default);
@@ -585,8 +485,6 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WhenPermissionsUnavailable_StillReturnsProfileData()
     {
-        // Fail-safe: the FE still needs the profile even if the account
-        // status couldn't be resolved.
         SetupUserExists(balanceNaira: 1_000m);
         SetupPermissionsReturnsNull();
 
@@ -608,16 +506,8 @@ public sealed class GetProfileTests : BaseTest
         var handler = CreateHandler();
         await handler.Handle(CreateQuery(), default);
 
-        _identityService.Verify(
-            x => x.GetPermissionsAsync(
-                UserPublicId,
-                It.IsAny<CancellationToken>()),
-            Times.Once);
+        _identityService.Verify(x => x.GetPermissionsAsync(UserPublicId, It.IsAny<CancellationToken>()), Times.Once);
     }
-
-    // =========================================================
-    // 7. Response envelope
-    // =========================================================
 
     [Fact]
     public async Task Handle_OnSuccess_ReturnsOk()

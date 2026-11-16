@@ -173,6 +173,20 @@ public sealed class CirclePayoutJob
                                 Reference = paymentRef,
                                 CompletedAt = now
                             });
+
+                            var user = await _identityService.GetByIdentifierAsync(member.UserPublicId!, cancellationToken);
+                            if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                            {
+                                _notificationQueue.QueueTransactionEmail(
+                                    user.FirstName,
+                                    user.Email,
+                                    totalAmountDue.ToString("N2"),
+                                    EmailTemplateTransaction.Debit,
+                                    "MOVA Main Balance",
+                                    paymentRef,
+                                    now.ToString("MMM dd, yyyy · HH:mm")
+                                );
+                            }
                         }
                     }
                     else

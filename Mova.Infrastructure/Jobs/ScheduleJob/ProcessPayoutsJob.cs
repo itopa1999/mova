@@ -2,13 +2,16 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
+using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Mova.Infrastructure.Persistence;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
+
 namespace Mova.Infrastructure.Jobs.ScheduleJob;
 
 public sealed class ProcessPayoutsJob
@@ -27,6 +30,7 @@ public sealed class ProcessPayoutsJob
     private readonly IMonnifyService _monnifyService;
     private readonly IFlutterwaveService _flutterwaveService;
     private readonly IIdentityService _identityService;
+    private readonly INotificationQueue _notificationQueue;
 
     public ProcessPayoutsJob(
         ApplicationDbContext context,
@@ -35,7 +39,8 @@ public sealed class ProcessPayoutsJob
         IPaystackService paystackService,
         IMonnifyService monnifyService,
         IFlutterwaveService flutterwaveService,
-        IIdentityService identityService)
+        IIdentityService identityService,
+        INotificationQueue notificationQueue)
     {
         _context = context;
         _logger = logger;
@@ -44,6 +49,7 @@ public sealed class ProcessPayoutsJob
         _monnifyService = monnifyService;
         _flutterwaveService = flutterwaveService;
         _identityService = identityService;
+        _notificationQueue = notificationQueue;
     }
 
     [DisableConcurrentExecution(1800)]
@@ -328,7 +334,6 @@ public sealed class ProcessPayoutsJob
 
         await using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-
         var credited = await _identityService.CreditBalanceAsync(
             payout.UserPublicId,
             payout.Amount.ToDecimal(),
@@ -340,6 +345,21 @@ public sealed class ProcessPayoutsJob
             await MarkFailedAsync(payout, "Failed to credit main MOVA balance.", cancellationToken);
             return;
         }
+
+        var user = await _identityService.GetByIdentifierAsync(payout.UserPublicId, cancellationToken);
+        if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+        {
+            _notificationQueue.QueueTransactionEmail(
+                user.FirstName,
+                user.Email,
+                payout.Amount.ToDecimal().ToString("N2"),
+                EmailTemplateTransaction.Credit,
+                "MOVA Main Balance",
+                payout.Reference ?? $"main-credit:{payout.Id}",
+                DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+            );
+        }
+        // ───────────────────────────────────
 
         payout.MainCreditedAt = DateTimeOffset.UtcNow;
         payout.Provider = "MainBalance";

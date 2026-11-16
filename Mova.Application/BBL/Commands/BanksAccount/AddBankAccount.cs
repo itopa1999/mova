@@ -186,12 +186,13 @@ public sealed class AddBankAccount
                     "Invalid bank.");
             }
 
-            var existingAccount = await _unitOfWork.Query<BankAccount>()
+            var userAccounts = await _unitOfWork.Query<BankAccount>()
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(
-                    x => x.UserPublicId == request.UserPublicId
-                         && x.AccountNumber == accountNumber,
-                    cancellationToken);
+                .Where(x => x.UserPublicId == request.UserPublicId)
+                .ToListAsync(cancellationToken);
+
+            var existingAccount = userAccounts
+                .FirstOrDefault(x => x.AccountNumber == accountNumber);
 
             if (existingAccount is not null && !existingAccount.IsDeleted)
             {
@@ -201,12 +202,8 @@ public sealed class AddBankAccount
                     "This bank account has already been added.");
             }
 
-            var activeBankAccountCount = await _unitOfWork.Query<BankAccount>()
-                .CountAsync(
-                    x => x.UserPublicId == request.UserPublicId
-                         && !x.IsDeleted
-                         && x.Status == BankAccountStatus.Active,
-                    cancellationToken);
+            var activeBankAccountCount = userAccounts.Count(
+                x => !x.IsDeleted && x.Status == BankAccountStatus.Active);
 
             if (activeBankAccountCount >= MaxBankAccountsPerUser)
             {
@@ -217,6 +214,11 @@ public sealed class AddBankAccount
                     HttpStatusCode.BadRequest,
                     $"You can only have up to {MaxBankAccountsPerUser} linked bank accounts. Please remove one before adding another.");
             }
+
+            var hasDefaultAccount = userAccounts.Any(
+                x => !x.IsDeleted
+                     && x.IsDefault
+                     && x.Status == BankAccountStatus.Active);
 
             var verifiedAccount = await _paystackService.ResolveBankAccountAsync(
                 accountNumber,
@@ -231,12 +233,8 @@ public sealed class AddBankAccount
                     "Unable to verify bank account.");
             }
 
-            var hasDefaultAccount = await _unitOfWork.Query<BankAccount>()
-                .AnyAsync(
-                    x => x.UserPublicId == request.UserPublicId
-                         && x.IsDefault
-                         && x.Status == BankAccountStatus.Active,
-                    cancellationToken);
+            var shouldBeDefault = !hasDefaultAccount;
+            var now = DateTimeOffset.UtcNow;
 
             BankAccount bankAccount;
 
@@ -250,11 +248,11 @@ public sealed class AddBankAccount
                 existingAccount.BankName = bank.Name;
                 existingAccount.BankImageUrl = bank.Logo;
                 existingAccount.Status = BankAccountStatus.Active;
-                existingAccount.IsDefault = !hasDefaultAccount;
-                existingAccount.VerifiedAt = DateTimeOffset.UtcNow;
+                existingAccount.IsDefault = shouldBeDefault;
+                existingAccount.VerifiedAt = now;
                 existingAccount.VerificationMessage = "Account verified and reactivated.";
                 existingAccount.ConsentGiven = true;
-                existingAccount.ConsentGivenAt = DateTimeOffset.UtcNow;
+                existingAccount.ConsentGivenAt = now;
                 existingAccount.ConsentVersion = "v1";
                 existingAccount.Currency = "NGN";
 
@@ -272,11 +270,11 @@ public sealed class AddBankAccount
                     BankName = bank.Name,
                     BankImageUrl = bank.Logo,
                     Status = BankAccountStatus.Active,
-                    IsDefault = !hasDefaultAccount,
-                    VerifiedAt = DateTimeOffset.UtcNow,
+                    IsDefault = shouldBeDefault,
+                    VerifiedAt = now,
                     VerificationMessage = "Account verified successfully.",
                     ConsentGiven = true,
-                    ConsentGivenAt = DateTimeOffset.UtcNow,
+                    ConsentGivenAt = now,
                     ConsentVersion = "v1",
                     Currency = "NGN",
                 };

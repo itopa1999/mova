@@ -15,6 +15,8 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
+
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class RestartWalletCommand
@@ -313,6 +315,19 @@ public sealed class RestartWalletCommand
 
             var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
 
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                _notificationQueue.QueueTransactionEmail(
+                    request.FirstName,
+                    request.Email,
+                    totalUpfrontCharge.ToString("N2"),
+                    EmailTemplateTransaction.Debit,
+                    "MOVA Main Balance",
+                    restartTx.Reference,
+                    DateTimeOffset.UtcNow.ToString("MMM dd, yyyy · HH:mm")
+                );
+            }
+
             op.Success(
                 $"Wallet restarted. WalletId: {wallet.Id}, " +
                 $"FirstRelease: {firstReleaseDate:u}, " +
@@ -324,7 +339,7 @@ public sealed class RestartWalletCommand
                 $"{wallet.Name} wallet restarted",
                 $"Your {wallet.Name} wallet has been restarted. " +
                 $"First release of the new cycle is scheduled for " +
-                $"{firstReleaseDate:MMM d, yyyy}. " +
+                $"{firstReleaseDate:MMM dd, yyyy}. " +
                 BuildDestinationClause(wallet.PayoutDestination),
                 $"/dashboard/scheduled/wallet/{wallet.Id}",
                 null,

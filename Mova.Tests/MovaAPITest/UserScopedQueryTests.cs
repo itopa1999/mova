@@ -10,6 +10,7 @@ using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
 using Xunit;
 using WalletListQuery = Mova.Application.BBL.Queries.AccountWallet.GetAllWallets;
+
 namespace Mova.Tests.MovaAPITest;
 
 public sealed class UserScopedQueryTests : BaseTest
@@ -64,10 +65,10 @@ public sealed class UserScopedQueryTests : BaseTest
     {
         var createdAt = new DateTimeOffset(2025, 4, 3, 2, 1, 0, TimeSpan.Zero);
         var identity = new Mock<IIdentityService>();
+        
+        // Use the real UnitOfWork from BaseTest instead of a mock.
         identity
-            .Setup(x => x.GetByIdentifierAsync(
-                UserPublicId,
-                It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetByIdentifierAsync(UserPublicId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(CreateIdentity(
                 UserPublicId,
                 createdAt: createdAt,
@@ -77,10 +78,8 @@ public sealed class UserScopedQueryTests : BaseTest
                 notifyProductUpdates: true,
                 notifyPromotions: false));
 
-        var handler = new GetProfile.Handler(identity.Object);
-        var result = await handler.Handle(
-            new GetProfile.Query { UserPublicId = UserPublicId },
-            CancellationToken.None);
+        var handler = new GetProfile.Handler(identity.Object, UnitOfWork);
+        var result = await handler.Handle(new GetProfile.Query { UserPublicId = UserPublicId }, CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
@@ -178,7 +177,7 @@ public sealed class UserScopedQueryTests : BaseTest
     public async Task GetProfile_RejectsMissingOwnerIdentifierWithoutLookingUpAUser()
     {
         var identity = new Mock<IIdentityService>();
-        var handler = new GetProfile.Handler(identity.Object);
+        var handler = new GetProfile.Handler(identity.Object, UnitOfWork);
 
         var result = await handler.Handle(
             new GetProfile.Query { UserPublicId = " " },

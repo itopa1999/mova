@@ -9,7 +9,6 @@ using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.Authentication;
 using Mova.Application.BBL.Queries.Profile;
 using Mova.Infrastructure.Authentication.Jwt;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using static Mova.Application.BBL.Commands.Authentication.ForgotPasswordCommand;
 using static Mova.Application.BBL.Commands.Authentication.LoginUserCommand;
@@ -308,6 +307,23 @@ public class AuthenticationController(
             (int)result.StatusCode,
             result);
     }
+
+    [HttpPost("request-profile-change")]
+    [Authorize(Roles = Roles.Customer)]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> RequestProfileChange(
+        [FromBody] RequestProfileChangeCommand.Command command,
+        CancellationToken cancellationToken)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+
+        var result = await _mediator.Send(command, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+
 
     [HttpPut("notification-preferences")]
     [Authorize(Roles = Roles.Customer)]
