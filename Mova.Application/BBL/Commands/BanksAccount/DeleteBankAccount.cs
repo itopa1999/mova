@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
@@ -11,8 +12,10 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+
 namespace Mova.Application.BBL.Commands.BanksAccount;
 
 public sealed class DeleteBankAccount
@@ -33,6 +36,7 @@ public sealed class DeleteBankAccount
         private readonly INotificationQueue _notificationQueue;
         private readonly IIdentityService _identityService;
         private readonly IPinChallenge _pinChallenge;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
@@ -40,12 +44,14 @@ public sealed class DeleteBankAccount
             INotificationQueue notificationQueue,
             IIdentityService identityService,
             IPinChallenge pinChallenge,
+            ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _notificationQueue = notificationQueue;
             _identityService = identityService;
             _pinChallenge = pinChallenge;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -146,6 +152,10 @@ public sealed class DeleteBankAccount
             account.IsDefault = false;
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _cacheService.DeleteAsync(
+                CacheKeys.UserBankAccounts(request.UserPublicId),
+                cancellationToken);
 
             op.Success(
                 $"Bank account deleted. Id: {account.Id}, Bank: {account.BankName}.");

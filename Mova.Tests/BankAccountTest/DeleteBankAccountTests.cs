@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Mova.Application.BBL.Commands.BanksAccount;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Domain.Entities;
@@ -20,6 +21,7 @@ public sealed class DeleteBankAccountTests : BaseTestWithPinChallenge
 
     private readonly Mock<INotificationQueue> _notifications = new();
     private readonly Mock<IIdentityService> _identityService = new();
+    private readonly Mock<ICacheService> _cacheService = new();
 
     public DeleteBankAccountTests()
     {
@@ -33,6 +35,7 @@ public sealed class DeleteBankAccountTests : BaseTestWithPinChallenge
             _notifications.Object,
             _identityService.Object,
             PinChallenge.Object,
+            _cacheService.Object,
             Mock.Of<ILogger<DeleteBankAccount.Handler>>());
     }
 
