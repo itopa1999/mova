@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Payment;
@@ -12,6 +13,7 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common;
+using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 
@@ -61,6 +63,7 @@ public sealed class AddBankAccount
         private readonly INotificationQueue _notificationQueue;
         private readonly IIdentityService _identityService;
         private readonly IPinChallenge _pinChallenge;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
@@ -69,6 +72,7 @@ public sealed class AddBankAccount
             INotificationQueue notificationQueue,
             IIdentityService identityService,
             IPinChallenge pinChallenge,
+            ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
@@ -76,6 +80,7 @@ public sealed class AddBankAccount
             _notificationQueue = notificationQueue;
             _identityService = identityService;
             _pinChallenge = pinChallenge;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -283,6 +288,10 @@ public sealed class AddBankAccount
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await _cacheService.DeleteAsync(
+                CacheKeys.UserBankAccounts(request.UserPublicId),
+                cancellationToken);
 
             op.Success(
                 $"Bank account {(existingAccount != null ? "reactivated" : "added")}. Id: {bankAccount.Id}, Bank: {bankAccount.BankName}.");

@@ -19,6 +19,11 @@ public static class CacheKeys
         $"banks:slug:{Norm(slug)}";
     public const string BanksPrefix = "banks:";
 
+    // ── User Bank Accounts ──────────────────────────────────────
+    public static string UserBankAccounts(string userPublicId) =>
+        $"user_bank_accounts:{Norm(userPublicId)}";
+    public const string UserBankAccountsPrefix = "user_bank_accounts:";
+
 
     // ── Feature flags ──────────────────────────────────────────
     public static string FeatureFlags() => "feature_flags:map";

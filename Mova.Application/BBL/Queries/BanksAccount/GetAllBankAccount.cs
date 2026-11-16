@@ -2,11 +2,13 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
+
 namespace Mova.Application.BBL.Queries.BanksAccount;
 
 public sealed class GetAllBankAccount
@@ -28,11 +30,15 @@ public sealed class GetAllBankAccount
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<List<GetAllBankAccountDto>>>
     {
-        private readonly IUnitOfWork _unitOfWork;
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
 
-        public Handler(IUnitOfWork unitOfWork)
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ICacheService _cacheService;
+
+        public Handler(IUnitOfWork unitOfWork, ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
+            _cacheService = cacheService;
         }
 
         public async Task<BaseResult<List<GetAllBankAccountDto>>> Handle(Query request, CancellationToken cancellationToken)
@@ -44,19 +50,29 @@ public sealed class GetAllBankAccount
                     "User public ID is required.");
             }
 
-            var accounts = await _unitOfWork.Query<BankAccount>()
-                .AsNoTracking()
-                .Where(x => x.UserPublicId == request.UserPublicId && x.Status == BankAccountStatus.Active)
-                .OrderByDescending(x => x.CreatedAt)
-                .Select(x => new GetAllBankAccountDto
+            var cacheKey = CacheKeys.UserBankAccounts(request.UserPublicId);
+
+            var accounts = await _cacheService.GetOrSetAsync(
+                cacheKey,
+                async ct =>
                 {
-                    Id = x.Id,
-                    AccountNumber = x.AccountNumber,
-                    AccountName = x.AccountName,
-                    BankName = x.BankName,
-                    BankImageUrl = x.BankImageUrl
-                })
-                .ToListAsync(cancellationToken);
+                    return await _unitOfWork.Query<BankAccount>()
+                        .AsNoTracking()
+                        .Where(x => x.UserPublicId == request.UserPublicId && x.Status == BankAccountStatus.Active)
+                        .OrderByDescending(x => x.CreatedAt)
+                        .Select(x => new GetAllBankAccountDto
+                        {
+                            Id = x.Id,
+                            AccountNumber = x.AccountNumber,
+                            AccountName = x.AccountName,
+                            BankName = x.BankName,
+                            BankImageUrl = x.BankImageUrl
+                        })
+                        .ToListAsync(ct);
+                },
+                timeout: CacheDuration,
+                cancellationToken: cancellationToken) 
+                ?? new List<GetAllBankAccountDto>();
 
             return new BaseResult<List<GetAllBankAccountDto>>(HttpStatusCode.OK, "Banks Account retrieve successfully", accounts);
         }

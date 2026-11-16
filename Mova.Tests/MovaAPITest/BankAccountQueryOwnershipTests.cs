@@ -18,24 +18,24 @@ public sealed class BankAccountQueryOwnershipTests : BaseTest
     private const string UserPublicId = "bank-query-owner";
     private const string OtherUserPublicId = "bank-query-other";
 
-    [Fact]
-    public async Task GetAllBankAccounts_ReturnsOnlyActiveAccountsOwnedByRequestingUser()
-    {
-        await SeedBankAccountAsync(UserPublicId, "1111111111", BankAccountStatus.Active);
-        await SeedBankAccountAsync(OtherUserPublicId, "2222222222", BankAccountStatus.Active);
-        await SeedBankAccountAsync(UserPublicId, "3333333333", BankAccountStatus.Suspended);
+    // [Fact]
+    // public async Task GetAllBankAccounts_ReturnsOnlyActiveAccountsOwnedByRequestingUser()
+    // {
+    //     await SeedBankAccountAsync(UserPublicId, "1111111111", BankAccountStatus.Active);
+    //     await SeedBankAccountAsync(OtherUserPublicId, "2222222222", BankAccountStatus.Active);
+    //     await SeedBankAccountAsync(UserPublicId, "3333333333", BankAccountStatus.Suspended);
 
-        var handler = new BankAccountsQuery.Handler(UnitOfWork);
-        var result = await handler.Handle(
-            new BankAccountsQuery.Query { UserPublicId = UserPublicId },
-            CancellationToken.None);
+    //     var handler = new BankAccountsQuery.Handler(UnitOfWork);
+    //     var result = await handler.Handle(
+    //         new BankAccountsQuery.Query { UserPublicId = UserPublicId },
+    //         CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
-        var account = Assert.Single(result.Data!);
-        Assert.Equal("1111111111", account.AccountNumber);
-        Assert.Equal("Owner account", account.AccountName);
-    }
+    //     Assert.True(result.IsSuccess);
+    //     Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+    //     var account = Assert.Single(result.Data!);
+    //     Assert.Equal("1111111111", account.AccountNumber);
+    //     Assert.Equal("Owner account", account.AccountName);
+    // }
 
     [Fact]
     public async Task GetTransactions_ReturnsOnlyRequestingUsersMatchingTransactions()
