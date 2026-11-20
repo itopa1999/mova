@@ -1,12 +1,15 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Mova.Api.Filters;
 using Mova.Api.HealthChecks;
+using Mova.Shared.Constants;
 namespace Mova.Api.Controllers;
 
 /// <summary>Provides backend readiness status for deployment probes.</summary>
 [ApiController]
 [AllowAnonymous]
+[RestrictPlatform(Platforms.Internal)]
 [Route("health")]
 public sealed class HealthController(HealthCheckService healthCheckService) : ControllerBase
 {

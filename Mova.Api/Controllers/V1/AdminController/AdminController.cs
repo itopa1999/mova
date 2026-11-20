@@ -17,12 +17,15 @@ using Mova.Application.BBL.Queries.Admin.User;
 using static Mova.Application.BBL.Queries.Admin.User.GetUsers;
 using Microsoft.AspNetCore.Authorization;
 using Mova.Shared.Constants;
+using Mova.Api.Filters;
 namespace Mova.Api.Controllers.V1.AdminController;
 
 [ApiController]
 [Authorize(Roles = Roles.AllAdmins)]
 [Route("api/v{version:apiVersion}/admin")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.Web, Platforms.Swagger)]
+
 public class AdminController(
     IMediator mediator) : BaseController
 {

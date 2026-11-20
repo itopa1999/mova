@@ -8,10 +8,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Mova.Api.Configurations;
+using Mova.Api.Filters;
 using Mova.Api.RateLimiting;
 using Mova.Application.BBL.Commands.Admin;
 using Mova.Infrastructure.Authentication.Jwt;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Constants;
 using static Mova.Application.BBL.Commands.Admin.LoginCommand;
 
 namespace Mova.Api.Controllers.V1.AdminController;
@@ -19,6 +21,8 @@ namespace Mova.Api.Controllers.V1.AdminController;
 [ApiController]
 [Route("api/v{version:apiVersion}/admin/auth")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.Web, Platforms.Swagger)]
+
 
 public class AdminAuth(
     IMediator mediator,
