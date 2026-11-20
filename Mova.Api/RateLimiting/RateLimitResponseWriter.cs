@@ -1,6 +1,8 @@
+using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using Mova.Shared.Common.Results;
 namespace Mova.Api.RateLimiting;
 
 internal static class RateLimitResponseWriter
@@ -37,15 +39,10 @@ internal static class RateLimitResponseWriter
         httpContext.Response.Headers["X-RateLimit-RetryAfter"] =
             retryAfterSeconds.ToString();
 
-        await httpContext.Response.WriteAsJsonAsync(new
-        {
-            is_success = false,
-            status_code = "rateLimitExceeded",
-            message =
-                $"Too many requests. Try again in {retryAfterText}.",
-            retry_after_seconds = retryAfterSeconds,
-            timestamp = DateTimeOffset.UtcNow,
-        }, cancellationToken);
+        await httpContext.Response.WriteAsJsonAsync(
+            new BaseResult(HttpStatusCode.TooManyRequests,
+        $"Too many requests. Try again in {retryAfterText}."),
+        cancellationToken);
     }
 
     private static string FormatRetryAfter(int seconds)

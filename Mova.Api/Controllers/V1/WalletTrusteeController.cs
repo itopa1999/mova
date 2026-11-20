@@ -1,4 +1,3 @@
-
 using System.Net;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -23,24 +22,42 @@ using static Mova.Application.BBL.Queries.AccountWalletTrustee.ListVerifiedTrust
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
 using Mova.Api.Filters;
+
 namespace Mova.Api.Controllers.V1;
 
+/// <summary>
+/// Trustee-wallet endpoints: creating a trustee wallet, inviting/managing
+/// trustees, and the token-based consent and release-request flows.
+/// </summary>
+/// <remarks>
+/// Release approvals and any endpoint that grants or revokes financial
+/// access use <see cref="RateLimitPolicies.Sensitive"/>; non-money writes
+/// use <see cref="RateLimitPolicies.Write"/>; reads use
+/// <see cref="RateLimitPolicies.Read"/>; anonymous token endpoints use
+/// <see cref="RateLimitPolicies.AuthStrict"/> to resist token guessing.
+/// </remarks>
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
 [Route("api/v{version:apiVersion}/trustee/wallets")]
 [ApiVersion("1.0")]
 [RestrictPlatform(Platforms.Web, Platforms.Swagger)]
-
 public class WalletTrusteeController(
     IMediator mediator) : BaseController
 {
     private readonly IMediator _mediator = mediator;
 
+    // ----------------------- Commands -----------------------
+
+    /// <summary>
+    /// Creates a new trustee-managed wallet for the authenticated customer.
+    /// </summary>
     [HttpPost("create")]
     [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult<CreateTrusteeWalletResponseDto>), (int)HttpStatusCode.Created)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> CreateWallet([FromBody] CreateTrusteeWalletCommand.Command command, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateWallet(
+        [FromBody] CreateTrusteeWalletCommand.Command command,
+        CancellationToken cancellationToken)
     {
         command.UserPublicId = UserPublicId ?? string.Empty;
         command.Email = UserEmail ?? string.Empty;
@@ -53,8 +70,11 @@ public class WalletTrusteeController(
             result);
     }
 
+    /// <summary>
+    /// Invites a user to act as a trustee on one of the customer's wallets.
+    /// </summary>
     [HttpPost("invite")]
-    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
+    [EnableRateLimiting(RateLimitPolicies.Write)]
     [ProducesResponseType(typeof(BaseResult<InviteTrusteeResponseDto>), (int)HttpStatusCode.Created)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Conflict)]
@@ -73,18 +93,9 @@ public class WalletTrusteeController(
             result);
     }
 
-    [HttpGet("trustee")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(typeof(BaseResult<ListOwnerTrusteesResponseDto>), (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> List(CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new ListOwnerTrusteesQuery.Query { UserPublicId = UserPublicId ?? string.Empty },
-            cancellationToken);
-
-        return StatusCode((int)result.StatusCode, result);
-    }
-
+    /// <summary>
+    /// Re-sends a pending trustee invitation.
+    /// </summary>
     [HttpPost("resend-invitation/{id:long}")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<ResendTrusteeInvitationResponseDto>), (int)HttpStatusCode.OK)]
@@ -108,8 +119,12 @@ public class WalletTrusteeController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    /// <summary>
+    /// Removes a trustee from the customer's wallet, revoking their
+    /// release-approval access.
+    /// </summary>
     [HttpDelete("trustee/{id:long}")]
-    [EnableRateLimiting(RateLimitPolicies.Write)]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<DeleteTrusteeResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult<DeleteTrusteeResponseDto>), (int)HttpStatusCode.Conflict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
@@ -129,25 +144,9 @@ public class WalletTrusteeController(
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpGet("validate/invitation/{token}")]
-    [AllowAnonymous]
-    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
-    [ProducesResponseType(typeof(BaseResult<TrusteeConsentInfoDto>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Gone)]
-    public async Task<IActionResult> GetConsent(
-        [FromRoute] string token,
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new GetTrusteeConsentQuery.Query { Token = token },
-            cancellationToken);
-
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
-    }
-
+    /// <summary>
+    /// Accepts a trustee invitation using the token from the invitation link.
+    /// </summary>
     [HttpPost("accept/invitation/{token}")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
@@ -172,6 +171,10 @@ public class WalletTrusteeController(
             result);
     }
 
+    /// <summary>
+    /// Declines a trustee invitation using the token from the invitation
+    /// link, optionally recording a reason.
+    /// </summary>
     [HttpPost("decline/invitation/{token}")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
@@ -202,6 +205,92 @@ public class WalletTrusteeController(
         public string? Reason { get; set; }
     }
 
+    /// <summary>
+    /// Raises a release request against a trustee wallet, asking the
+    /// trustees to approve a fund release.
+    /// </summary>
+    [HttpPost("{id:long}/release-requests")]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(typeof(BaseResult<ReleaseRequestsPageDto>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ReleaseRequests(
+        int id,
+        [FromBody] RequestReleaseCommand.Command command,
+        CancellationToken cancellationToken = default)
+    {
+        command.UserPublicId = UserPublicId ?? string.Empty;
+        command.FirstName = UserFirstName ?? string.Empty;
+        command.Email = UserEmail ?? string.Empty;
+        command.WalletId = id;
+
+        var result = await _mediator.Send(command, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Approves a pending release request via the trustee token, releasing
+    /// the funds.
+    /// </summary>
+    [HttpPost("release/{token}/approve")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ApproveRelease(
+        [FromRoute] string token,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new ApproveReleaseRequestCommand.Command
+            {
+                Token = token,
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+            },
+            cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Rejects a pending release request via the trustee token, optionally
+    /// with a reason.
+    /// </summary>
+    [HttpPost("release/{token}/reject")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> RejectRelease(
+        [FromRoute] string token,
+        [FromBody] RejectReleaseRequestCommand.Command? body,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new RejectReleaseRequestCommand.Command
+            {
+                Token = token,
+                Reason = body?.Reason,
+            },
+            cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    // ----------------------- Queries -----------------------
+
+    /// <summary>
+    /// Lists the trustees attached to the authenticated customer's wallets.
+    /// </summary>
+    [HttpGet("trustee")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<ListOwnerTrusteesResponseDto>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> List(CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new ListOwnerTrusteesQuery.Query { UserPublicId = UserPublicId ?? string.Empty },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Lists the customer's trustees that have completed verification.
+    /// </summary>
     [HttpGet("list/verified/trustees")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<ListVerifiedTrusteesResponseDto>), (int)HttpStatusCode.OK)]
@@ -217,6 +306,9 @@ public class WalletTrusteeController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    /// <summary>
+    /// Returns the details of a specific trustee wallet.
+    /// </summary>
     [HttpGet("{id:long}")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<TrusteeWalletDetailDto>), (int)HttpStatusCode.OK)]
@@ -236,23 +328,9 @@ public class WalletTrusteeController(
         return StatusCode((int)result.StatusCode, result);
     }
 
-    [HttpPost("{id:long}/release-requests")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(typeof(BaseResult<ReleaseRequestsPageDto>), (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> ReleaseRequests(
-        int id,
-        [FromBody] RequestReleaseCommand.Command command,
-        CancellationToken cancellationToken = default)
-    {
-        command.UserPublicId = UserPublicId ?? string.Empty;
-        command.FirstName = UserFirstName ?? string.Empty;
-        command.Email = UserEmail ?? string.Empty;
-        command.WalletId = id;
-
-        var result = await _mediator.Send(command, cancellationToken);
-        return StatusCode((int)result.StatusCode, result);
-    }
-
+    /// <summary>
+    /// Returns a paginated list of release requests for a trustee wallet.
+    /// </summary>
     [HttpGet("{id:long}/release-requests")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<ReleaseRequestsPageDto>), (int)HttpStatusCode.OK)]
@@ -277,6 +355,32 @@ public class WalletTrusteeController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    /// <summary>
+    /// Validates a trustee-invitation token and returns the consent details.
+    /// </summary>
+    [HttpGet("validate/invitation/{token}")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
+    [ProducesResponseType(typeof(BaseResult<TrusteeConsentInfoDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Gone)]
+    public async Task<IActionResult> GetConsent(
+        [FromRoute] string token,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetTrusteeConsentQuery.Query { Token = token },
+            cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
+
+    /// <summary>
+    /// Validates a release-request token and returns the release-consent
+    /// details.
+    /// </summary>
     [HttpGet("release/validate/{token}")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
@@ -287,44 +391,6 @@ public class WalletTrusteeController(
     {
         var result = await _mediator.Send(
             new GetReleaseRequestConsentQuery.Query { Token = token },
-            cancellationToken);
-        return StatusCode((int)result.StatusCode, result);
-    }
-    
-    [HttpPost("release/{token}/approve")]
-    [AllowAnonymous]
-    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> ApproveRelease(
-        [FromRoute] string token,
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new ApproveReleaseRequestCommand.Command
-            {
-                Token = token,
-                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
-            },
-            cancellationToken);
-        return StatusCode((int)result.StatusCode, result);
-    }
-
-    
-    [HttpPost("release/{token}/reject")]
-    [AllowAnonymous]
-    [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> RejectRelease(
-        [FromRoute] string token,
-        [FromBody] RejectReleaseRequestCommand.Command? body,
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new RejectReleaseRequestCommand.Command
-            {
-                Token = token,
-                Reason = body?.Reason,
-            },
             cancellationToken);
         return StatusCode((int)result.StatusCode, result);
     }

@@ -24,8 +24,18 @@ using WithdrawalResponse = Mova.Application.BBL.Commands.BanksAccount.Withdrawal
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
 using Mova.Api.Filters;
+
 namespace Mova.Api.Controllers.V1;
 
+/// <summary>
+/// Bank-account management, deposits, withdrawals, funding, and
+/// payment-provider callbacks for authenticated Mova customers.
+/// </summary>
+/// <remarks>
+/// Money-moving, account-mutation, and external-provider endpoints use
+/// <see cref="RateLimitPolicies.Sensitive"/>; reads use
+/// <see cref="RateLimitPolicies.Read"/>.
+/// </remarks>
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
 [Route("api/v{version:apiVersion}/bank-account")]
@@ -38,22 +48,12 @@ public class BankAccountController(
     private readonly IMediator _mediator = mediator;
     private readonly ExternalApiSettings _externalApiSettings = externalApiSettings.Value;
 
-    [HttpGet("banks")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(typeof(BaseResult<List<GetBanksDto>>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> GetBanksDetailsData([FromQuery] string? name, CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new GetBanks.Query
-            {
-                Name = name
-            },
-            cancellationToken);
+    // ----------------------- Commands -----------------------
 
-        return StatusCode((int)result.StatusCode, result);
-    }
-
+    /// <summary>
+    /// Verifies a bank account number against the specified bank via the
+    /// payment provider and returns the resolved account holder name.
+    /// </summary>
     [HttpPost("banks/verify")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<VerifyBankAccountDto>), (int)HttpStatusCode.OK)]
@@ -63,14 +63,15 @@ public class BankAccountController(
         CancellationToken cancellationToken)
     {
         command.UserPublicId = UserPublicId ?? string.Empty;
-        
-        var result = await _mediator.Send(
-            command,
-            cancellationToken);
+
+        var result = await _mediator.Send(command, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
     }
 
+    /// <summary>
+    /// Adds a new bank account to the authenticated customer's profile.
+    /// </summary>
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<AddBankAccountDto>), (int)HttpStatusCode.OK)]
@@ -83,23 +84,19 @@ public class BankAccountController(
         command.Email = UserEmail ?? string.Empty;
         command.FirstName = UserFirstName ?? string.Empty;
 
-        var result = await _mediator.Send(
-            command,
-            cancellationToken);
+        var result = await _mediator.Send(command, cancellationToken);
 
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
+        return StatusCode((int)result.StatusCode, result);
     }
 
+    /// <summary>
+    /// Links a specific wallet to a customer's existing bank account so
+    /// funds can be withdrawn to it.
+    /// </summary>
     [HttpPost("{walletId:long}/bank-account")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
-    [ProducesResponseType(
-        typeof(BaseResult<LinkAccountToBankDto>),
-        (int)HttpStatusCode.OK)]
-    [ProducesResponseType(
-        typeof(BaseResult),
-        (int)HttpStatusCode.NotFound)]
+    [ProducesResponseType(typeof(BaseResult<LinkAccountToBankDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> LinkAccountToBank(
         long walletId,
         [FromBody] LinkAccountToBank.Command command,
@@ -110,33 +107,14 @@ public class BankAccountController(
         command.FirstName = UserFirstName ?? string.Empty;
         command.Email = UserEmail ?? string.Empty;
 
-        var result = await _mediator.Send(
-            command,
-            cancellationToken);
-
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
-    }
-
-    [HttpGet]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(typeof(BaseResult<List<GetAllBankAccountDto>>), (int)HttpStatusCode.OK)]
-    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
-    public async Task<IActionResult> GetBankAccounts(
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new GetAllBankAccount.Query
-            {
-                UserPublicId = UserPublicId ?? string.Empty
-            },
-            cancellationToken);
+        var result = await _mediator.Send(command, cancellationToken);
 
         return StatusCode((int)result.StatusCode, result);
     }
 
-
+    /// <summary>
+    /// Removes a bank account from the authenticated customer's profile.
+    /// </summary>
     [HttpDelete("{bankAccountId:long}/remove")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
@@ -156,65 +134,13 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
-
-
-    [HttpGet("deposits")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(
-        typeof(BaseResult<List<DepositTransaction.TransactionDto>>),
-        (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> GetUnassignedDepositTransactions(
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new DepositTransaction.Query
-            {
-                UserPublicId = UserPublicId ?? string.Empty
-            },
-            cancellationToken);
-
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
-    }
-
-    [HttpGet("transactions")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(
-        typeof(BaseResult<PaginatedTransactionsDto>),
-        (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> GetTransactions(
-        [FromQuery] GetTransactions.Query query,
-        CancellationToken cancellationToken)
-    {
-        query.UserPublicId = UserPublicId ?? string.Empty;
-        var result = await _mediator.Send(query, cancellationToken);
-        return StatusCode((int)result.StatusCode, result);
-    }
-
-    [HttpGet("withdrawal/available-balance")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    [ProducesResponseType(
-        typeof(BaseResult<GetWithdrawalAvailableBalancesQuery.Response>),
-        (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> GetWithdrawalAvailableBalances(
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new GetWithdrawalAvailableBalancesQuery.Query
-            {
-                UserPublicId = UserPublicId ?? string.Empty
-            },
-            cancellationToken);
-
-        return StatusCode((int)result.StatusCode, result);
-    }
-
+    /// <summary>
+    /// Initiates a withdrawal from a customer wallet to a linked bank
+    /// account.
+    /// </summary>
     [HttpPost("withdrawal")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
-    [ProducesResponseType(
-        typeof(BaseResult<WithdrawalResponse>),
-        (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult<WithdrawalResponse>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.Forbidden)]
@@ -227,6 +153,10 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    /// <summary>
+    /// Initiates a deposit / wallet-funding request via the payment
+    /// provider.
+    /// </summary>
     [HttpPost("fund-account")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<FundAccountDto>), (int)HttpStatusCode.OK)]
@@ -240,13 +170,116 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+    // ----------------------- Queries -----------------------
+
+    /// <summary>
+    /// Returns the list of supported banks from the payment provider,
+    /// optionally filtered by name (case-insensitive contains match).
+    /// </summary>
+    [HttpGet("banks")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<List<GetBanksDto>>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetBanksDetailsData(
+        [FromQuery] string? name,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetBanks.Query
+            {
+                Name = name
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Returns all bank accounts registered by the authenticated customer.
+    /// </summary>
+    [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<List<GetAllBankAccountDto>>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetBankAccounts(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetAllBankAccount.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Returns deposit transactions that have been received but not yet
+    /// assigned to a wallet.
+    /// </summary>
+    [HttpGet("deposits")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<List<DepositTransaction.TransactionDto>>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> GetUnassignedDepositTransactions(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new DepositTransaction.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Returns a paginated list of the authenticated customer's
+    /// transactions.
+    /// </summary>
+    [HttpGet("transactions")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<PaginatedTransactionsDto>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> GetTransactions(
+        [FromQuery] GetTransactions.Query query,
+        CancellationToken cancellationToken)
+    {
+        query.UserPublicId = UserPublicId ?? string.Empty;
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Returns the balances the customer can withdraw from, broken down by
+    /// wallet.
+    /// </summary>
+    [HttpGet("withdrawal/available-balance")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<GetWithdrawalAvailableBalancesQuery.Response>), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> GetWithdrawalAvailableBalances(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetWithdrawalAvailableBalancesQuery.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Returns the funding account (virtual account) the customer should
+    /// transfer to in order to fund their wallet.
+    /// </summary>
     [HttpGet("funding-method")]
     [EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<GetAccountForFundingResponse>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetFundingMethod(CancellationToken cancellationToken)
     {
-
         var query = new GetAccountForFunding.Query
         {
             UserPublicId = UserPublicId ?? string.Empty,
@@ -256,7 +289,12 @@ public class BankAccountController(
         return StatusCode((int)result.StatusCode, result);
     }
 
-
+    /// <summary>
+    /// Payment-provider callback. Called by the provider (or the user's
+    /// browser after checkout) with a payment reference. Looks up the
+    /// transaction and redirects the browser to the frontend confirmation
+    /// page with the result encoded in the query string.
+    /// </summary>
     [HttpGet("payment/callback")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Read)]
@@ -268,11 +306,11 @@ public class BankAccountController(
         CancellationToken cancellationToken)
     {
         var paymentReference =
-        !string.IsNullOrWhiteSpace(reference)
-            ? reference
-            : !string.IsNullOrWhiteSpace(txRef)
-                ? txRef
-                : monnifyReference;
+            !string.IsNullOrWhiteSpace(reference)
+                ? reference
+                : !string.IsNullOrWhiteSpace(txRef)
+                    ? txRef
+                    : monnifyReference;
 
         var result = await _mediator.Send(
             new PaymentCallback.Query

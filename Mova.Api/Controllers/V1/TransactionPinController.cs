@@ -13,14 +13,23 @@ using Mova.Shared.Constants;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
 using Mova.Api.Filters;
+
 namespace Mova.Api.Controllers.V1;
 
+/// <summary>
+/// Transaction-PIN endpoints: set, verify, change, forgot-PIN OTP flow, and
+/// PIN-setup lookup.
+/// </summary>
+/// <remarks>
+/// Set/change use <see cref="RateLimitPolicies.Sensitive"/>; verify and the
+/// forgot-PIN flow use <see cref="RateLimitPolicies.AuthStrict"/> to resist
+/// brute force; the setup lookup uses <see cref="RateLimitPolicies.Read"/>.
+/// </remarks>
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
 [Route("api/v{version:apiVersion}/security/pin")]
 [ApiVersion("1.0")]
 [RestrictPlatform(Platforms.Web, Platforms.Swagger)]
-
 public class TransactionPinController(
     IMediator mediator,
     IPinDecryptionService pinDecryptionService,
@@ -30,6 +39,11 @@ public class TransactionPinController(
     private readonly IPinDecryptionService _pinDecryptionService = pinDecryptionService;
     private readonly ILogger<TransactionPinController> _logger = logger;
 
+    // ----------------------- Commands -----------------------
+
+    /// <summary>
+    /// Sets the initial transaction PIN for the authenticated customer.
+    /// </summary>
     [HttpPost("set")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
@@ -56,6 +70,10 @@ public class TransactionPinController(
             result);
     }
 
+    /// <summary>
+    /// Verifies the authenticated customer's transaction PIN for a given
+    /// challenge type.
+    /// </summary>
     [HttpPost("verify")]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
@@ -84,6 +102,9 @@ public class TransactionPinController(
             result);
     }
 
+    /// <summary>
+    /// Changes the authenticated customer's transaction PIN.
+    /// </summary>
     [HttpPut("change")]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
@@ -110,28 +131,11 @@ public class TransactionPinController(
         return StatusCode(
             (int)result.StatusCode,
             result);
-
     }
 
-    [HttpGet("has-pin-setup")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
-    public async Task<IActionResult> CheckIfPinSet(
-        CancellationToken cancellationToken)
-    {
-        var result = await _mediator.Send(
-            new GetIfPinIsSetQuery.Query
-            {
-                UserPublicId = UserPublicId ?? string.Empty
-            },
-            cancellationToken);
-
-        return StatusCode(
-            (int)result.StatusCode,
-            result);
-
-    }
-
-
+    /// <summary>
+    /// Sends an OTP to start the forgot-PIN reset flow.
+    /// </summary>
     [HttpPost("forgot-pin-send")]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
@@ -151,6 +155,9 @@ public class TransactionPinController(
             result);
     }
 
+    /// <summary>
+    /// Verifies the OTP issued by the forgot-PIN flow.
+    /// </summary>
     [HttpPost("forgot-pin-verify")]
     [EnableRateLimiting(RateLimitPolicies.AuthStrict)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
@@ -169,6 +176,28 @@ public class TransactionPinController(
             result);
     }
 
+    // ----------------------- Queries -----------------------
+
+    /// <summary>
+    /// Reports whether the authenticated customer has already set up a
+    /// transaction PIN.
+    /// </summary>
+    [HttpGet("has-pin-setup")]
+    [EnableRateLimiting(RateLimitPolicies.Read)]
+    public async Task<IActionResult> CheckIfPinSet(
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new GetIfPinIsSetQuery.Query
+            {
+                UserPublicId = UserPublicId ?? string.Empty
+            },
+            cancellationToken);
+
+        return StatusCode(
+            (int)result.StatusCode,
+            result);
+    }
 
     private bool TryDecryptPin(string encryptedPin, out string pin)
     {

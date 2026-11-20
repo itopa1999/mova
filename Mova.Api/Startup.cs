@@ -19,6 +19,7 @@ using Mova.Infrastructure.Jobs.CircleJob;
 using Mova.Infrastructure.Jobs.ScheduleJob;
 using Mova.Infrastructure.Jobs.TruteesJob;
 using Asp.Versioning;
+using System.Reflection;
 namespace Mova.Api;
 
 public class Startup(IConfiguration configuration, IWebHostEnvironment environment)
@@ -218,6 +219,10 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
                     .Replace(",", "_")
                     .Replace(" ", "_");
             });
+
+            var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+            options.IncludeXmlComments(xmlPath);
 
         });
 
