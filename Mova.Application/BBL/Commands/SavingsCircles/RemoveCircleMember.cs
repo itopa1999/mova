@@ -156,7 +156,7 @@ public sealed class RemoveCircleMemberCommand
             }
 
             wallet.Status = WalletStatus.Broken;
-            wallet.ClosedAt = DateTimeOffset.Now;
+            wallet.ClosedAt = DateTimeOffset.UtcNow;
             member.Status = CircleMemberStatus.Exited;
             member.DepositHeld = Money.FromNaira(0);
             member.RotationPosition = null;
