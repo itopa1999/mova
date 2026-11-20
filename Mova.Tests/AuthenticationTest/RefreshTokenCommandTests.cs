@@ -149,7 +149,6 @@ public sealed class RefreshTokenCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
                 It.IsAny<string>(),
-                It.IsAny<string>(),
                 It.IsAny<List<string>>()))
             .Returns(NewAccessToken);
     }
@@ -349,7 +348,6 @@ public sealed class RefreshTokenCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
-                It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<List<string>>()),
             Times.Never);

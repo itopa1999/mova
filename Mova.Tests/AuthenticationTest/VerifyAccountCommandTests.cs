@@ -133,7 +133,6 @@ public sealed class VerifyAccountCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
                 It.IsAny<string>(),
-                It.IsAny<string>(),
                 It.IsAny<List<string>>()))
             .Returns(AccessToken);
     }

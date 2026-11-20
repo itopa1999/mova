@@ -199,7 +199,6 @@ public sealed class LoginUserCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
                 It.IsAny<string>(),
-                It.IsAny<string>(),
                 It.IsAny<List<string>>()))
             .Returns(AccessToken);
     }
@@ -537,7 +536,6 @@ public sealed class LoginUserCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
                 It.IsAny<string>(),
-                It.IsAny<string>(),
                 It.IsAny<List<string>>()),
             Times.Never);
     }
@@ -815,7 +813,6 @@ public sealed class LoginUserCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
                 It.IsAny<string>(),
-                It.IsAny<string>(),
                 It.IsAny<List<string>>()),
             Times.Never);
     }
@@ -991,7 +988,6 @@ public sealed class LoginUserCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
                 It.IsAny<string>(),
-                It.IsAny<string>(),
                 It.IsAny<List<string>>()),
             Times.Never);
     }
@@ -1153,7 +1149,6 @@ public sealed class LoginUserCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
                 It.IsAny<string>(),
-                It.IsAny<string>(),
                 It.IsAny<List<string>>()),
             Times.Never);
     }
@@ -1201,7 +1196,6 @@ public sealed class LoginUserCommandTests : BaseTest
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
                 It.IsAny<decimal>(),
-                It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<List<string>>()))
             .Callback(() => callOrder.Add("jwt"))

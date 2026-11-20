@@ -280,6 +280,10 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
         //    middleware registered below it.
         // ─────────────────────────────────────────────────────────────
         app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+        app.UseCors("AllowSpecificOrigin");
+
+        
         app.UseMiddleware<PlatformValidationMiddleware>();
 
         // ─────────────────────────────────────────────────────────────
@@ -293,7 +297,7 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
         // ─────────────────────────────────────────────────────────────
         // 3. CORS — must run before endpoints it protects.
         // ─────────────────────────────────────────────────────────────
-        app.UseCors("AllowSpecificOrigin");
+        
 
         // ─────────────────────────────────────────────────────────────
         // 4. Swagger — gated by basic auth via SwaggerAuthMiddleware.
