@@ -22,11 +22,13 @@ using static Mova.Application.BBL.Commands.Authentication.CheckRegistrationAvail
 using static Mova.Application.BBL.Queries.Profile.GetProfile;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
+using Mova.Api.Filters;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/auth")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.Internal, Platforms.Web, Platforms.Swagger)]
 public class AuthenticationController(
     IMediator mediator,
     IOptions<JwtSettings> jwtOptions) : BaseController

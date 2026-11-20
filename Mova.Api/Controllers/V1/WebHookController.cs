@@ -6,14 +6,17 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Mova.Api.Configurations;
 using Mova.Application.BBL.Commands.WebHook;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
+using Mova.Api.Filters;
+using Mova.Shared.Constants;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/webhook")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.External)]
+
 public class WebHookController(
     IMediator mediator) : BaseController
 {

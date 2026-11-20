@@ -18,7 +18,8 @@ public class PlatformValidationMiddleware
 
     private static readonly string[] ExternalPaths = 
     { 
-        "/api/v1/webhooks", 
+        "/api/v1/webhooks",
+        "/api/v1/bank-account/payment/callback"
     };
 
     private static readonly string[] InternalPaths = 
@@ -26,7 +27,7 @@ public class PlatformValidationMiddleware
         "/health", 
         "/swagger", 
         "/hangfire",
-        "/api/v1/auth/verify-email"
+        "api/v1/auth/verify-account"
     };
 
     public PlatformValidationMiddleware(RequestDelegate next)
@@ -47,14 +48,8 @@ public class PlatformValidationMiddleware
 
         if (MatchesPath(path, InternalPaths))
         {
-            if (path.StartsWith("/api/v1/auth/verify-email", StringComparison.OrdinalIgnoreCase))
-            {
-                context.Items["Platform"] = Platforms.Mobile;
-            }
-            else
-            {
-                context.Items["Platform"] = Platforms.Internal; 
-            }
+    
+            context.Items["Platform"] = Platforms.Internal; 
             await _next(context);
             return;
         }

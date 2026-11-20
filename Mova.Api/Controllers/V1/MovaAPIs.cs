@@ -13,11 +13,14 @@ using static Mova.Application.BBL.MovaAPIs.SubmitFeedbackCommand;
 using Mova.Shared.Constants;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
+using Mova.Api.Filters;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/mova")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.Web, Platforms.Swagger)]
+
 public class MovaController(
     IMediator mediator) : BaseController
 {

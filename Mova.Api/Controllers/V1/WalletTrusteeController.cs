@@ -22,12 +22,15 @@ using static Mova.Application.BBL.Queries.AccountWalletTrustee.ListOwnerTrustees
 using static Mova.Application.BBL.Queries.AccountWalletTrustee.ListVerifiedTrusteesQuery;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
+using Mova.Api.Filters;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
 [Route("api/v{version:apiVersion}/trustee/wallets")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.Web, Platforms.Swagger)]
+
 public class WalletTrusteeController(
     IMediator mediator) : BaseController
 {

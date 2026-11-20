@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mova.Api.Configurations;
+using Mova.Api.Filters;
 using Mova.Application.BBL.Commands.Legal;
 using Mova.Application.BBL.Queries.Legal;
 using Mova.Domain.Enums;
@@ -16,6 +17,8 @@ namespace Mova.Api.Controllers.V1;
 [ApiController]
 [Route("api/v{version:apiVersion}/legal")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.Web, Platforms.Swagger)]
+
 public class LegalDocumentController(IMediator mediator) : BaseController
 {
     private readonly IMediator _mediator = mediator;

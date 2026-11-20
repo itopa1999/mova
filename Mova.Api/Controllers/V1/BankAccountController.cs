@@ -23,12 +23,14 @@ using WithdrawalRequest = Mova.Application.BBL.Commands.BanksAccount.WithdrawalC
 using WithdrawalResponse = Mova.Application.BBL.Commands.BanksAccount.WithdrawalCommand.WithdrawalResponse;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
+using Mova.Api.Filters;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
 [Route("api/v{version:apiVersion}/bank-account")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.External, Platforms.Web, Platforms.Swagger)]
 public class BankAccountController(
     IMediator mediator,
     IOptions<ExternalApiSettings> externalApiSettings) : BaseController

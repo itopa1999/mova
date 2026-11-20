@@ -12,12 +12,14 @@ using static Mova.Application.BBL.Commands.SavingsCircles.CreateCircleCommand;
 using static Mova.Application.BBL.Queries.SavingsCircles.SearchCircleInviteeQuery;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
+using Mova.Api.Filters;
 namespace Mova.Api.Controllers.V1;
 
 [ApiController]
 [Authorize(Roles = Roles.Customer)]
 [Route("api/v{version:apiVersion}/circle")]
 [ApiVersion("1.0")]
+[RestrictPlatform(Platforms.Web, Platforms.Swagger)]
 public class CircleController(
     IMediator mediator) : BaseController
 {
