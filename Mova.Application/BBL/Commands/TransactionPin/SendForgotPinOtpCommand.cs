@@ -20,8 +20,6 @@ public sealed class SendForgotPinOtpCommand
     {
         [JsonIgnore]
         public string UserPublicId { get; set; } = string.Empty;
-
-        public string Platform { get; set; } = "web";
     }
 
     public sealed class Handler

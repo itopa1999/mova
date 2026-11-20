@@ -13,7 +13,6 @@ namespace Mova.Application.Interfaces.Security
             string phoneNumber,
             decimal balance,
             string fullName,
-            string platform,
             IList<string> roles);
     }
 }

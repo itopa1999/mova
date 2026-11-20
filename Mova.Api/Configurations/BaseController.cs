@@ -34,7 +34,4 @@ public abstract class BaseController : ControllerBase
 
     protected List<string> UserRoles =>
         User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
-
-    protected string? Platform =>
-        User.FindFirst("Platform")?.Value;
 }

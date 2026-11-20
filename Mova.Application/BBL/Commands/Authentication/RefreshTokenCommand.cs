@@ -18,8 +18,6 @@ public sealed class RefreshTokenCommand
         [MaxLength(4096)]
         public string RefreshToken { get; set; } = string.Empty;
 
-        [Required, MaxLength(20)]
-        public string Platform { get; init; } = Platforms.Mobile;
     }
 
     public class RefreshTokenResponseDto
@@ -73,16 +71,7 @@ public sealed class RefreshTokenCommand
             using var op = OperationLogger.Start(
                 _logger,
                 "RefreshToken",
-                ("Platform", request.Platform),
                 ("TokenPrefix", RedactToken(request.RefreshToken)));
-
-            if (!ValidPlatforms.Contains(request.Platform))
-            {
-                op.Warning($"Invalid platform: {request.Platform}");
-                return new BaseResult<RefreshTokenResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Invalid platform specified.");
-            }
 
             var refreshToken = await _refreshTokenService.ValidateAsync(
                 request.RefreshToken,
@@ -143,7 +132,6 @@ public sealed class RefreshTokenCommand
                 user.PhoneNumber,
                 user.Balance.ToDecimal(),
                 user.FullName,
-                request.Platform,
                 roles);
 
             var (newToken, newRefreshTokenEntity) =
@@ -168,7 +156,6 @@ public sealed class RefreshTokenCommand
                     FullName = user.FullName,
                     ProfilePicture = user.ProfilePicture,
                     Balance = user.Balance.ToDecimal(),
-                    Platform = request.Platform,
                     AccessToken = accessToken,
                     RefreshToken = newToken,
                     AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),

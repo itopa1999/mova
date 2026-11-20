@@ -29,7 +29,6 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
         string phoneNumber,
         decimal balance,
         string fullName,
-        string platform,
         IList<string> roles)
     {
         ArgumentNullException.ThrowIfNull(roles);
@@ -56,7 +55,6 @@ public sealed class JwtTokenGenerator : IJwtTokenGenerator
             new("UserLastName", lastName ?? string.Empty),
             new("UserPhoneNumber", phoneNumber ?? string.Empty),
             new("UserFullName", fullName ?? string.Empty),
-            new("Platform", string.IsNullOrWhiteSpace(platform) ? "web" : platform),
 
             new(
                 "UserBalance",

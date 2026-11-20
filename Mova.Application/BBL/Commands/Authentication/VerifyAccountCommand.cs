@@ -26,8 +26,6 @@ public sealed class VerifyAccountCommand
         [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "OTP must be exactly 6 digits.")]
         public string OtpCode { get; init; } = string.Empty;
 
-        [Required, MaxLength(20)]
-        public string Platform { get; init; } = Platforms.Mobile;
     }
 
     public class VerifyAccountResponseDto
@@ -39,7 +37,6 @@ public sealed class VerifyAccountCommand
         public string FullName { get; set; } = string.Empty;
         public string? ProfilePicture { get; set; } = string.Empty;
         public decimal Balance { get; set; }
-        public string Platform { get; set; } = Platforms.Mobile;
         public string? AccessToken { get; set; }
         public string? RefreshToken { get; set; }
         public DateTimeOffset? AccessTokenExpiresAt { get; set; }
@@ -67,14 +64,6 @@ public sealed class VerifyAccountCommand
         private readonly IJwtTokenGenerator _jwtTokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
         private readonly IOtpService _otpService;
-
-        private static readonly HashSet<string> ValidPlatforms =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                Platforms.Web,
-                Platforms.Mobile,
-                Platforms.Swagger,
-            };
 
         public Handler(
             IUnitOfWork unitOfWork,
@@ -105,16 +94,7 @@ public sealed class VerifyAccountCommand
             using var op = OperationLogger.Start(
                 _logger,
                 "VerifyAccount",
-                ("Identifier", identifier),
-                ("Platform", request.Platform));
-
-            if (!ValidPlatforms.Contains(request.Platform))
-            {
-                op.Warning($"Invalid platform: {request.Platform}");
-                return new BaseResult<VerifyAccountResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Invalid platform specified.");
-            }
+                ("Identifier", identifier));
 
             if (string.IsNullOrWhiteSpace(request.Email))
             {
@@ -223,7 +203,6 @@ public sealed class VerifyAccountCommand
                 user.PhoneNumber,
                 user.Balance.ToDecimal(),
                 user.FullName,
-                request.Platform,
                 roles);
 
             var (refreshTokenValue, refreshTokenEntity) =
@@ -252,7 +231,6 @@ public sealed class VerifyAccountCommand
                     FullName = user.FullName,
                     ProfilePicture = user.ProfilePicture,
                     Balance = user.Balance.ToDecimal(),
-                    Platform = request.Platform,
                     AccessToken = accessToken,
                     RefreshToken = refreshTokenValue,
                     AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
