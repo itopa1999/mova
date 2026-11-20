@@ -42,6 +42,12 @@ RUN dotnet ef migrations bundle \
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV TZ=Africa/Lagos
+
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 
