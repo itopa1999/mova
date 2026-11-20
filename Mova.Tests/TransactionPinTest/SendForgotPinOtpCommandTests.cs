@@ -43,13 +43,11 @@ public sealed class SendForgotPinOtpCommandTests : BaseTest
     }
 
     private SendForgotPinOtpCommand.Command CreateCommand(
-        string? userPublicId = null,
-        string platform = "web")
+        string? userPublicId = null)
     {
         return new SendForgotPinOtpCommand.Command
         {
             UserPublicId = userPublicId ?? UserPublicId,
-            Platform = platform,
         };
     }
 

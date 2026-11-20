@@ -39,14 +39,12 @@ public sealed class LoginUserCommandTests : BaseTest
 
     private LoginUserCommand.Command CreateCommand(
         string identifier = UserEmail,
-        string password = ValidPassword,
-        string platform = Platforms.Web)
+        string password = ValidPassword)
     {
         return new LoginUserCommand.Command
         {
             Identifier = identifier,
-            Password = password,
-            Platform = platform,
+            Password = password
         };
     }
 
@@ -391,7 +389,6 @@ public sealed class LoginUserCommandTests : BaseTest
         Assert.Equal(UserPhone, login.Phone);
         Assert.Equal("Lucky Starboy", login.FullName);
         Assert.Equal("https://example.com/avatar.png", login.ProfilePicture);
-        Assert.Equal(Platforms.Web, login.Platform);
         Assert.Equal(AccessToken, login.AccessToken);
         Assert.Equal(RefreshTokenValue, login.RefreshToken);
         Assert.True(login.AccessTokenExpiresAt > DateTimeOffset.UtcNow);
@@ -434,22 +431,8 @@ public sealed class LoginUserCommandTests : BaseTest
                 UserPhone,
                 It.IsAny<decimal>(),
                 "Lucky Starboy",
-                Platforms.Web,
                 It.IsAny<List<string>>()),
             Times.Once);
-    }
-
-    [Fact]
-    public async Task Handle_WithMobilePlatform_Succeeds()
-    {
-        SetupHappyPath();
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(
-            CreateCommand(platform: Platforms.Mobile), default);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(Platforms.Mobile, result.Data!.Data!.Platform);
     }
 
     [Fact]
@@ -465,35 +448,7 @@ public sealed class LoginUserCommandTests : BaseTest
 
     // =========================================================
     // 2. Validation failures
-    // =========================================================
-
-    [Fact]
-    public async Task Handle_WithInvalidPlatform_ReturnsBadRequest()
-    {
-        var handler = CreateHandler();
-
-        var result = await handler.Handle(
-            CreateCommand(platform: "UnknownPlatform"), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Contains("Invalid platform", result.Message);
-    }
-
-    [Fact]
-    public async Task Handle_WithInvalidPlatform_DoesNotCheckPermissions()
-    {
-        var handler = CreateHandler();
-
-        await handler.Handle(
-            CreateCommand(platform: "UnknownPlatform"), default);
-
-        _identityService.Verify(
-            x => x.GetPermissionsAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
-    }
+    // ========================================================
 
     [Fact]
     public async Task Handle_WithUnknownUser_ReturnsBadRequestWithGenericMessage()

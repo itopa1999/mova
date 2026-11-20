@@ -77,9 +77,7 @@ public class AuthenticationController(
     {
         var result = await _mediator.Send(command, cancellationToken);
 
-        if (result.IsSuccess &&
-            result.Data is not null &&
-            string.Equals(result.Data.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
+        if (result.IsSuccess && result.Data is not null && IsWebPlatform())
         {
             RemoveAuthenticationTokensFromResponse(
                 result.Data.AccessToken,
@@ -127,9 +125,7 @@ public class AuthenticationController(
 
         var loginData = result.Data?.Data;
 
-        if (result.IsSuccess &&
-            loginData is not null &&
-            string.Equals(loginData.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
+        if (result.IsSuccess && result.Data is not null && IsWebPlatform())
         {
             RemoveAuthenticationTokensFromResponse(
                 loginData.AccessToken,
@@ -156,7 +152,7 @@ public class AuthenticationController(
     public async Task<IActionResult> RefreshToken(
         [FromBody] RefreshTokenCommand.Command command, CancellationToken cancellationToken)
     {
-        if (string.Equals(command.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase))
+        if (IsWebPlatform())
         {
             var refreshTokenFromCookie = Request.Cookies["refresh_token"];
             if (!string.IsNullOrEmpty(refreshTokenFromCookie))
@@ -166,8 +162,7 @@ public class AuthenticationController(
         }
         var result = await _mediator.Send(command, cancellationToken);
 
-        var isWebPlatform = string.Equals(command.Platform, Platforms.Web, StringComparison.OrdinalIgnoreCase);
-        if (isWebPlatform)
+        if (IsWebPlatform())
         {
             if (result.IsSuccess && result.Data is not null)
             {
@@ -483,5 +478,12 @@ public class AuthenticationController(
 
         setCookies(accessToken, refreshToken);
         removeTokens();
+    }
+
+    private bool IsWebPlatform()
+    {
+        return HttpContext.Items.TryGetValue("Platform", out var platform)
+               && platform is string platformValue
+               && string.Equals(platformValue, Platforms.Web, StringComparison.OrdinalIgnoreCase);
     }
 }

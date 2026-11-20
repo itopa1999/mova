@@ -155,6 +155,14 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
                     Description = "Enter JWT Token. Example: eyJhbGciOiJIUzI1NiIs..."
                 });
 
+                options.AddSecurityDefinition("X-Platform", new OpenApiSecurityScheme
+                {
+                    Name = "X-Platform",
+                    Type = SecuritySchemeType.ApiKey,
+                    In = ParameterLocation.Header,
+                    Description = "Required platform identifier. Allowed values: Web, Mobile, Swagger"
+                });
+
                 options.AddSecurityRequirement(new OpenApiSecurityRequirement
                 {
                     {
@@ -164,6 +172,18 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
                             {
                                 Type = ReferenceType.SecurityScheme,
                                 Id = "Bearer"
+                            }
+                        },
+                        Array.Empty<string>()
+                    }, 
+                    
+                    {
+                        new OpenApiSecurityScheme
+                        {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "X-Platform"
                             }
                         },
                         Array.Empty<string>()
@@ -260,6 +280,7 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
         //    middleware registered below it.
         // ─────────────────────────────────────────────────────────────
         app.UseMiddleware<ExceptionHandlingMiddleware>();
+        app.UseMiddleware<PlatformValidationMiddleware>();
 
         // ─────────────────────────────────────────────────────────────
         // 2. HTTPS redirect early in prod — before any content is served.

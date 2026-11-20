@@ -140,7 +140,6 @@ public sealed class LoginCommand
                 user.PhoneNumber,
                 user.Balance.ToDecimal(),
                 user.FullName,
-                "web",
                 roles);
 
             var (refreshToken, refreshTokenEntity) =

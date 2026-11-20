@@ -36,13 +36,11 @@ public sealed class RefreshTokenCommandTests : BaseTest
     }
 
     private RefreshTokenCommand.Command CreateCommand(
-        string token = IncomingTokenValue,
-        string platform = Platforms.Web)
+        string token = IncomingTokenValue)
     {
         return new RefreshTokenCommand.Command
         {
-            RefreshToken = token,
-            Platform = platform,
+            RefreshToken = token
         };
     }
 
@@ -212,7 +210,6 @@ public sealed class RefreshTokenCommandTests : BaseTest
         Assert.Equal(NewRefreshTokenValue, result.Data.RefreshToken);
         Assert.Equal(UserPublicId, result.Data.UserPublicId);
         Assert.Equal(UserEmail, result.Data.Email);
-        Assert.Equal(Platforms.Web, result.Data.Platform);
         Assert.True(result.Data.AccessTokenExpiresAt > DateTimeOffset.UtcNow);
     }
 
@@ -271,20 +268,6 @@ public sealed class RefreshTokenCommandTests : BaseTest
     // ---------------------------------------------------------
     // 2. Validation failures
     // ---------------------------------------------------------
-
-    [Fact]
-    public async Task Handle_WithInvalidPlatform_ReturnsBadRequest()
-    {
-        var handler = CreateHandler();
-
-        var result = await handler.Handle(
-            CreateCommand(platform: "UnknownPlatform"), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Contains("Invalid platform", result.Message);
-        Assert.Equal(0, UnitOfWork.BeginCount);
-    }
 
     [Fact]
     public async Task Handle_WithInvalidToken_ReturnsBadRequest()

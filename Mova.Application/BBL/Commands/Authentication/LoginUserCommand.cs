@@ -24,9 +24,6 @@ public sealed class LoginUserCommand
         [Required, MinLength(8), MaxLength(256)]
         public string Password { get; init; } = string.Empty;
 
-        [Required, MaxLength(20)]
-        public string Platform { get; init; } = Platforms.Mobile;
-
         [MaxLength(200)]
         public string? DeviceId { get; init; }
     }
@@ -109,14 +106,6 @@ public sealed class LoginUserCommand
                 _logger,
                 "LoginUser",
                 ("Identifier", request.Identifier));
-
-            if (!ValidPlatforms.Contains(request.Platform))
-            {
-                op.Warning($"Invalid platform: {request.Platform}");
-                return new BaseResult<LoginResultDto>(
-                    HttpStatusCode.BadRequest,
-                    "Invalid platform specified.");
-            }
 
             var user = await _identityService.GetByIdentifierAsync(
                 request.Identifier,
@@ -226,7 +215,6 @@ public sealed class LoginUserCommand
                 user.PhoneNumber,
                 user.Balance.ToDecimal(),
                 user.FullName,
-                request.Platform,
                 roles);
 
             var (refreshToken, refreshTokenEntity) =
@@ -261,7 +249,6 @@ public sealed class LoginUserCommand
                     user.PublicId,
                     user.Email ?? string.Empty,
                     user.FirstName,
-                    request.Platform,
                     incomingDeviceId!);
             }
 
@@ -286,7 +273,6 @@ public sealed class LoginUserCommand
                         FullName = user.FullName,
                         ProfilePicture = user.ProfilePicture,
                         Balance = user.Balance.ToDecimal(),
-                        Platform = request.Platform,
                         AccessToken = accessToken,
                         RefreshToken = refreshToken,
                         AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15),
@@ -373,12 +359,8 @@ public sealed class LoginUserCommand
             string userPublicId,
             string email,
             string firstName,
-            string platform,
             string deviceId)
         {
-            var platformLabel = string.IsNullOrWhiteSpace(platform)
-                ? "a new device"
-                : platform;
 
             var shortDeviceId = deviceId.Length > 8
                 ? deviceId[..8]
@@ -388,7 +370,7 @@ public sealed class LoginUserCommand
                 userPublicId,
                 NotificationType.System,
                 "New device login",
-                $"Your MOVA account was just accessed from a new device ({platformLabel}). " +
+                $"Your MOVA account was just accessed from a new device " +
                 $"If this wasn't you, please change your password and review your account.",
                 null,
                 null,
@@ -403,7 +385,6 @@ public sealed class LoginUserCommand
                 "# New device login detected\n\n" +
                 $"**Hi {firstName},**\n\n" +
                 "We noticed a login to your MOVA account from a device we don't recognise.\n\n" +
-                $"- Platform: **{platformLabel}**\n" +
                 $"- Device reference: **{shortDeviceId}**\n" +
                 $"- Time: **{DateTimeOffset.UtcNow:MMM d, yyyy h:mm tt} UTC**\n\n" +
                 "If this was you, you can ignore this message — we will remember this device.\n\n" +

@@ -50,14 +50,12 @@ public sealed class VerifyAccountCommandTests : BaseTest
 
     private VerifyAccountCommand.Command CreateCommand(
         string email = UserEmail,
-        string otp = ValidOtp,
-        string platform = Platforms.Web)
+        string otp = ValidOtp)
     {
         return new VerifyAccountCommand.Command
         {
             Email = email,
             OtpCode = otp,
-            Platform = platform,
         };
     }
 
@@ -225,7 +223,6 @@ public sealed class VerifyAccountCommandTests : BaseTest
         Assert.Equal(UserEmail, result.Data.Email);
         Assert.Equal(AccessToken, result.Data.AccessToken);
         Assert.Equal(RefreshTokenValue, result.Data.RefreshToken);
-        Assert.Equal(Platforms.Web, result.Data.Platform);
         Assert.True(result.Data.AccessTokenExpiresAt > DateTimeOffset.UtcNow);
     }
 
@@ -294,21 +291,6 @@ public sealed class VerifyAccountCommandTests : BaseTest
     // ---------------------------------------------------------
     // 2. Validation failures
     // ---------------------------------------------------------
-
-    [Fact]
-    public async Task Handle_WithInvalidPlatform_ReturnsBadRequest()
-    {
-        var handler = CreateHandler();
-
-        var result = await handler.Handle(
-            CreateCommand(platform: "Unknown"), default);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.StatusCode);
-        Assert.Contains("Invalid platform", result.Message);
-        Assert.Equal(0, UnitOfWork.BeginCount);
-    }
-
     [Fact]
     public async Task Handle_WithEmptyEmail_ReturnsBadRequest()
     {
