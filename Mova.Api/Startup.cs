@@ -208,6 +208,13 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
                 Description = "Mova Fintech Platform API V3"
             });
 
+            options.SwaggerDoc("admin", new OpenApiInfo
+            {
+                Title       = "Mova API - Admin",
+                Version     = "admin",
+                Description = "Mova Fintech Platform — Admin endpoints"
+            });
+
             options.CustomSchemaIds(type =>
             {
                 var fullName = type.FullName ?? type.Name;
@@ -330,6 +337,10 @@ public class Startup(IConfiguration configuration, IWebHostEnvironment environme
             options.SwaggerEndpoint(
                 "/swagger/v3/swagger.json",
                 "Mova API v3");
+
+            options.SwaggerEndpoint(
+                "/swagger/admin/swagger.json",
+                "Mova API Admin");
 
 
             options.DocumentTitle =

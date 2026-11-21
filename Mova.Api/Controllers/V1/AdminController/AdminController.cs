@@ -24,6 +24,7 @@ namespace Mova.Api.Controllers.V1.AdminController;
 [Authorize(Roles = Roles.AllAdmins)]
 [Route("api/v{version:apiVersion}/admin")]
 [ApiVersion("1.0")]
+[ApiExplorerSettings(GroupName = "admin")] 
 [RestrictPlatform(Platforms.Web, Platforms.Swagger)]
 
 public class AdminController(
@@ -32,7 +33,7 @@ public class AdminController(
     private readonly IMediator _mediator = mediator;
 
     [HttpGet("users")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<BasePaginationResponse<UserListItemDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetUsers(
@@ -44,7 +45,7 @@ public class AdminController(
     }
 
     [HttpGet("feature-flags")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<FeatureFlagDto>>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetAll(
@@ -57,7 +58,7 @@ public class AdminController(
     }
 
     [HttpPost("feature-flags/toggle")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    //[EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<ToggleFeatureFlagDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> Toggle(
@@ -77,7 +78,7 @@ public class AdminController(
     }
 
     [HttpPost("admin/virtual-accounts")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    //[EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(
         typeof(BaseResult<CreateVirtualAccountForUserResponseDto>),
         (int)HttpStatusCode.OK)]
@@ -92,7 +93,7 @@ public class AdminController(
     }
 
     [HttpPost("banks/refresh")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    //[EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> RefreshBanks(
@@ -106,7 +107,7 @@ public class AdminController(
     }
 
     [HttpGet("get/users/{userPublicId}/roles")]
-    [EnableRateLimiting(RateLimitPolicies.Read)]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<GetUserRolesQuery.GetUserRolesResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.NotFound)]
     public async Task<IActionResult> GetUserRoles(
@@ -121,7 +122,7 @@ public class AdminController(
     }
 
     [HttpPost("add/users/{userPublicId}/roles")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    //[EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<AddUserToRoleCommand.AssignRoleResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> AddUserToRole(
@@ -136,7 +137,7 @@ public class AdminController(
     }
 
     [HttpDelete("remove/users/{userPublicId}/roles/{role}")]
-    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    //[EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult<RemoveUserFromRoleCommand.AssignRoleResponseDto>), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> RemoveUserFromRole(
