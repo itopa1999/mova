@@ -9,10 +9,11 @@ using Mova.Application.Interfaces.Security;
 using Mova.Shared.Common.Results;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
+using static Mova.Application.Helpers.ExtensionHelpers;
 
 namespace Mova.Application.BBL.Commands.Admin;
 
-public sealed class LoginCommand
+public sealed class AdminLoginCommand
 {
     public class Command : IRequest<BaseResult<LoginResponseDto>>
     {
@@ -30,7 +31,6 @@ public sealed class LoginCommand
         public string FullName { get; set; } = string.Empty;
         public string? AccessToken { get; set; }
         public string? RefreshToken { get; set; }
-        public DateTimeOffset? AccessTokenExpiresAt { get; set; }
     }
 
     public class Handler : IRequestHandler<Command, BaseResult<LoginResponseDto>>
@@ -117,12 +117,7 @@ public sealed class LoginCommand
 
             var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
 
-            // Check if the user has an admin role
-            var allowedAdminRoles = Roles.AllAdmins.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(r => r.Trim())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            if (!roles.Any(r => allowedAdminRoles.Contains(r)))
+            if (!AdminAuthorization.HasAdminRole(roles))
             {
                 op.Warning($"User {user.PublicId} denied admin login. Missing admin role.");
                 return new BaseResult<LoginResponseDto>(
@@ -161,7 +156,6 @@ public sealed class LoginCommand
                     FullName = user.FullName,
                     AccessToken = accessToken,
                     RefreshToken = refreshToken,
-                    AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
                 });
         }
     }

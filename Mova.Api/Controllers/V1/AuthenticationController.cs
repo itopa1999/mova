@@ -236,7 +236,7 @@ public class AuthenticationController(
     /// cookies are always cleared on success.
     /// </summary>
     [HttpPost("logout")]
-    [Authorize(Roles = Roles.All)]
+    [Authorize(Roles = Roles.Customer)]
     [EnableRateLimiting(RateLimitPolicies.AuthMedium)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
@@ -320,7 +320,7 @@ public class AuthenticationController(
     /// current password.
     /// </summary>
     [HttpPost("change-password")]
-    [Authorize(Roles = Roles.All)]
+    [Authorize(Roles = Roles.Customer)]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.OK)]
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]

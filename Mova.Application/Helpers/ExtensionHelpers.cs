@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using MediatR;
 using Mova.Domain.Enums;
+using Mova.Shared.Constants;
 namespace Mova.Application.Helpers;
 
 public static partial class ExtensionHelpers
@@ -62,4 +63,16 @@ public static partial class ExtensionHelpers
 
     public static bool IsValid(string? phoneNumber)
         => Normalize(phoneNumber) is not null;
+
+
+    public static class AdminAuthorization
+    {
+        private static readonly HashSet<string> AllowedAdminRoles = Roles.AllAdmins
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(r => r.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        public static bool HasAdminRole(IEnumerable<string>? roles) =>
+            roles is not null && roles.Any(AllowedAdminRoles.Contains);
+    }
 }

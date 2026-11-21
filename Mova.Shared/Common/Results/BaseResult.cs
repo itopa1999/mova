@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.Json.Serialization;
-using Mova.Shared.Common.Results;
 namespace Mova.Shared.Common.Results;
 
 public class BaseResult
