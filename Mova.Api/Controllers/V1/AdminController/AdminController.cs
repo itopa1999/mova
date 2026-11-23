@@ -44,6 +44,55 @@ public class AdminController(
         return StatusCode((int)result.StatusCode, result);
     }
 
+
+    [HttpGet("users-details")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserDetails(
+        [FromQuery] GetUserDetails.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("users-wallets")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserWallets(
+        [FromQuery] GetUserWallets.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("users-bankaccounts")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserBankAccount(
+        [FromQuery] GetUserBankAccount.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("users-transactions")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserTransactions(
+        [FromQuery] GetUserTransactions.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
     [HttpGet("feature-flags")]
     //[EnableRateLimiting(RateLimitPolicies.Read)]
     [ProducesResponseType(typeof(BaseResult<List<FeatureFlagDto>>), (int)HttpStatusCode.OK)]
