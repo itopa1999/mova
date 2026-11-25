@@ -1,15 +1,22 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.AspNetCore.Identity;
+using Mova.Domain.Common;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-namespace Mova.Infrastructure.Identity;
+
+namespace Mova.Domain.Entities;
 
 [Table("users")]
-public class User : IdentityUser<long>
+public class User : BaseEntity
 {
+    public long UserId { get; set; }
+
     [MaxLength(100)]
     public string PublicId { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public bool EmailConfirmed { get; set; }
+    public string PhoneNumber { get; set; } = string.Empty;
+    public bool PhoneNumberConfirmed { get; set; } 
 
     [MaxLength(100)]
     public string FirstName { get; set; } = string.Empty;
@@ -73,29 +80,6 @@ public class User : IdentityUser<long>
     public DateTimeOffset? RestrictionExpiresAt { get; set; }
 
     public DateTimeOffset? ReactivatedAt { get; set; }
-
-
-
-    // ─────────────────────────────────────────────────────────
-    // Audit
-    // ─────────────────────────────────────────────────────────
-
-    public DateTimeOffset? CreatedAt { get; set; }
-
-    public DateTimeOffset? ModifiedAt { get; set; }
-
-    public bool IsDeleted { get; set; }
-
-    public DateTimeOffset? DeletedAt { get; set; }
-
-    [MaxLength(100)]
-    public string? CreatedBy { get; set; }
-
-    [MaxLength(100)]
-    public string? ModifiedBy { get; set; }
-
-    [MaxLength(100)]
-    public string? DeletedBy { get; set; }
 }
 
 

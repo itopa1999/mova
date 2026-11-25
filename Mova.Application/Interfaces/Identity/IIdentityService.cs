@@ -3,12 +3,9 @@ namespace Mova.Application.Interfaces.Identity;
 
 public interface IIdentityService
 {
-    Task<(bool Success, string ErrorMessage, string UserPublicId, long UserId)> CreateUserAsync(
-        string firstName,
-        string lastName,
+    Task<(bool Success, string ErrorMessage, long UserId)> CreateUserAsync(
         string email,
         string phoneNumber,
-        string BVN,
         string password,
         CancellationToken cancellationToken = default);
 

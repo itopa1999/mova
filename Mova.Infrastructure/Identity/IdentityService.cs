@@ -5,7 +5,6 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Infrastructure.Identity.Extensions;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
@@ -14,50 +13,36 @@ namespace Mova.Infrastructure.Identity;
 
 public sealed class IdentityService : IIdentityService
 {
-    private readonly UserManager<User> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _context;
-    private readonly SensitiveIdentifierHasher _hasher;
     private readonly ICacheService _cacheService;
     private static readonly TimeSpan UserIdentityCacheDuration = TimeSpan.FromMinutes(5);
 
     public IdentityService(
-        UserManager<User> userManager,
+        UserManager<ApplicationUser> userManager,
         ApplicationDbContext context,
-        SensitiveIdentifierHasher hasher,
         ICacheService cacheService)
     {
         _userManager = userManager;
         _context = context;
-        _hasher = hasher;
         _cacheService = cacheService;
     }
 
     // ─────────────────────────────────────────────────────────────
     // WRITE PATH — user creation
     // ─────────────────────────────────────────────────────────────
-    public async Task<(bool Success, string ErrorMessage, string UserPublicId, long UserId)> CreateUserAsync(
-        string firstName,
-        string lastName,
+    public async Task<(bool Success, string ErrorMessage, long UserId)> CreateUserAsync(
         string email,
         string phoneNumber,
-        string BVN,
         string password,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var user = new User
+        var user = new ApplicationUser
         {
-            FirstName = firstName,
-            LastName = lastName,
             Email = email,
             UserName = email,
-            PhoneNumber = phoneNumber,
-            PublicId = string.Empty,
-            ProfilePicture = DefaultProfilePictures.PickRandom(),
-            Balance = Money.FromNaira(0),
-            AccountStatus = UserAccountStatus.Active,
-            OnboardingStage = OnboardingStage.Register,
-            BvnHash = _hasher.Hash(BVN, SecuritySaltPurpose.BvnVerification.ToString())
+            PhoneNumber = phoneNumber
         };
 
         var result = await _userManager.CreateAsync(user, password);
@@ -65,20 +50,10 @@ public sealed class IdentityService : IIdentityService
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return (false, errors, string.Empty, 0);
+            return (false, errors, 0);
         }
 
-        user.PublicId = user.Id.ToString("D4");
-
-        var updateResult = await _userManager.UpdateAsync(user);
-
-        if (!updateResult.Succeeded)
-        {
-            var errors = string.Join(", ", updateResult.Errors.Select(x => x.Description));
-            return (false, errors, string.Empty, 0);
-        }
-
-        return (true, string.Empty, user.PublicId, user.Id);
+        return (true, string.Empty, user.Id);
     }
 
     // ─────────────────────────────────────────────────────────────
