@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Extensions;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
@@ -70,12 +71,10 @@ public sealed class GetProfile
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetProfileDto>>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
 
-        public Handler(IIdentityService identityService, IUnitOfWork unitOfWork)
+        public Handler(IUnitOfWork unitOfWork)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
         }
 
@@ -91,21 +90,18 @@ public sealed class GetProfile
                     default);
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user == null)
             {
                 return new BaseResult<GetProfileDto>(
-                    HttpStatusCode.NotFound,
+                    HttpStatusCode.Unauthorized,
                     "User not found.",
                     default);
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var permissions = user.GetUserPermissions();
 
             var pendingChange = await _unitOfWork
                 .Query<RequestProfileChange>()

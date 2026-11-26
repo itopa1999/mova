@@ -1,11 +1,11 @@
 using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Mova.Application.Extensions;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.Profile;
 
@@ -66,16 +66,13 @@ public sealed class GetRequestForAccountDeletion
                     "User identity is required.");
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                return new BaseResult<GetRequestForAccountDeletionDto>(
-                    HttpStatusCode.NotFound,
-                    "User account was not found.");
-            }
+            if (user is null)
+                return new BaseResult<GetRequestForAccountDeletionDto>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             var dto = new GetRequestForAccountDeletionDto();
 

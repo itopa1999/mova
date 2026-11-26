@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Mova.Application.Interfaces.Identity;
-using Mova.Infrastructure.Caching;
 using Mova.Infrastructure.Persistence;
 namespace Mova.Infrastructure.Identity;
 
@@ -43,7 +42,7 @@ public static class DependencyInjection
 
 
         services
-            .AddIdentity<User, IdentityRole<long>>(options =>
+            .AddIdentity<ApplicationUser, IdentityRole<long>>(options =>
             {
                 ConfigurePassword(options);
                 ConfigureUser(options);

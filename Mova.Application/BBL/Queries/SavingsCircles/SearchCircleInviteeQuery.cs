@@ -5,9 +5,11 @@ using System.Text.RegularExpressions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Mova.Application.Interfaces.Persistence;
+using Microsoft.EntityFrameworkCore;
 namespace Mova.Application.BBL.Queries.SavingsCircles;
 
 public sealed class SearchCircleInviteeQuery
@@ -34,14 +36,14 @@ public sealed class SearchCircleInviteeQuery
     public sealed class Handler
         : IRequestHandler<Query, BaseResult<SearchCircleInviteeResponseDto>>
     {
-        private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
+            IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -78,8 +80,12 @@ public sealed class SearchCircleInviteeQuery
                     "You cannot invite yourself — you are already member #1.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                normalized, cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .Where(x =>
+                    x.Email == normalized ||
+                    x.PhoneNumber == normalized ||
+                    x.PublicId == normalized)
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {

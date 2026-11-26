@@ -75,6 +75,8 @@ public sealed class CirclePayoutJob
                 
                 foreach (var member in membersToCollect)
                 {
+                    var userMember = await _context.UserDetails.FirstOrDefaultAsync(x=>x.PublicId == member.UserPublicId, cancellationToken);
+
                     var contrib = currentRound.Contributions.FirstOrDefault(c => c.CircleMemberId == member.Id);
 
                     if (contrib != null && contrib.Status == ContributionStatus.Collected)
@@ -115,7 +117,7 @@ public sealed class CirclePayoutJob
                     }
                     else
                     {
-                        paid = await _identityService.DebitBalanceAsync(member.UserPublicId!, totalAmountDue, cancellationToken);
+                        paid = await _identityService.DebitBalanceAsync(userMember!, totalAmountDue, cancellationToken);
                         
                         if (paid)
                         {
@@ -174,12 +176,11 @@ public sealed class CirclePayoutJob
                                 CompletedAt = now
                             });
 
-                            var user = await _identityService.GetByIdentifierAsync(member.UserPublicId!, cancellationToken);
-                            if (user != null && !string.IsNullOrWhiteSpace(user.Email))
+                            if (userMember != null && !string.IsNullOrWhiteSpace(userMember.Email))
                             {
                                 _notificationQueue.QueueTransactionEmail(
-                                    user.FirstName,
-                                    user.Email,
+                                    userMember.FirstName,
+                                    userMember.Email,
                                     totalAmountDue.ToString("N2"),
                                     EmailTemplateTransaction.Debit,
                                     "MOVA Main Balance",

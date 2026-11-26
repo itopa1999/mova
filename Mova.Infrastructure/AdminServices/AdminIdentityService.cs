@@ -22,7 +22,7 @@ public class AdminIdentityService : IAdminIdentityService
         int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var query = _context.Users.AsNoTracking().IgnoreQueryFilters();
+        var query = _context.UserDetails.AsNoTracking().IgnoreQueryFilters();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -91,7 +91,7 @@ public class AdminIdentityService : IAdminIdentityService
         string publicId,
         CancellationToken cancellationToken = default)
     {
-        var user = await _context.Users
+        var user = await _context.UserDetails
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(u => u.PublicId == publicId)
@@ -170,15 +170,5 @@ public class AdminIdentityService : IAdminIdentityService
 
         user.Roles = roles;
         return user;
-    }
-
-    public async Task<bool> GetUserAsync(
-        string publicId,
-        CancellationToken cancellationToken = default)
-    {
-        return await _context.Users
-            .AsNoTracking()
-            .IgnoreQueryFilters()
-            .AnyAsync(u => u.PublicId == publicId, cancellationToken);
     }
 }

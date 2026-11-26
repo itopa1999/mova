@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Identity;
-using Mova.Shared.Common;
+using Mova.Application.Interfaces.Persistence;
+using Mova.Domain.Entities;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.TransactionPin;
 
@@ -21,11 +23,11 @@ public sealed class GetIfPinIsSetQuery
 
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetIfPinIsSetQueryDto>>
     {
-        private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public Handler(IIdentityService identityService)
+        public Handler(IUnitOfWork unitOfWork)
         {
-            _identityService = identityService;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<BaseResult<GetIfPinIsSetQueryDto>> Handle(
@@ -40,9 +42,8 @@ public sealed class GetIfPinIsSetQuery
                     default);
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user == null)
             {

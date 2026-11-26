@@ -15,9 +15,4 @@ public interface IAdminIdentityService
     Task<UserDetailsDto?> GetByPublicIdAsync(
         string publicId,
         CancellationToken cancellationToken = default);
-
-
-    Task<bool> GetUserAsync(
-        string publicId,
-        CancellationToken cancellationToken = default);
 }

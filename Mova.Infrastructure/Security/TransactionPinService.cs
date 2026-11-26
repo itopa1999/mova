@@ -1,10 +1,8 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Behaviors;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
-using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
 using Mova.Shared.Common;
 using Mova.Shared.Constants;
@@ -37,7 +35,7 @@ public class TransactionPinService : ITransactionPinService
         string UserPublicId,
         CancellationToken cancellationToken = default)
     {
-        return await _context.Users
+        return await _context.UserDetails
             .AsNoTracking()
             .AnyAsync(
                 x => x.PublicId == UserPublicId &&
@@ -53,7 +51,7 @@ public class TransactionPinService : ITransactionPinService
     {
         ValidatePin(pin);
 
-        var user = await _context.Users
+        var user = await _context.UserDetails
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
                 cancellationToken) ?? throw new KeyNotFoundException("User not found.");
@@ -83,7 +81,7 @@ public class TransactionPinService : ITransactionPinService
         string pin,
         CancellationToken cancellationToken = default)
     {
-        var user = await _context.Users
+        var user = await _context.UserDetails
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
                 cancellationToken);
@@ -114,7 +112,7 @@ public class TransactionPinService : ITransactionPinService
             return TransactionPinVerificationResult.Locked;
         }
 
-        var user = await _context.Users
+        var user = await _context.UserDetails
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
                 cancellationToken);
@@ -183,7 +181,7 @@ public class TransactionPinService : ITransactionPinService
     {
         ValidatePin(newPin);
 
-        var user = await _context.Users
+        var user = await _context.UserDetails
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
                 cancellationToken);
@@ -212,7 +210,7 @@ public class TransactionPinService : ITransactionPinService
         string UserPublicId,
         CancellationToken cancellationToken = default)
     {
-        var user = await _context.Users
+        var user = await _context.UserDetails
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
                 cancellationToken);

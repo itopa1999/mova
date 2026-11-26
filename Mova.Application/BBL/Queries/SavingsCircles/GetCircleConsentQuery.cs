@@ -9,7 +9,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.SavingsCircles;
@@ -28,18 +27,15 @@ public sealed class GetCircleConsentQuery
     public sealed class Handler : IRequestHandler<Query, BaseResult<CircleConsentDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly ISavingsCircleService _savingsCircleService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             ISavingsCircleService savingsCircleService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _savingsCircleService = savingsCircleService;
             _logger = logger;
         }
@@ -95,7 +91,9 @@ public sealed class GetCircleConsentQuery
             else if (hasPendingInvite) op.Success("User has a pending invite.");
             else op.Success("User can join via public link.");
 
-            var organizer = await _identityService.GetByIdentifierAsync(circle.OrganizerUserPublicId, cancellationToken);
+            var organizer = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == circle.OrganizerUserPublicId, cancellationToken);
+
             var organizerName = organizer is not null
                 ? $"{organizer.FirstName} {organizer.LastName}".Trim()
                 : "Organizer";

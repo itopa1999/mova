@@ -116,8 +116,7 @@ public sealed class RenewalService : IRenewalService
         }
 
         // ─── Fetch user's main balance ───────────────────────
-        var user = await _identityService.GetByIdentifierAsync(
-            wallet.UserPublicId, cancellationToken);
+        var user = await _context.UserDetails.FirstOrDefaultAsync(x=>x.PublicId == wallet.UserPublicId, cancellationToken);
 
         if (user is null)
         {
@@ -305,7 +304,7 @@ public sealed class RenewalService : IRenewalService
         try
         {
             var debited = await _identityService.DebitBalanceAsync(
-                wallet.UserPublicId, totalDebit, cancellationToken);
+                user, totalDebit, cancellationToken);
 
             if (!debited)
             {

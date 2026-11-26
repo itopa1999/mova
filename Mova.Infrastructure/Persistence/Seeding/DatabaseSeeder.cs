@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Payment;
@@ -14,16 +16,20 @@ namespace Mova.Infrastructure.Persistence.Seeding;
 public sealed class DatabaseSeeder
 {
     private readonly ApplicationDbContext _dbContext;
-    private readonly UserManager<User> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole<long>> _roleManager;
+    private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
     private readonly IBankService _bankService;
     private readonly ICacheService _cache;
     private readonly ILogger<DatabaseSeeder> _logger;
 
     public DatabaseSeeder(
         ApplicationDbContext dbContext,
-        UserManager<User> userManager,
+        UserManager<ApplicationUser> userManager,
         RoleManager<IdentityRole<long>> roleManager,
+        IConfiguration configuration,
+        IHostEnvironment environment,
         IBankService bankService,
         ICacheService cache,
         ILogger<DatabaseSeeder> logger)
@@ -31,6 +37,8 @@ public sealed class DatabaseSeeder
         _dbContext = dbContext;
         _userManager = userManager;
         _roleManager = roleManager;
+        _configuration = configuration;
+        _environment = environment;
         _bankService = bankService;
         _cache = cache;
         _logger = logger;
@@ -263,97 +271,119 @@ public sealed class DatabaseSeeder
         op.Success($"Seeded wallet templates — {summary}");
     }
 
-    private async Task SeedAdminUserAsync(
-        CancellationToken cancellationToken)
+    private async Task SeedAdminUserAsync(CancellationToken cancellationToken)
     {
-        const string adminEmail = "admin@mova.com";
-        const string adminPublicId = "MovaAdmin1";
+        using var op = OperationLogger.Start(_logger, "SeedAdminUser");
 
-        using var op = OperationLogger.Start(
-            _logger,
-            "SeedAdminUser",
-            [
-                ("Email", adminEmail),
-                ("PublicId", adminPublicId),
-            ]);
+        var email     = _configuration["Seed:SuperAdmin:Email"];
+        var firstName = _configuration["Seed:SuperAdmin:FirstName"];
+        var lastName  = _configuration["Seed:SuperAdmin:LastName"];
+        var password  = _configuration["Seed:SuperAdmin:Password"];
+
+        if (string.IsNullOrWhiteSpace(email)
+            || string.IsNullOrWhiteSpace(password)
+            || string.IsNullOrWhiteSpace(firstName)
+            || string.IsNullOrWhiteSpace(lastName))
+        {
+            if (_environment.IsProduction())
+            {
+                throw new InvalidOperationException(
+                    "No SuperAdmin exists and seed credentials are not configured. " +
+                    "Set Seed__SuperAdmin__Email, Seed__SuperAdmin__Password, " +
+                    "Seed__SuperAdmin__FirstName, Seed__SuperAdmin__LastName.");
+            }
+
+            op.Warning("No SuperAdmin exists and seed credentials are not configured. Skipping.");
+            return;
+        }
 
         await IdentitySeeder.SeedRolesAsync(_roleManager);
 
-        var existing = await _userManager.FindByEmailAsync(adminEmail);
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+
+        var existing = await _userManager.FindByEmailAsync(normalizedEmail);
         if (existing is not null)
         {
-            op.Success($"Bootstrap admin {adminEmail} already exists — skipping.");
+            op.Success($"Bootstrap admin {normalizedEmail} already exists — skipping.");
             return;
         }
 
-        var admin = new User
+        var adminUser = new ApplicationUser
         {
-            UserName = adminEmail,
-            Email = adminEmail,
-            EmailConfirmed = true,
-
-            PhoneNumber = null,
+            UserName            = normalizedEmail,
+            Email               = normalizedEmail,
+            EmailConfirmed      = true,
             PhoneNumberConfirmed = true,
-
-            PublicId = adminPublicId,
-            FirstName = "Mova",
-            LastName = "Admin",
-            ProfilePicture = null,
-            TransactionPinHash = null,
-            BvnHash = null,
-
-            Balance = Money.FromNaira(0),
-            AccountStatus = UserAccountStatus.Active,
-            RestrictionReason = AccountRestrictionReason.None,
-
-            NotifyLoginAlerts = true,
-            NotifyReleaseAlerts = true,
-            NotifyProductUpdates = true,
-            NotifyPromotions = false,
-
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = "DatabaseSeeder",
-            IsDeleted = false,
-            LockoutEnabled = true,
+            LockoutEnabled      = true,
         };
 
-        var createResult = await _userManager.CreateAsync(admin);
+        await using var tx = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var createResult = await _userManager.CreateAsync(adminUser, password);
 
         if (!createResult.Succeeded)
         {
-            var isDuplicate = createResult.Errors.Any(e =>
-                e.Code is "DuplicateEmail" or "DuplicateUserName");
-
-            if (isDuplicate)
-            {
-                op.Success(
-                    $"Bootstrap admin {adminEmail} was created concurrently — skipping.");
-                return;
-            }
-
-            op.Error(
-                "Failed to seed bootstrap admin: " +
+            throw new InvalidOperationException(
+                "Failed to create SuperAdmin application user: " +
                 string.Join(", ", createResult.Errors.Select(e => e.Description)));
-            return;
         }
+
+        if (adminUser.Id == 0)
+        {
+            throw new InvalidOperationException(
+                "ApplicationUser.Id was not generated by the Identity store.");
+        }
+
+        var user = new User
+        {
+            UserId              = adminUser.Id,
+            Email               = normalizedEmail,
+            EmailConfirmed      = true,
+            PhoneNumber         = null,
+            PhoneNumberConfirmed = true,
+
+            PublicId            = "AD000001",
+            FirstName           = firstName!,
+            LastName            = lastName!,
+            ProfilePicture      = null,
+            TransactionPinHash  = null,
+            BvnHash             = null,
+
+            Balance             = Money.FromNaira(0),
+            AccountStatus       = UserAccountStatus.Active,
+            RestrictionReason   = AccountRestrictionReason.None,
+
+            NotifyLoginAlerts    = true,
+            NotifyReleaseAlerts  = true,
+            NotifyProductUpdates = true,
+            NotifyPromotions     = false,
+
+            CreatedAt           = DateTimeOffset.UtcNow,
+            CreatedBy           = "DatabaseSeeder",
+            IsDeleted           = false,
+        };
+
+        await _dbContext.UserDetails.AddAsync(user, cancellationToken);
 
         var rolesToAssign = new[] { Roles.SuperAdmin, Roles.Admin };
 
         foreach (var role in rolesToAssign)
         {
-            var roleResult = await _userManager.AddToRoleAsync(admin, role);
+            var roleResult = await _userManager.AddToRoleAsync(adminUser, role);
             if (!roleResult.Succeeded)
             {
-                op.Error(
-                    $"Failed to assign {role}: " +
+                throw new InvalidOperationException(
+                    $"Failed to assign role {role} to SuperAdmin: " +
                     string.Join(", ", roleResult.Errors.Select(e => e.Description)));
-                return;
             }
         }
 
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+
         op.Success(
-            $"Bootstrapped admin {adminEmail} with roles [{string.Join(", ", rolesToAssign)}]. " +
-            "No password set — use the password-reset flow to activate.");
+            $"Bootstrapped admin {email} with roles [{string.Join(", ", rolesToAssign)}]. " +
+            "Password was set from Seed__SuperAdmin__Password — rotate it after first login.");
     }
 
     private async Task SeedBanksIfMissingAsync(

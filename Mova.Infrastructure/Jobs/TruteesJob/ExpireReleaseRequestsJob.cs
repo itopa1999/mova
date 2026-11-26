@@ -98,8 +98,9 @@ public sealed class ExpireReleaseRequestsJob
                     null,
                     CancellationToken.None);
 
-                var owner = await _identityService.GetByIdentifierAsync(
-                    releaseRequest.RequestedByUserPublicId,
+                var owner = await _context.UserDetails
+                    .FirstOrDefaultAsync(
+                    x => x.PublicId == releaseRequest.RequestedByUserPublicId,
                     cancellationToken);
 
                 if (!string.IsNullOrWhiteSpace(owner?.Email))

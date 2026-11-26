@@ -8,7 +8,7 @@ using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Common.Results;
 
-namespace Mova.Application.BBL.Queries.Admin.User;
+namespace Mova.Application.BBL.Queries.Admin.UserQuery;
 
 public sealed class GetUserTransactions
 {
@@ -32,19 +32,20 @@ public sealed class GetUserTransactions
     public sealed class Handler : IRequestHandler<Query, BaseResult<BasePaginationResponse<UserTransactionDto>>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IAdminIdentityService _adminIdentityService;
 
-        public Handler(IUnitOfWork unitOfWork, IAdminIdentityService adminIdentityService)
+        public Handler(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _adminIdentityService = adminIdentityService;
         }
 
         public async Task<BaseResult<BasePaginationResponse<UserTransactionDto>>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
-            bool userExists = await _adminIdentityService.GetUserAsync(request.UserId, cancellationToken);
+            bool userExists = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .AnyAsync(u => u.PublicId == request.UserId, cancellationToken);
 
             if (!userExists)
             {

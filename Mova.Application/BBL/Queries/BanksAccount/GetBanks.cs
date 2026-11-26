@@ -2,7 +2,6 @@ using System.Net;
 using System.ComponentModel.DataAnnotations;
 using MediatR;
 using Mova.Application.Interfaces.Payment;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.BanksAccount;
 public sealed class GetBanks

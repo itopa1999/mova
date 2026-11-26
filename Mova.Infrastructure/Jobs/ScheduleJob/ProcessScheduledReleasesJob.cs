@@ -312,9 +312,8 @@ public sealed class ProcessScheduledReleasesJob
         PayoutDestination payoutDestination)
     {
         // ─── Load user via identity service (cache-backed) ───
-        var user = await _identityService.GetByIdentifierAsync(
-            userPublicId,
-            CancellationToken.None);
+
+        var user = await _context.UserDetails.FirstOrDefaultAsync(x=>x.PublicId == userPublicId);
 
         if (user is null)
         {

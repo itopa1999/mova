@@ -55,7 +55,7 @@ public sealed class BackgroundTaskJob
     {
         _logger.LogInformation("Starting virtual account creation for user {UserPublicId}.", userPublicId);
 
-        var userExists = await _context.Users.AnyAsync(x => x.PublicId == userPublicId, cancellationToken);
+        var userExists = await _context.UserDetails.AnyAsync(x => x.PublicId == userPublicId, cancellationToken);
 
         if (!userExists)
         {
@@ -158,7 +158,8 @@ public sealed class BackgroundTaskJob
 
         try
         {
-            var balanceDebited = await _identityService.DebitBalanceAsync(UserPublicId, TotalUpfrontCharge, cancellationToken);
+            var debituser = await _context.UserDetails.FirstOrDefaultAsync(x=>x.PublicId == UserPublicId, cancellationToken);
+            var balanceDebited = await _identityService.DebitBalanceAsync(debituser!, TotalUpfrontCharge, cancellationToken);
 
             if (!balanceDebited)
             {
@@ -255,7 +256,7 @@ public sealed class BackgroundTaskJob
             await _context.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
 
-            var user = await _identityService.GetByIdentifierAsync(UserPublicId, cancellationToken);
+            var user = await _context.UserDetails.FirstOrDefaultAsync(x=>x.PublicId == UserPublicId, cancellationToken);
             if (user != null && !string.IsNullOrWhiteSpace(user.Email))
             {
                 var mainReference = debitTransactions.FirstOrDefault()?.Reference ?? $"circle-join-{SavingsCircleId}";

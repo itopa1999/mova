@@ -1,12 +1,11 @@
 using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Mova.Application.Interfaces.Admin;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common.Results;
 
-namespace Mova.Application.BBL.Queries.Admin.User;
+namespace Mova.Application.BBL.Queries.Admin.UserQuery;
 
 public sealed class GetUserBankAccount
 {
@@ -18,19 +17,19 @@ public sealed class GetUserBankAccount
     public sealed class Handler : IRequestHandler<Query, BaseResult<UserBankAccountsDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IAdminIdentityService _adminIdentityService;
-
-        public Handler(IUnitOfWork unitOfWork, IAdminIdentityService adminIdentityService)
+        public Handler(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _adminIdentityService = adminIdentityService;
         }
 
         public async Task<BaseResult<UserBankAccountsDto>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
-            bool userExists = await _adminIdentityService.GetUserAsync(request.UserId, cancellationToken);
+            bool userExists = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .AnyAsync(u => u.PublicId == request.UserId, cancellationToken);
 
             if (!userExists)
             {

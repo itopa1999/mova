@@ -3,7 +3,7 @@ using MediatR;
 using Mova.Application.Interfaces.Admin;
 using Mova.Shared.Common.Results;
 
-namespace Mova.Application.BBL.Queries.Admin.User;
+namespace Mova.Application.BBL.Queries.Admin.UserQuery;
 
 public sealed class GetUserDetails
 {

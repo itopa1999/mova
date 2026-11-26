@@ -39,7 +39,11 @@ public sealed class IdentityService : IIdentityService
         {
             Email = email,
             UserName = email,
-            PhoneNumber = phoneNumber
+            PhoneNumber = phoneNumber,
+            PhoneNumberConfirmed = false,
+            EmailConfirmed = false,
+            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedBy = email
         };
 
         var result = await _userManager.CreateAsync(user, password);

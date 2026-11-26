@@ -334,8 +334,10 @@ public sealed class ProcessPayoutsJob
 
         await using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
 
+        var user = await _context.UserDetails.FirstOrDefaultAsync(x=>x.PublicId == payout.UserPublicId, cancellationToken);
+
         var credited = await _identityService.CreditBalanceAsync(
-            payout.UserPublicId,
+            user!,
             payout.Amount.ToDecimal(),
             cancellationToken);
 
@@ -346,7 +348,6 @@ public sealed class ProcessPayoutsJob
             return;
         }
 
-        var user = await _identityService.GetByIdentifierAsync(payout.UserPublicId, cancellationToken);
         if (user != null && !string.IsNullOrWhiteSpace(user.Email))
         {
             _notificationQueue.QueueTransactionEmail(

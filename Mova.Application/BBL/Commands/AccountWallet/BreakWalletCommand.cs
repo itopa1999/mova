@@ -74,6 +74,12 @@ public sealed class BreakWalletCommand
                 return new BaseResult<object>(HttpStatusCode.BadRequest, "User identity is required.");
             }
 
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+
+            if (user is null)
+                return new BaseResult<object>(HttpStatusCode.Unauthorized, "User not found.");
+
             var (challengeValid, challengeMessage) = await _pinChallenge.ValidateAsync(
                 request.UserPublicId, PinChallengeType.BreakWallet, cancellationToken);
 
@@ -158,7 +164,7 @@ public sealed class BreakWalletCommand
             if (wallet.PayoutDestination == PayoutDestination.Main)
             {
                 var credited = await _identityService.CreditBalanceAsync(
-                    request.UserPublicId, 
+                    user, 
                     amountToReturn.ToDecimal(), 
                     cancellationToken);
 
