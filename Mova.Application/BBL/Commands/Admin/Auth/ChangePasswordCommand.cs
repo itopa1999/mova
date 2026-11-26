@@ -70,19 +70,13 @@ public sealed class AdminChangePasswordCommand
                     "New password cannot be the same as the old password.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
-            {
-                op.Warning($"User not found: {request.UserPublicId}");
-                return new BaseResult(
-                    HttpStatusCode.BadRequest,
-                    "User not found.");
-            }
+                return new BaseResult(HttpStatusCode.Unauthorized, "User not found.");
 
-            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             if (!AdminAuthorization.HasAdminRole(roles))
             {
@@ -94,10 +88,7 @@ public sealed class AdminChangePasswordCommand
 
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            var (success, errorMessage) = await _identityService.ChangePasswordAsync(
-                user.Id,
-                request.OldPassword,
-                request.NewPassword);
+            var (success, errorMessage) = await _identityService.ChangePasswordAsync(user.UserId, request.OldPassword, request.NewPassword, cancellationToken);
 
             if (!success)
             {

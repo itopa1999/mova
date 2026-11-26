@@ -11,7 +11,6 @@ using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
@@ -34,20 +33,17 @@ public sealed class AcceptTrusteeConsentCommand
     public sealed class Handler : IRequestHandler<Command, BaseResult>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
         private readonly ICacheService _cacheService;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger,
             ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
             _logger = logger;
             _cacheService = cacheService;
@@ -138,9 +134,9 @@ public sealed class AcceptTrusteeConsentCommand
                 null,
                 CancellationToken.None);
 
-            var owner = await _identityService.GetByIdentifierAsync(
-                trustee.OwnerPublicId,
-                cancellationToken);
+            var owner = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == trustee.OwnerPublicId, cancellationToken);
+
 
             if (!string.IsNullOrWhiteSpace(owner?.Email))
             {

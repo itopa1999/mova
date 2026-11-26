@@ -113,40 +113,36 @@ public sealed class RegisterCommand
                     "Please provide a valid Nigerian phone number.");
             }
 
-            var emailExists = await _identityService.EmailExistsAsync(
-                normalizedEmail,
-                cancellationToken: cancellationToken);
+            var bvnHash = _hasher.Hash(request.Bvn, SecuritySaltPurpose.BvnVerification.ToString());
 
-            if (emailExists)
+            var existing = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.Email == normalizedEmail
+                    || x.PhoneNumber == normalizedPhoneNumber
+                    || x.BvnHash == bvnHash)
+                .Select(x => new { x.Email, x.PhoneNumber, x.BvnHash })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (existing is not null)
             {
-                op.Warning($"Email already exists: {normalizedEmail}");
-                return new BaseResult<RegistrationResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Email is already in use.");
-            }
+                if (existing.Email == normalizedEmail)
+                {
+                    op.Warning($"Email already exists: {normalizedEmail}");
+                    return new BaseResult<RegistrationResponseDto>(
+                        HttpStatusCode.Conflict, "Email is already in use.");
+                }
 
-            var bvnExists = await _identityService.BvnExistsAsync(
-                request.Bvn,
-                cancellationToken: cancellationToken);
+                if (existing.PhoneNumber == normalizedPhoneNumber)
+                {
+                    op.Warning($"Phone already exists: {normalizedPhoneNumber}");
+                    return new BaseResult<RegistrationResponseDto>(
+                        HttpStatusCode.Conflict, "Phone number is already in use.");
+                }
 
-            if (bvnExists)
-            {
                 op.Warning("BVN already registered.");
                 return new BaseResult<RegistrationResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This BVN is already registered to another account.");
-            }
-
-            var phoneExists = await _identityService.PhoneExistsAsync(
-                normalizedPhoneNumber,
-                cancellationToken: cancellationToken);
-
-            if (phoneExists)
-            {
-                op.Warning($"Phone already exists: {normalizedPhoneNumber}");
-                return new BaseResult<RegistrationResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Phone number is already in use.");
             }
 
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
@@ -194,7 +190,7 @@ public sealed class RegisterCommand
                 Balance = Money.FromNaira(0),
                 AccountStatus = UserAccountStatus.Active,
                 OnboardingStage = OnboardingStage.Register,
-                BvnHash = _hasher.Hash(request.Bvn, SecuritySaltPurpose.BvnVerification.ToString())
+                BvnHash = bvnHash
             };
 
             await _unitOfWork.AddAsync(user, cancellationToken);

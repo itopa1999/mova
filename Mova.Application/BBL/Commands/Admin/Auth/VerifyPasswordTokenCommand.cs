@@ -84,19 +84,18 @@ public sealed class AdminVerifyPasswordTokenCommand
                     "Token must be exactly 6 characters.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult<VerifyPasswordTokenResponseDto>(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 
-            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             if (!AdminAuthorization.HasAdminRole(roles))
             {

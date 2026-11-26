@@ -80,6 +80,12 @@ public sealed class RestartWalletCommand
                 ("UserId", request.UserPublicId),
                 ("WalletId", request.WalletId));
 
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+
+            if (user is null)
+                return new BaseResult<RestartWalletResponseDto>(HttpStatusCode.Unauthorized, "User not found.");
+
             var wallet = await _unitOfWork.Query<Wallet>()
                 .Include(w => w.Rule)
                 .FirstOrDefaultAsync(
@@ -165,7 +171,7 @@ public sealed class RestartWalletCommand
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             var balanceDebited = await _identityService.DebitBalanceAsync(
-                request.UserPublicId,
+                user,
                 totalUpfrontCharge,
                 cancellationToken);
 
@@ -309,11 +315,13 @@ public sealed class RestartWalletCommand
 
             var firstReleaseDate = firstRelease.ScheduledFor;
 
-            var userAfterDebit = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var userAfterDebit = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => x.Balance)
+                .FirstAsync(cancellationToken);
 
-            var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
+            var newMainBalance = userAfterDebit.ToDecimal();
 
             if (!string.IsNullOrWhiteSpace(request.Email))
             {

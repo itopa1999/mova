@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
@@ -12,6 +11,7 @@ using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.TransactionPin;
 
 public sealed class SendForgotPinOtpCommand
@@ -27,20 +27,17 @@ public sealed class SendForgotPinOtpCommand
     {
         private const int OtpExpiryMinutes = 2;
 
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOtpService _otpService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             IOtpService otpService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _otpService = otpService;
             _notificationQueue = notificationQueue;
@@ -64,17 +61,13 @@ public sealed class SendForgotPinOtpCommand
                     "UserPublicId is required.");
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return new BaseResult<object>(
-                    HttpStatusCode.InternalServerError,
-                    "We couldn't verify your account permissions right now. Please try again in a moment.");
-            }
+            if (user is null)
+                return new BaseResult<object>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanPerformSensitiveOperations)
             {
@@ -89,18 +82,6 @@ public sealed class SendForgotPinOtpCommand
                 return new BaseResult<object>(
                     HttpStatusCode.Locked,
                     userMessage);
-            }
-
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
-
-            if (user is null)
-            {
-                op.Warning($"User not found: {request.UserPublicId}.");
-                return new BaseResult<object>(
-                    HttpStatusCode.NotFound,
-                    "User not found.");
             }
 
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);

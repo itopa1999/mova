@@ -10,9 +10,9 @@ using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Microsoft.EntityFrameworkCore;
 namespace Mova.Application.BBL.Commands.BanksAccount;
 
 public sealed class FundAccount
@@ -76,8 +76,6 @@ public sealed class FundAccount
     {
         private const decimal MinimumFundingAmount = 1000m;
         private const decimal MaximumFundingAmount = 100_000_000m;
-
-        private readonly IIdentityService _identityService;
         private readonly IPaystackService _paystackService;
         private readonly IFlutterwaveService _flutterwaveService;
         private readonly IMonnifyService _monnifyService;
@@ -86,7 +84,6 @@ public sealed class FundAccount
         private readonly IFeatureFlagService _featureFlagService;
 
         public Handler(
-            IIdentityService identityService,
             IPaystackService paystackService,
             IFlutterwaveService flutterwaveService,
             IMonnifyService monnifyService,
@@ -94,7 +91,6 @@ public sealed class FundAccount
             ILogger<Handler> logger,
             IFeatureFlagService featureFlagService)
         {
-            _identityService = identityService;
             _paystackService = paystackService;
             _flutterwaveService = flutterwaveService;
             _monnifyService = monnifyService;
@@ -153,15 +149,14 @@ public sealed class FundAccount
                     "Payment cannot be completed at this time.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}.");
                 return new BaseResult<FundAccountDto>(
-                    HttpStatusCode.NotFound,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 

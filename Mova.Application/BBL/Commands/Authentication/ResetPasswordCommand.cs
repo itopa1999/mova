@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.Authentication;
@@ -71,21 +70,18 @@ public sealed class ResetPasswordCommand
                     "Password must be at least 8 characters.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 
-            var (success, errorMessage) = await _identityService.ResetPasswordAsync(
-                user.Id,
-                request.NewPassword);
+            var (success, errorMessage) = await _identityService.ResetPasswordAsync(user.UserId, request.NewPassword, cancellationToken);
 
             if (!success)
             {

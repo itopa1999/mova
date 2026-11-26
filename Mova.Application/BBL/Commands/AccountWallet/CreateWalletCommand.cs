@@ -17,8 +17,8 @@ using Mova.Domain.ValueObjects;
 using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
-using Mova.Application.Models;
 using Mova.Shared.Constants;
+using Mova.Application.Extensions;
 
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
@@ -128,17 +128,13 @@ public sealed class CreateWalletCommand
                 "CreateWallet",
                 ("UserId", request.UserPublicId));
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return new BaseResult<CreateWalletResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "We couldn't verify your account permissions right now. Please try again in a moment.");
-            }
+            if (user is null)
+                return new BaseResult<CreateWalletResponseDto>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanCreateWallets)
             {
@@ -428,7 +424,7 @@ public sealed class CreateWalletCommand
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             var balanceDebited = await _identityService.DebitBalanceAsync(
-                request.UserPublicId,
+                user,
                 totalUpfrontCharge,
                 cancellationToken);
 
@@ -545,11 +541,13 @@ public sealed class CreateWalletCommand
 
             var firstReleaseDate = firstRelease.ScheduledFor;
 
-            var userAfterDebit = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var newMainBalance = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => x.Balance)
+                .FirstAsync(cancellationToken);
 
-            var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
+            var newMainBalanceAmount = newMainBalance.ToDecimal();
 
             if (!string.IsNullOrWhiteSpace(request.Email))
             {
@@ -595,7 +593,7 @@ public sealed class CreateWalletCommand
                     WalletId = wallet.Id,
                     FirstReleaseDate = firstReleaseDate,
                     Notification = true,
-                    NewMainBalance = newMainBalance,
+                    NewMainBalance = newMainBalanceAmount,
                 });
         }
 

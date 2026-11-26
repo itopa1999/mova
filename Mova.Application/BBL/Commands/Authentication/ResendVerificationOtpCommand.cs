@@ -75,15 +75,14 @@ public sealed class ResendVerificationOtpCommand
                     "Email must be provided.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Email,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found for email: {request.Email}");
                 return new BaseResult<ResendVerificationOtpResponseDto>(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 

@@ -71,9 +71,8 @@ public sealed class ForgotPasswordCommand
                     "Email must be provided.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Email,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
 
             if (user is null)
             {
@@ -89,7 +88,7 @@ public sealed class ForgotPasswordCommand
                     });
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
+            if (await _identityService.IsAccountVerifiedAsync(user.UserId, cancellationToken) is false)
             {
                 op.Warning($"Account not verified: {user.PublicId}");
                 return new BaseResult<ForgotPasswordResponseDto>(

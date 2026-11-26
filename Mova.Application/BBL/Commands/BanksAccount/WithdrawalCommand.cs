@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Data;
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
@@ -13,10 +12,10 @@ using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using DataAnnotationValidationResult = System.ComponentModel.DataAnnotations.ValidationResult;
 using Mova.Shared.Common.Results;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.BanksAccount;
 
 public sealed class WithdrawalCommand
@@ -176,17 +175,13 @@ public sealed class WithdrawalCommand
                     "User identity is required.");
             }
 
-            var permissions = await identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return new BaseResult<WithdrawalResponse>(
-                    HttpStatusCode.InternalServerError,
-                    "We couldn't verify your account permissions right now. Please try again in a moment.");
-            }
+            if (user is null)
+                return new BaseResult<WithdrawalResponse>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanPerformSensitiveOperations)
             {
@@ -233,18 +228,6 @@ public sealed class WithdrawalCommand
                 return new BaseResult<WithdrawalResponse>(
                     HttpStatusCode.BadRequest,
                     challengeMessage);
-            }
-
-            var user = await identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
-
-            if (user is null)
-            {
-                op.Warning($"User not found: {request.UserPublicId}.");
-                return new BaseResult<WithdrawalResponse>(
-                    HttpStatusCode.NotFound,
-                    "User not found.");
             }
 
             var amount = Money.FromNaira(request.Amount);

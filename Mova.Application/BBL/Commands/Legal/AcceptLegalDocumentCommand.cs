@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
@@ -38,18 +37,15 @@ public sealed class AcceptLegalDocumentCommand
         };
 
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
             _logger = logger;
         }
@@ -83,14 +79,13 @@ public sealed class AcceptLegalDocumentCommand
                 return Bad($"Unsupported document type: {request.Type}.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}.");
-                return Bad("User not found.", HttpStatusCode.NotFound);
+                return Bad("User not found.", HttpStatusCode.Unauthorized);
             }
 
             var currentDocument = await _unitOfWork.Query<LegalDocument>()
@@ -142,17 +137,14 @@ public sealed class AcceptLegalDocumentCommand
 
             if (isOnboarding)
             {
-                var (stageOk, stageMessage) = await _identityService.UpdateOnboardingStageAsync(
-                    user.PublicId,
-                    stages.Target,
-                    cancellationToken);
-
-                if (!stageOk)
+                if (stages.Target <= user.OnboardingStage)
                 {
-                    op.Warning($"Failed to advance onboarding stage: {stageMessage}");
-                    return Bad(stageMessage);
+                    return Bad(
+                        $"Cannot move onboarding stage from {user.OnboardingStage} to {stages.Target}. " +
+                        "Stage must always advance forward.");
                 }
-
+                var previousStage = user.OnboardingStage;
+                user.OnboardingStage = stages.Target;
             }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);

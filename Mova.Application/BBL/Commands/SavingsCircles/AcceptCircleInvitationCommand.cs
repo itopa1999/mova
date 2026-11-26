@@ -33,20 +33,17 @@ public sealed class AcceptCircleInvitationCommand
         : IRequestHandler<Command, BaseResult<AcceptCircleInvitationResponse>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             INotificationQueue notificationQueue,
             ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
             _cacheService = cacheService;
             _logger = logger;
@@ -76,13 +73,13 @@ public sealed class AcceptCircleInvitationCommand
             }
 
             // ── 2. Resolve user identity (same pattern as CreateCircle) ──
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId, cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Error("User not found.");
-                return Bad("User account not found.", HttpStatusCode.NotFound);
+                return Bad("User account not found.", HttpStatusCode.Unauthorized);
             }
 
             var userEmail = user.Email;

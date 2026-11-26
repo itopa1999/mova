@@ -11,7 +11,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
@@ -29,18 +28,15 @@ public sealed class ApproveReleaseRequestCommand
     public sealed class Handler : IRequestHandler<Command, BaseResult>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
             _logger = logger;
         }
@@ -211,9 +207,8 @@ public sealed class ApproveReleaseRequestCommand
                 null,
                 CancellationToken.None);
 
-            var owner = await _identityService.GetByIdentifierAsync(
-                releaseRequest.RequestedByUserPublicId,
-                cancellationToken);
+            var owner = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == releaseRequest.RequestedByUserPublicId, cancellationToken);
 
             if (!string.IsNullOrWhiteSpace(owner?.Email))
             {

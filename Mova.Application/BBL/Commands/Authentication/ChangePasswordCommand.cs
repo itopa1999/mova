@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.Authentication;
@@ -70,24 +69,20 @@ public sealed class ChangePasswordCommand
                     "New password cannot be the same as the old password.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            var (success, errorMessage) = await _identityService.ChangePasswordAsync(
-                user.Id,
-                request.OldPassword,
-                request.NewPassword);
+            var (success, errorMessage) = await _identityService.ChangePasswordAsync(user.UserId, request.OldPassword, request.NewPassword, cancellationToken);
 
             if (!success)
             {

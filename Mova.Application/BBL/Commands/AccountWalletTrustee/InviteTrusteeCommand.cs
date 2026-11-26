@@ -50,7 +50,6 @@ public sealed class InviteTrusteeCommand
     public sealed class Handler
         : IRequestHandler<Command, BaseResult<InviteTrusteeResponseDto>>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
         private readonly INotificationQueue _notificationQueue;
@@ -60,7 +59,6 @@ public sealed class InviteTrusteeCommand
         private readonly ICacheService _cacheService;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
             INotificationQueue notificationQueue,
@@ -69,7 +67,6 @@ public sealed class InviteTrusteeCommand
             IOptions<ExternalApiSettings> externalApiSettings,
             ICacheService cacheService)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
             _notificationQueue = notificationQueue;

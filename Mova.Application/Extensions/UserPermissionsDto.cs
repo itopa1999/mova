@@ -1,5 +1,6 @@
 using Mova.Domain.Enums;
-namespace Mova.Application.Interfaces.Identity;
+
+namespace Mova.Application.Extensions;
 
 /// <summary>
 /// Immutable snapshot of what a user is allowed to do right now, derived

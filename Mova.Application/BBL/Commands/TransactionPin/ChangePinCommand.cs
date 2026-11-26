@@ -3,13 +3,15 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Mova.Application.Interfaces.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.TransactionPin;
 
 public sealed class ChangePinCommand
@@ -29,19 +31,19 @@ public sealed class ChangePinCommand
     public sealed class Handler : IRequestHandler<Command, BaseResult<object>>
     {
         private readonly ITransactionPinService _transactionPinService;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             ITransactionPinService transactionPinService,
-            IIdentityService identityService,
             INotificationQueue notificationQueue,
+            IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
             _transactionPinService = transactionPinService;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -62,9 +64,13 @@ public sealed class ChangePinCommand
                     "UserPublicId is required.");
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+
+            if (user is null)
+                return new BaseResult<object>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (permissions is null)
             {
@@ -143,18 +149,6 @@ public sealed class ChangePinCommand
                 return new BaseResult<object>(
                     HttpStatusCode.BadRequest,
                     "New PIN cannot be the same as current PIN.");
-            }
-
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
-
-            if (user is null)
-            {
-                op.Warning($"User not found: {request.UserPublicId}.");
-                return new BaseResult<object>(
-                    HttpStatusCode.BadRequest,
-                    "User not found.");
             }
 
             var hasPin = await _transactionPinService.HasPinAsync(

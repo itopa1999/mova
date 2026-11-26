@@ -3,13 +3,15 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.BBL.Queries.Profile;
-using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Mova.Application.Interfaces.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class RequestAccountDeletion
@@ -33,7 +35,7 @@ public sealed class RequestAccountDeletion
     public sealed class Handler : IRequestHandler<Command, BaseResult>
     {
         private readonly IMediator _mediator;
-        private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IPinChallenge _pinChallenge;
         private readonly IRefreshTokenService _refreshTokenService;
         private readonly INotificationQueue _notificationQueue;
@@ -41,14 +43,14 @@ public sealed class RequestAccountDeletion
 
         public Handler(
             IMediator mediator,
-            IIdentityService identityService,
+            IUnitOfWork unitOfWork,
             IPinChallenge pinChallenge,
             IRefreshTokenService refreshTokenService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _mediator = mediator;
-            _identityService = identityService;
+            _unitOfWork = unitOfWork;
             _pinChallenge = pinChallenge;
             _refreshTokenService = refreshTokenService;
             _notificationQueue = notificationQueue;
@@ -85,15 +87,14 @@ public sealed class RequestAccountDeletion
                     challengeMessage);
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult(
-                    HttpStatusCode.NotFound,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 
@@ -141,20 +142,11 @@ public sealed class RequestAccountDeletion
                 ? "User requested account deletion."
                 : $"User requested account deletion. Reason: {request.Reason}";
 
-            var closed = await _identityService.CloseAccountAsync(
-                request.UserPublicId,
-                AccountRestrictionReason.UserRequestedDeactivation,
+            user.ClosePermanently(
+                AccountRestrictionReason.UserRequestedDeactivation, 
                 details,
-                performedBy: "self-service",
-                cancellationToken);
+                "self-service");
 
-            if (!closed)
-            {
-                op.Error($"CloseAccountAsync returned false for user {request.UserPublicId}.");
-                return new BaseResult(
-                    HttpStatusCode.InternalServerError,
-                    "Failed to submit your account deletion request. Please try again.");
-            }
 
             var revoked = await _refreshTokenService.RevokeAllForUserAsync(
                 request.UserPublicId,

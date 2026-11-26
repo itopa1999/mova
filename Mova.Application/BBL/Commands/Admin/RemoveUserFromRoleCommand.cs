@@ -2,10 +2,12 @@ using System.Net;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Mova.Application.Interfaces.Persistence;
+using Microsoft.EntityFrameworkCore;
 namespace Mova.Application.BBL.Commands.Admin;
 
 public sealed class RemoveUserFromRoleCommand
@@ -25,13 +27,16 @@ public sealed class RemoveUserFromRoleCommand
     public sealed class Handler : IRequestHandler<Command, BaseResult<AssignRoleResponseDto>>
     {
         private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IIdentityService identityService,
+            IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
             _identityService = identityService;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -61,9 +66,8 @@ public sealed class RemoveUserFromRoleCommand
                     "Role is required.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
@@ -74,7 +78,7 @@ public sealed class RemoveUserFromRoleCommand
             }
 
             var existingRoles = await _identityService.GetRolesAsync(
-                user.Id,
+                user.UserId,
                 cancellationToken);
 
             if (!existingRoles.Any(r =>
@@ -109,7 +113,7 @@ public sealed class RemoveUserFromRoleCommand
             }
 
             var (success, errorMessage) = await _identityService.RemoveFromRoleAsync(
-                user.Id,
+                user.UserId,
                 request.Role,
                 cancellationToken);
 
@@ -122,7 +126,7 @@ public sealed class RemoveUserFromRoleCommand
             }
 
             var updatedRoles = await _identityService.GetRolesAsync(
-                user.Id,
+                user.UserId,
                 cancellationToken);
 
             op.Success($"Role {request.Role} removed from user {request.UserPublicId}.");

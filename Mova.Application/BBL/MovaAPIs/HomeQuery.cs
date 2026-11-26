@@ -6,8 +6,8 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.MovaAPIs;
 
 public sealed class HomeQuery
@@ -76,14 +76,10 @@ public sealed class HomeQuery
     public sealed class Handler : IRequestHandler<Query, BaseResult<HomeQueryDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
-
         public Handler(
-            IUnitOfWork unitOfWork,
-            IIdentityService identityService)
+            IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
         }
 
         public async Task<BaseResult<HomeQueryDto>> Handle(
@@ -97,20 +93,13 @@ public sealed class HomeQuery
                     "User public ID is required.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (user == null)
-            {
-                return new BaseResult<HomeQueryDto>(
-                    HttpStatusCode.NotFound,
-                    "User not found.");
-            }
+            if (user is null)
+                return new BaseResult<HomeQueryDto>(HttpStatusCode.Unauthorized, "User not found.");
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var permissions = user.GetUserPermissions();
 
             try
             {

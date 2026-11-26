@@ -34,18 +34,15 @@ public sealed class VerifyPasswordTokenCommand
     public class Handler : IRequestHandler<Command, BaseResult<VerifyPasswordTokenResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly IOtpService _otpService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             IOtpService otpService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _otpService = otpService;
             _logger = logger;
         }
@@ -83,9 +80,8 @@ public sealed class VerifyPasswordTokenCommand
                     "Token must be exactly 6 characters.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {

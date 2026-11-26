@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
@@ -59,13 +60,13 @@ public sealed class RequestProfileChangeCommand
                     "Please describe what you want to change.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId, cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
-                return new BaseResult(HttpStatusCode.NotFound, "Account not found.");
+                return new BaseResult(HttpStatusCode.Unauthorized, "Account not found.");
             }
 
             var change = new RequestProfileChange

@@ -113,7 +113,13 @@ public sealed class PayContributionCommand
 
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            bool paid = await _identityService.DebitBalanceAsync(member.UserPublicId!, totalAmountDue, cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == member.UserPublicId!, cancellationToken);
+
+            if (user is null)
+                return new BaseResult<bool>(HttpStatusCode.Unauthorized, "User not found.");
+
+            bool paid = await _identityService.DebitBalanceAsync(user, totalAmountDue, cancellationToken);
 
             if (!paid)
             {
@@ -178,7 +184,6 @@ public sealed class PayContributionCommand
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
 
-            var user = await _identityService.GetByIdentifierAsync(member.UserPublicId!, cancellationToken);
             if (user != null && !string.IsNullOrWhiteSpace(user.Email))
             {
                 _notificationQueue.QueueTransactionEmail(

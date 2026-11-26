@@ -7,9 +7,11 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Mova.Application.Interfaces.Persistence;
+using Microsoft.EntityFrameworkCore;
 namespace Mova.Application.BBL.Commands.TransactionPin;
 
 public sealed class VerifyPinCommand
@@ -53,18 +55,18 @@ public sealed class VerifyPinCommand
     public sealed class Handler : IRequestHandler<Command, BaseResult>
     {
         private readonly ITransactionPinService _transactionPinService;
-        private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             ITransactionPinService transactionPinService,
-            IIdentityService identityService,
+            IUnitOfWork unitOfWork,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
             _transactionPinService = transactionPinService;
-            _identityService = identityService;
+            _unitOfWork = unitOfWork;
             _notificationQueue = notificationQueue;
             _logger = logger;
         }
@@ -127,15 +129,14 @@ public sealed class VerifyPinCommand
                     "Unsupported PIN challenge type for this endpoint.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}.");
                 return new BaseResult(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 

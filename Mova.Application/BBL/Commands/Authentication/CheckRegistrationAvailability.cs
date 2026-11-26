@@ -2,13 +2,15 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Helpers;
-using Mova.Application.Interfaces.Identity;
-using Mova.Shared.Common;
+using Mova.Domain.Entities;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Application.Interfaces.Persistence;
+
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class CheckRegistrationAvailability
@@ -47,14 +49,14 @@ public sealed class CheckRegistrationAvailability
     public class Handler
         : IRequestHandler<Query, BaseResult<CheckRegistrationAvailabilityResponseDto>>
     {
-        private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
+            IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -79,21 +81,17 @@ public sealed class CheckRegistrationAvailability
                     "Provide an email or phone number to check.");
             }
 
-            var emailAvailable = true;
-            var phoneAvailable = true;
+            string? normalizedEmail = null;
+            string? normalizedPhone = null;
 
             if (emailProvided)
             {
-                var normalizedEmail = request.Email!.Trim().ToLowerInvariant();
-
-                emailAvailable = !await _identityService.EmailExistsAsync(
-                    normalizedEmail,
-                    cancellationToken: cancellationToken);
+                normalizedEmail = request.Email!.Trim().ToLowerInvariant();
             }
 
             if (phoneProvided)
             {
-                var normalizedPhone = ExtensionHelpers.Normalize(request.PhoneNumber!);
+                normalizedPhone = ExtensionHelpers.Normalize(request.PhoneNumber!);
 
                 if (normalizedPhone is null)
                 {
@@ -102,11 +100,33 @@ public sealed class CheckRegistrationAvailability
                         HttpStatusCode.BadRequest,
                         "Please provide a valid Nigerian phone number.");
                 }
-
-                phoneAvailable = !await _identityService.PhoneExistsAsync(
-                    normalizedPhone,
-                    cancellationToken: cancellationToken);
             }
+
+            var query = _unitOfWork.Query<User>().AsNoTracking();
+
+            if (normalizedEmail is not null && normalizedPhone is not null)
+            {
+                query = query.Where(x =>
+                    x.Email == normalizedEmail || x.PhoneNumber == normalizedPhone);
+            }
+            else if (normalizedEmail is not null)
+            {
+                query = query.Where(x => x.Email == normalizedEmail);
+            }
+            else
+            {
+                query = query.Where(x => x.PhoneNumber == normalizedPhone);
+            }
+
+            var matches = await query
+                .Select(x => new { x.Email, x.PhoneNumber })
+                .ToListAsync(cancellationToken);
+
+            var emailAvailable = normalizedEmail is null
+                || !matches.Any(x => x.Email == normalizedEmail);
+
+            var phoneAvailable = normalizedPhone is null
+                || !matches.Any(x => x.PhoneNumber == normalizedPhone);
 
             var canProceed = emailAvailable && phoneAvailable;
 

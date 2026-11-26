@@ -2,12 +2,13 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
+using Mova.Domain.Entities;
 using Mova.Shared.Common.Results;
-using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using static Mova.Application.Helpers.ExtensionHelpers;
 
@@ -64,9 +65,11 @@ public sealed class AdminLoginCommand
                 "LoginUser",
                 ("Identifier", request.Identifier));
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Identifier,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .Where(x =>
+                    x.Email == request.Identifier ||
+                    x.PhoneNumber == request.Identifier)
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
@@ -76,7 +79,7 @@ public sealed class AdminLoginCommand
                     "Invalid email or password.");
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
+            if (await _identityService.IsAccountVerifiedAsync(user.UserId, cancellationToken) is false)
             {
                 op.Warning($"Account not verified for user {user.PublicId}.");
                 return new BaseResult<LoginResponseDto>(
@@ -84,9 +87,9 @@ public sealed class AdminLoginCommand
                     "Please verify your account before logging in.");
             }
 
-            if (await _identityService.IsLockedOutAsync(user.Id, cancellationToken))
+            if (await _identityService.IsLockedOutAsync(user.UserId, cancellationToken))
             {
-                var lockoutEnd = await _identityService.GetLockoutEndAsync(user.Id, cancellationToken);
+                var lockoutEnd = await _identityService.GetLockoutEndAsync(user.UserId, cancellationToken);
                 var timeText = lockoutEnd.HasValue 
                     ? $"Try again in {Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalMinutes)} minute(s)." 
                     : "Please try again later.";
@@ -99,13 +102,13 @@ public sealed class AdminLoginCommand
             }
 
             var passwordIsValid = await _identityService.CheckPasswordAsync(
-                user.Id, 
+                user.UserId, 
                 request.Password, 
                 cancellationToken);
 
             if (!passwordIsValid)
             {
-                await _identityService.RecordFailedAccessAsync(user.Id, cancellationToken);
+                await _identityService.RecordFailedAccessAsync(user.UserId, cancellationToken);
                 op.Warning($"Invalid password for user {user.PublicId}.");
                 
                 return new BaseResult<LoginResponseDto>(
@@ -113,9 +116,9 @@ public sealed class AdminLoginCommand
                     "Invalid email or password.");
             }
 
-            await _identityService.ResetFailedAccessAsync(user.Id, cancellationToken);
+            await _identityService.ResetFailedAccessAsync(user.UserId, cancellationToken);
 
-            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             if (!AdminAuthorization.HasAdminRole(roles))
             {
