@@ -271,10 +271,8 @@ public sealed class RequestReleaseCommand
                 CancellationToken.None);
 
             var maskedAccount = MaskAccount(bank.AccountNumber);
-
-            var encodedToken = Uri.EscapeDataString(rawToken);
             var approvalUrl =
-                $"{_externalApiSettings.FrontendBaseUrl.TrimEnd('/')}/trustee/wallet/release/{encodedToken}";
+                $"{_externalApiSettings.FrontendBaseUrl.TrimEnd('/')}/trustee/wallet/release/{rawToken}";
 
             var noteClause = string.IsNullOrWhiteSpace(releaseRequest.UserNote)
                 ? string.Empty
