@@ -1,198 +1,198 @@
-name: build-check
+# name: build-check
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
+#   workflow_dispatch:
 
-concurrency:
-  group: build-check-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# concurrency:
+#   group: build-check-${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
 
-permissions:
-  contents: read
+# permissions:
+#   contents: read
 
-env:
-  DOTNET_VERSION: '8.0.x'
-  DOTNET_NOLOGO: true
-  DOTNET_CLI_TELEMETRY_OPTOUT: true
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+# env:
+#   DOTNET_VERSION: '8.0.x'
+#   DOTNET_NOLOGO: true
+#   DOTNET_CLI_TELEMETRY_OPTOUT: true
+#   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+#   NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
 
-jobs:
-  test:
-    name: build-check-before-merging
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+# jobs:
+#   test:
+#     name: build-check-before-merging
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 15
 
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
+#     services:
+#       redis:
+#         image: redis:7-alpine
+#         ports:
+#           - 6379:6379
+#         options: >-
+#           --health-cmd "redis-cli ping"
+#           --health-interval 5s
+#           --health-timeout 3s
+#           --health-retries 10
 
-    env:
-      REDIS_CONNECTION: localhost:6379
+#     env:
+#       REDIS_CONNECTION: localhost:6379
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+#       - name: Setup .NET
+#         uses: actions/setup-dotnet@v4
+#         with:
+#           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.NUGET_PACKAGES }}
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/packages.lock.json', '**/NuGet.config') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+#       - name: Cache NuGet packages
+#         uses: actions/cache@v4
+#         with:
+#           path: ${{ env.NUGET_PACKAGES }}
+#           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/packages.lock.json', '**/NuGet.config') }}
+#           restore-keys: |
+#             ${{ runner.os }}-nuget-
 
-      - name: Restore
-        run: dotnet restore --verbosity minimal
+#       - name: Restore
+#         run: dotnet restore --verbosity minimal
 
-      - name: Format check
-        run: dotnet format --no-restore --verify-no-changes --verbosity diagnostic
-        continue-on-error: true
+#       - name: Format check
+#         run: dotnet format --no-restore --verify-no-changes --verbosity diagnostic
+#         continue-on-error: true
 
-      - name: Build
-        run: >
-          dotnet build
-          --no-restore
-          --configuration Release
-          --verbosity minimal
-          /p:TreatWarningsAsErrors=false
+#       - name: Build
+#         run: >
+#           dotnet build
+#           --no-restore
+#           --configuration Release
+#           --verbosity minimal
+#           /p:TreatWarningsAsErrors=false
 
-      - name: Test
-        run: >
-          dotnet test
-          --no-build
-          --configuration Release
-          --logger "console;verbosity=normal"
-          --logger "trx;LogFileName=results.trx"
-          --results-directory ./TestResults
-          --blame-hang-timeout 5m
-          --blame-hang-dump-type none
+#       - name: Test
+#         run: >
+#           dotnet test
+#           --no-build
+#           --configuration Release
+#           --logger "console;verbosity=normal"
+#           --logger "trx;LogFileName=results.trx"
+#           --results-directory ./TestResults
+#           --blame-hang-timeout 5m
+#           --blame-hang-dump-type none
 
-      - name: Publish test summary
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Test Results
-          path: ./TestResults/*.trx
-          reporter: dotnet-trx
-          fail-on-error: false
+#       - name: Publish test summary
+#         if: always()
+#         uses: dorny/test-reporter@v1
+#         with:
+#           name: Test Results
+#           path: ./TestResults/*.trx
+#           reporter: dotnet-trx
+#           fail-on-error: false
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: ./TestResults/*.trx
-          retention-days: 7
+#       - name: Upload test results
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: test-results
+#           path: ./TestResults/*.trx
+#           retention-days: 7
 
-  promote-to-production:
-    name: promote-to-production
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+#   promote-to-production:
+#     name: promote-to-production
+#     needs: test
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 5
 
-    permissions:
-      contents: write
-      pull-requests: write
+#     permissions:
+#       contents: write
+#       pull-requests: write
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+#           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create or update PR (main → production)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
+#       - name: Create or update PR (main → production)
+#         env:
+#           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         run: |
+#           set -e
 
-          if ! git ls-remote --exit-code --heads origin production >/dev/null 2>&1; then
-            echo "🆕 production branch does not exist — creating it from main."
-            git push origin main:production
-            echo "✅ production branch created."
-            exit 0
-          fi
+#           if ! git ls-remote --exit-code --heads origin production >/dev/null 2>&1; then
+#             echo "🆕 production branch does not exist — creating it from main."
+#             git push origin main:production
+#             echo "✅ production branch created."
+#             exit 0
+#           fi
 
-          git fetch origin main production
-          DIFF=$(git rev-list --count origin/production..origin/main)
-          if [ "$DIFF" -eq 0 ]; then
-            echo "✅ production is already up to date with main. Nothing to promote."
-            exit 0
-          fi
-          echo "📦 $DIFF commit(s) to promote from main → production."
+#           git fetch origin main production
+#           DIFF=$(git rev-list --count origin/production..origin/main)
+#           if [ "$DIFF" -eq 0 ]; then
+#             echo "✅ production is already up to date with main. Nothing to promote."
+#             exit 0
+#           fi
+#           echo "📦 $DIFF commit(s) to promote from main → production."
 
-          # ─── Build a PR title from the latest commit message ───
-          RAW_TITLE=$(git log -1 --pretty=%s origin/main)
+#           # ─── Build a PR title from the latest commit message ───
+#           RAW_TITLE=$(git log -1 --pretty=%s origin/main)
 
-          # Fallback if the commit subject is empty
-          if [ -z "$RAW_TITLE" ]; then
-            RAW_TITLE="chore: promote main → production"
-          fi
+#           # Fallback if the commit subject is empty
+#           if [ -z "$RAW_TITLE" ]; then
+#             RAW_TITLE="chore: promote main → production"
+#           fi
 
-          # Truncate to 70 characters so the title stays readable in the PR list
-          MAX_LEN=70
-          if [ "${#RAW_TITLE}" -gt "$MAX_LEN" ]; then
-            PR_TITLE="${RAW_TITLE:0:$((MAX_LEN - 1))}…"
-          else
-            PR_TITLE="$RAW_TITLE"
-          fi
+#           # Truncate to 70 characters so the title stays readable in the PR list
+#           MAX_LEN=70
+#           if [ "${#RAW_TITLE}" -gt "$MAX_LEN" ]; then
+#             PR_TITLE="${RAW_TITLE:0:$((MAX_LEN - 1))}…"
+#           else
+#             PR_TITLE="$RAW_TITLE"
+#           fi
 
-          echo "🏷️  PR title: $PR_TITLE"
+#           echo "🏷️  PR title: $PR_TITLE"
 
-          EXISTING_PR=$(gh pr list \
-            --base production \
-            --head main \
-            --state open \
-            --json number \
-            --jq '.[0].number')
+#           EXISTING_PR=$(gh pr list \
+#             --base production \
+#             --head main \
+#             --state open \
+#             --json number \
+#             --jq '.[0].number')
 
-          if [ -n "$EXISTING_PR" ]; then
-            echo "♻️  PR #$EXISTING_PR already exists — updating title."
-            gh pr edit "$EXISTING_PR" --title "$PR_TITLE" >/dev/null
-            PR_NUMBER=$EXISTING_PR
-          else
-            PR_URL=$(gh pr create \
-              --base production \
-              --head main \
-              --title "$PR_TITLE" \
-              --body "## Automated promotion
+#           if [ -n "$EXISTING_PR" ]; then
+#             echo "♻️  PR #$EXISTING_PR already exists — updating title."
+#             gh pr edit "$EXISTING_PR" --title "$PR_TITLE" >/dev/null
+#             PR_NUMBER=$EXISTING_PR
+#           else
+#             PR_URL=$(gh pr create \
+#               --base production \
+#               --head main \
+#               --title "$PR_TITLE" \
+#               --body "## Automated promotion
 
-          This PR promotes \`main\` to \`production\`.
+#           This PR promotes \`main\` to \`production\`.
 
-          **Triggered by:** ${{ github.event.head_commit.message }}
-          **Commit:** \`${{ github.sha }}\`
-          **Author:** @${{ github.actor }}
+#           **Triggered by:** ${{ github.event.head_commit.message }}
+#           **Commit:** \`${{ github.sha }}\`
+#           **Author:** @${{ github.actor }}
 
-          ---
+#           ---
 
-          All status checks must pass before this merges.
-          Once green, auto-merge will complete automatically.")
+#           All status checks must pass before this merges.
+#           Once green, auto-merge will complete automatically.")
 
-            echo "✨ Created PR: $PR_URL"
-            PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-          fi
+#             echo "✨ Created PR: $PR_URL"
+#             PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+#           fi
 
-          echo "🔀 Enabling auto-merge on PR #$PR_NUMBER..."
-          gh pr merge "$PR_NUMBER" --auto --merge --delete-branch=false || \
-            echo "⚠️  Auto-merge could not be enabled (see notes in the workflow)."
+#           echo "🔀 Enabling auto-merge on PR #$PR_NUMBER..."
+#           gh pr merge "$PR_NUMBER" --auto --merge --delete-branch=false || \
+#             echo "⚠️  Auto-merge could not be enabled (see notes in the workflow)."

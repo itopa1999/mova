@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Mova.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class Initiate : Migration
+    public partial class Initated : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -33,28 +33,6 @@ namespace Mova.Infrastructure.Migrations
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PublicId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    FirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    OtherNames = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    LastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    ProfilePicture = table.Column<string>(type: "text", nullable: true),
-                    TransactionPinHash = table.Column<string>(type: "text", nullable: true),
-                    BvnHash = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    TransactionPinSetAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    TransactionPinResetAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    TransactionPinChangedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LastKnownDeviceId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    NotifyLoginAlerts = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    NotifyReleaseAlerts = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    NotifyProductUpdates = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
-                    NotifyPromotions = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    AccountStatus = table.Column<int>(type: "integer", nullable: false),
-                    RestrictionReason = table.Column<int>(type: "integer", nullable: true),
-                    RestrictionReasonDetails = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
-                    RestrictedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    RestrictedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    RestrictionExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    ReactivatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -62,8 +40,6 @@ namespace Mova.Infrastructure.Migrations
                     CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    balance_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
-                    balance_minor_units = table.Column<long>(type: "bigint", nullable: false),
                     UserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     NormalizedUserName = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
@@ -194,6 +170,31 @@ namespace Mova.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "legal_documents",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Type = table.Column<int>(type: "integer", nullable: false),
+                    Version = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Content = table.Column<string>(type: "text", nullable: false),
+                    PublishedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    IsCurrent = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_legal_documents", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "notifications",
                 columns: table => new
                 {
@@ -299,6 +300,44 @@ namespace Mova.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "request_profile_changes",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserPublicId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    NewFirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    NewOtherName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    NewLastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    NewEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    NewPhoneNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    RequestReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    RequestComment = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    OldFirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    OldOtherName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    OldLastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    OldEmail = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    OldPhoneNumber = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
+                    IsApproved = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    ApprovedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsRejected = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    RejectionReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    RejectedBy = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    RejectedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_request_profile_changes", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "savings_circles",
                 columns: table => new
                 {
@@ -341,6 +380,55 @@ namespace Mova.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_savings_circles", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "users",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<long>(type: "bigint", nullable: false),
+                    PublicId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Email = table.Column<string>(type: "text", nullable: false),
+                    EmailConfirmed = table.Column<bool>(type: "boolean", nullable: false),
+                    PhoneNumber = table.Column<string>(type: "text", nullable: false),
+                    PhoneNumberConfirmed = table.Column<bool>(type: "boolean", nullable: false),
+                    FirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    OtherNames = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    LastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    ProfilePicture = table.Column<string>(type: "text", nullable: true),
+                    TransactionPinHash = table.Column<string>(type: "text", nullable: true),
+                    BvnHash = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    TransactionPinSetAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    TransactionPinResetAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    TransactionPinChangedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    LastKnownDeviceId = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    NotifyLoginAlerts = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    NotifyReleaseAlerts = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    NotifyProductUpdates = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    NotifyPromotions = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    OnboardingStage = table.Column<int>(type: "integer", nullable: false, defaultValue: 1),
+                    AccountStatus = table.Column<int>(type: "integer", nullable: false),
+                    RestrictionReason = table.Column<int>(type: "integer", nullable: true),
+                    RestrictionReasonDetails = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    RestrictedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    RestrictedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    RestrictionExpiresAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ReactivatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    balance_currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    balance_minor_units = table.Column<long>(type: "bigint", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_users", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -525,6 +613,36 @@ namespace Mova.Infrastructure.Migrations
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "user_consents",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserPublicId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    LegalDocumentId = table.Column<long>(type: "bigint", nullable: false),
+                    DocumentType = table.Column<int>(type: "integer", nullable: false),
+                    DocumentVersion = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    AcceptedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    ModifiedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    ModifiedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_user_consents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_user_consents_legal_documents_LegalDocumentId",
+                        column: x => x.LegalDocumentId,
+                        principalTable: "legal_documents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1134,29 +1252,6 @@ namespace Mova.Infrastructure.Migrations
                 column: "NormalizedEmail");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AspNetUsers_Email",
-                table: "AspNetUsers",
-                column: "Email",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AspNetUsers_PhoneNumber",
-                table: "AspNetUsers",
-                column: "PhoneNumber",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AspNetUsers_PublicId",
-                table: "AspNetUsers",
-                column: "PublicId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_users_bvn_hash",
-                table: "AspNetUsers",
-                column: "BvnHash");
-
-            migrationBuilder.CreateIndex(
                 name: "UserNameIndex",
                 table: "AspNetUsers",
                 column: "NormalizedUserName",
@@ -1173,22 +1268,18 @@ namespace Mova.Infrastructure.Migrations
                 column: "PaystackRecipientCode");
 
             migrationBuilder.CreateIndex(
-                name: "IX_bank_accounts_UserPublicId",
-                table: "bank_accounts",
-                column: "UserPublicId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_bank_accounts_UserPublicId_AccountNumber",
                 table: "bank_accounts",
                 columns: new[] { "UserPublicId", "AccountNumber" },
-                unique: true);
+                unique: true,
+                filter: "\"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_bank_accounts_UserPublicId_IsDefault",
                 table: "bank_accounts",
-                columns: new[] { "UserPublicId", "IsDefault" },
+                column: "UserPublicId",
                 unique: true,
-                filter: "\"IsDefault\" = true");
+                filter: "\"IsDefault\" = true AND \"IsDeleted\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_bank_accounts_UserPublicId_Status",
@@ -1298,6 +1389,24 @@ namespace Mova.Infrastructure.Migrations
                 name: "IX_ledger_entries_WalletId_CreatedAt",
                 table: "ledger_entries",
                 columns: new[] { "WalletId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_legal_documents_type_is_current",
+                table: "legal_documents",
+                columns: new[] { "Type", "IsCurrent" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_legal_documents_one_current_per_type",
+                table: "legal_documents",
+                column: "Type",
+                unique: true,
+                filter: "\"IsCurrent\" = true");
+
+            migrationBuilder.CreateIndex(
+                name: "ux_legal_documents_type_version",
+                table: "legal_documents",
+                columns: new[] { "Type", "Version" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_notifications_UserPublicId_CreatedAt",
@@ -1432,6 +1541,26 @@ namespace Mova.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_request_profile_changes_IsApproved",
+                table: "request_profile_changes",
+                column: "IsApproved");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_request_profile_changes_IsApproved_IsRejected",
+                table: "request_profile_changes",
+                columns: new[] { "IsApproved", "IsRejected" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_request_profile_changes_UserPublicId",
+                table: "request_profile_changes",
+                column: "UserPublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_request_profile_changes_UserPublicId_CreatedAt",
+                table: "request_profile_changes",
+                columns: new[] { "UserPublicId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_savings_circles_InviteCode",
                 table: "savings_circles",
                 column: "InviteCode",
@@ -1501,6 +1630,45 @@ namespace Mova.Infrastructure.Migrations
                 name: "IX_transactions_WalletId_Status",
                 table: "transactions",
                 columns: new[] { "WalletId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_user_consents_document",
+                table: "user_consents",
+                column: "LegalDocumentId");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_user_consents_user",
+                table: "user_consents",
+                column: "UserPublicId");
+
+            migrationBuilder.CreateIndex(
+                name: "ux_user_consents_user_document",
+                table: "user_consents",
+                columns: new[] { "UserPublicId", "LegalDocumentId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_users_bvn_hash",
+                table: "users",
+                column: "BvnHash");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_users_Email",
+                table: "users",
+                column: "Email",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_users_PhoneNumber",
+                table: "users",
+                column: "PhoneNumber",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_users_PublicId",
+                table: "users",
+                column: "PublicId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_virtual_accounts_Provider_AccountNumber",
@@ -1655,7 +1823,16 @@ namespace Mova.Infrastructure.Migrations
                 name: "renewal_events");
 
             migrationBuilder.DropTable(
+                name: "request_profile_changes");
+
+            migrationBuilder.DropTable(
                 name: "scheduled_releases");
+
+            migrationBuilder.DropTable(
+                name: "user_consents");
+
+            migrationBuilder.DropTable(
+                name: "users");
 
             migrationBuilder.DropTable(
                 name: "virtual_accounts");
@@ -1683,6 +1860,9 @@ namespace Mova.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "wallet_rules");
+
+            migrationBuilder.DropTable(
+                name: "legal_documents");
 
             migrationBuilder.DropTable(
                 name: "wallets");

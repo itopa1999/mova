@@ -26,18 +26,15 @@ public sealed class GetCircleDetailsQuery
     public sealed class Handler : IRequestHandler<Query, BaseResult<CircleDetailsResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly ISavingsCircleService _savingsCircleService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             ISavingsCircleService savingsCircleService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _savingsCircleService = savingsCircleService;
             _logger = logger;
         }
@@ -126,8 +123,12 @@ public sealed class GetCircleDetailsQuery
             }
 
             // ── 6. Resolve organizer name ──────────────────────────────
-            var organizer = await _identityService.GetByIdentifierAsync(
-                circle.OrganizerUserPublicId, cancellationToken);
+            var organizer = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == circle.OrganizerUserPublicId)
+                .Select(x => new { x.FirstName, x.LastName })
+                .FirstOrDefaultAsync(cancellationToken);
+                
             var organizerName = organizer is not null
                 ? $"{organizer.FirstName} {organizer.LastName}".Trim()
                 : "Organizer";

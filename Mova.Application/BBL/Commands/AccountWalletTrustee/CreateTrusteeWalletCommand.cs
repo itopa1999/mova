@@ -15,6 +15,7 @@ using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 using Mova.Shared.Constants;
+using Mova.Application.Extensions;
 
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
 
@@ -93,17 +94,13 @@ public sealed class CreateTrusteeWalletCommand
                 "CreateTrusteeWallet",
                 ("UserId", request.UserPublicId));
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return new BaseResult<CreateTrusteeWalletResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "We couldn't verify your account permissions right now. Please try again in a moment.");
-            }
+            if (user is null)
+                return new BaseResult<CreateTrusteeWalletResponseDto>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanCreateWallets)
             {
@@ -261,7 +258,7 @@ public sealed class CreateTrusteeWalletCommand
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
             var balanceDebited = await _identityService.DebitBalanceAsync(
-                request.UserPublicId,
+                user,
                 totalUpfrontCharge,
                 cancellationToken);
 
@@ -349,11 +346,13 @@ public sealed class CreateTrusteeWalletCommand
 
             await tx.CommitAsync(cancellationToken);
 
-            var userAfterDebit = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var userAfterDebit = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => x.Balance)
+                .FirstAsync(cancellationToken);
 
-            var newMainBalance = userAfterDebit?.Balance.ToDecimal() ?? 0m;
+            var newMainBalance = userAfterDebit.ToDecimal();
 
             if (!string.IsNullOrWhiteSpace(request.Email))
             {

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
@@ -24,16 +25,13 @@ public sealed class RequestProfileChangeCommand
 
     public class Handler : IRequestHandler<Command, BaseResult>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
@@ -59,13 +57,16 @@ public sealed class RequestProfileChangeCommand
                     "Please describe what you want to change.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId, cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.PublicId })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
-                return new BaseResult(HttpStatusCode.NotFound, "Account not found.");
+                return new BaseResult(HttpStatusCode.Unauthorized, "Account not found.");
             }
 
             var change = new RequestProfileChange

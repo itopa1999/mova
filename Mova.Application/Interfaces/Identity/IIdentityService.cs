@@ -1,14 +1,12 @@
-using Mova.Domain.Enums;
+using Mova.Domain.Entities;
+
 namespace Mova.Application.Interfaces.Identity;
 
 public interface IIdentityService
 {
-    Task<(bool Success, string ErrorMessage, string UserPublicId, long UserId)> CreateUserAsync(
-        string firstName,
-        string lastName,
+    Task<(bool Success, string ErrorMessage, long UserId)> CreateUserAsync(
         string email,
         string phoneNumber,
-        string BVN,
         string password,
         CancellationToken cancellationToken = default);
 
@@ -22,25 +20,6 @@ public interface IIdentityService
         string role,
         CancellationToken cancellationToken = default);
 
-    Task<UserIdentityDto?> GetByIdentifierAsync(
-        string identifier,
-        CancellationToken cancellationToken);
-
-    Task<bool> EmailExistsAsync(
-        string email,
-        long? excludeUserId = null,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> BvnExistsAsync(
-        string bvnHash,
-        long? excludeUserId = null,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> PhoneExistsAsync(
-        string phoneNumber,
-        long? excludeUserId = null,
-        CancellationToken cancellationToken = default);
-
 
     Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(long userId, CancellationToken cancellationToken = default);
 
@@ -51,26 +30,13 @@ public interface IIdentityService
         string oldPassword,
         string newPassword, CancellationToken cancellationToken = default);
 
-    Task<bool> UpdateNotificationPreferenceAsync(
-        string identifier,
-        string key,
-        bool enabled,
-        CancellationToken cancellationToken);
-
-    Task<bool> UpdateLastKnownDeviceAsync(
-        string identifier,
-        string deviceId,
-        CancellationToken cancellationToken = default);
-
     Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default);
-
-    Task<bool> IsAccountVerifiedAsync(long userId, CancellationToken cancellationToken = default);
 
     Task<IList<string>> GetRolesAsync(long userId, CancellationToken cancellationToken = default);
 
-    Task<bool> CreditBalanceAsync(string UserPublicId, decimal Amount, CancellationToken cancellationToken);
+    Task<bool> CreditBalanceAsync(User user, decimal Amount, CancellationToken cancellationToken);
 
-    Task<bool> DebitBalanceAsync(string userPublicId, decimal amount, CancellationToken cancellationToken);
+    Task<bool> DebitBalanceAsync(User user, decimal amount, CancellationToken cancellationToken);
     Task<int> CountUsersInRoleAsync(string role, CancellationToken cancellationToken = default);
 
 
@@ -91,29 +57,4 @@ public interface IIdentityService
         CancellationToken cancellationToken = default);
 
 
-    Task<(bool Success, string Message)> UpdateOnboardingStageAsync(
-        string userPublicId,
-        OnboardingStage newStage,
-        CancellationToken cancellationToken = default);
-
-
-
-    // ─────────────────────────────────────────────────────
-    // Permissions / feature gates
-    // ─────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns a snapshot of the user's current permissions, or null if the
-    /// user does not exist.
-    /// </summary>
-    Task<UserPermissionsDto?> GetPermissionsAsync(
-        string userPublicId,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> CloseAccountAsync(
-        string userPublicId,
-        AccountRestrictionReason reason,
-        string details,
-        string performedBy,
-        CancellationToken cancellationToken = default);
 }

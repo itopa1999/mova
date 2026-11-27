@@ -8,7 +8,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.AccountWallet;
 
@@ -55,16 +54,13 @@ public sealed class GetReleasesQuery
         private const int MaximumProjectedReleases = 500;
 
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly IWalletRuleService _walletRuleService;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             IWalletRuleService walletRuleService)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _walletRuleService = walletRuleService;
         }
 
@@ -77,17 +73,6 @@ public sealed class GetReleasesQuery
                 return new BaseResult<GetReleasesQueryDto>(
                     HttpStatusCode.BadRequest,
                     "User public ID is required.");
-            }
-
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
-
-            if (user == null)
-            {
-                return new BaseResult<GetReleasesQueryDto>(
-                    HttpStatusCode.NotFound,
-                    "User not found.");
             }
 
             try

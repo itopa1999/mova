@@ -14,7 +14,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
@@ -48,7 +47,6 @@ public sealed class ResendTrusteeInvitationCommand
     public sealed class Handler
         : IRequestHandler<Command, BaseResult<ResendTrusteeInvitationResponseDto>>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
         private readonly INotificationQueue _notificationQueue;
@@ -58,7 +56,6 @@ public sealed class ResendTrusteeInvitationCommand
         private readonly ICacheService _cacheService;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
             INotificationQueue notificationQueue,
@@ -67,7 +64,6 @@ public sealed class ResendTrusteeInvitationCommand
             IOptions<ExternalApiSettings> externalApiSettings,
             ICacheService cacheService)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
             _notificationQueue = notificationQueue;

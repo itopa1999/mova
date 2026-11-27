@@ -73,19 +73,21 @@ public sealed class AdminResetPasswordCommand
                     "Password must be at least 8 characters.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId, x.PublicId })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 
-            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             if (!AdminAuthorization.HasAdminRole(roles))
             {
@@ -95,9 +97,7 @@ public sealed class AdminResetPasswordCommand
                     "Access denied. You do not have administrator privileges.");
             }
 
-            var (success, errorMessage) = await _identityService.ResetPasswordAsync(
-                user.Id,
-                request.NewPassword);
+            var (success, errorMessage) = await _identityService.ResetPasswordAsync(user.UserId, request.NewPassword, cancellationToken);
 
             if (!success)
             {

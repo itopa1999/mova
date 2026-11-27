@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
+
 namespace Mova.Infrastructure.Notification.Email;
 
 public sealed class TemplateRenderer
@@ -161,6 +162,16 @@ public sealed class TemplateRenderer
 
         formatted = Regex.Replace(
             formatted,
+            @"\*\*(.+?)\*\*",
+            m => $"<strong>{m.Groups[1].Value}</strong>");
+
+        formatted = Regex.Replace(
+            formatted,
+            @"(?<!\*)\*(.+?)(?<!\*)\*(?!\*)",
+            m => $"<em>{m.Groups[1].Value}</em>");
+
+        formatted = Regex.Replace(
+            formatted,
             @"\[([^\]]+)\]\((https?://[^)]+)\)",
             match =>
             {
@@ -178,26 +189,6 @@ public sealed class TemplateRenderer
                 var label = match.Value;
                 return $"<a href=\"{href}\" target=\"_blank\" rel=\"noopener noreferrer\">{label}</a>";
             });
-
-        formatted = Regex.Replace(
-            formatted,
-            @"\*\*(.+?)\*\*",
-            m => $"<strong>{m.Groups[1].Value}</strong>");
-
-        formatted = Regex.Replace(
-            formatted,
-            @"__(.+?)__",
-            m => $"<strong>{m.Groups[1].Value}</strong>");
-
-        formatted = Regex.Replace(
-            formatted,
-            @"(?<!\*)\*(.+?)(?<!\*)\*(?!\*)",
-            m => $"<em>{m.Groups[1].Value}</em>");
-
-        formatted = Regex.Replace(
-            formatted,
-            @"(?<!_)_(.+?)(?<!_)_(?!_)",
-            m => $"<em>{m.Groups[1].Value}</em>");
 
         return formatted;
     }

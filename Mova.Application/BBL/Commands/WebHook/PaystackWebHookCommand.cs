@@ -10,7 +10,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 using Mova.Shared.Constants;
@@ -183,16 +182,6 @@ public sealed class PaystackWebHookCommand
                 return Fail(HttpStatusCode.BadRequest, "Transaction amount mismatch.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                transaction.UserPublicId,
-                cancellationToken);
-
-            if (user is null)
-            {
-                op.Warning($"User not found: {transaction.UserPublicId}.");
-                return Fail(HttpStatusCode.NotFound, "User not found.");
-            }
-
             var amount = transaction.Amount.ToDecimal();
 
             await using var tx = await _unitOfWork.BeginAtomicSerializableAsync(cancellationToken);
@@ -212,8 +201,17 @@ public sealed class PaystackWebHookCommand
                 return Ok("Transaction already processed.", webhook);
             }
 
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == freshTransaction.UserPublicId, cancellationToken);
+
+            if (user is null)
+            {
+                op.Warning($"User not found: {transaction.UserPublicId}.");
+                return Fail(HttpStatusCode.NotFound, "User not found.");
+            }
+
             var updated = await _identityService.CreditBalanceAsync(
-                freshTransaction.UserPublicId,
+                user,
                 amount,
                 cancellationToken);
 
@@ -248,7 +246,7 @@ public sealed class PaystackWebHookCommand
             return Ok("Webhook processed successfully.", webhook);
         }
 
-        private void SendDepositNotifications(UserIdentityDto user, decimal amount, string reference)
+        private void SendDepositNotifications(User user, decimal amount, string reference)
         {
             var inAppMessage = $"₦{amount:N0} has been added to your available balance.";
 

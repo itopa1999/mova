@@ -139,10 +139,16 @@ public sealed class RemoveCircleMemberCommand
             await using var tx = await _unitOfWork.BeginAtomicSerializableAsync(
                 cancellationToken);
 
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.TargetUserPublicId, cancellationToken);
+
+            if (user is null)
+                return Bad("User not found.", HttpStatusCode.Unauthorized);
+
             if (refundAmount > 0)
             {
                 var credited = await _identityService.CreditBalanceAsync(
-                    request.TargetUserPublicId,
+                    user,
                     refundAmount,
                     cancellationToken);
 

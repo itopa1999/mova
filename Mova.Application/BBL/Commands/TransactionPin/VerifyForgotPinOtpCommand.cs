@@ -8,7 +8,6 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
-using Mova.Application.Interfaces.Service;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Shared.Constants;
@@ -97,9 +96,16 @@ public sealed class VerifyForgotPinOtpCommand
                     "Please enter a valid 6-digit code.");
             }
 
-            var passwordValid = await _identityService.CheckPasswordAsync(
-                request.UserId,
-                request.Password);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (user is null)
+                return new BaseResult<object>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var passwordValid = await _identityService.CheckPasswordAsync(user.UserId, request.Password, cancellationToken);
 
             if (!passwordValid)
             {

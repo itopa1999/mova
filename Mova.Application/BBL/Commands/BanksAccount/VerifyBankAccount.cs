@@ -8,9 +8,9 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Payment;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.BanksAccount;
 
 public sealed class VerifyBankAccount
@@ -39,18 +39,15 @@ public sealed class VerifyBankAccount
     {
         private readonly IPaystackService _paystackService;
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IPaystackService paystackService,
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             ILogger<Handler> logger)
         {
             _paystackService = paystackService;
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _logger = logger;
         }
 
@@ -72,17 +69,13 @@ public sealed class VerifyBankAccount
                     "User identity is required.");
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return new BaseResult<VerifyBankAccountDto>(
-                    HttpStatusCode.InternalServerError,
-                    "We couldn't verify your account permissions right now. Please try again in a moment.");
-            }
+            if (user is null)
+                return new BaseResult<VerifyBankAccountDto>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanPerformSensitiveOperations)
             {

@@ -1,5 +1,4 @@
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
 namespace Mova.Api.RateLimiting;
 
 public static class RateLimitSetup
@@ -73,11 +72,16 @@ public static class RateLimitSetup
         int permitLimit,
         TimeSpan window)
     {
+        if (HttpMethods.IsOptions(httpContext.Request.Method))
+            return RateLimitPartition.GetNoLimiter("preflight");
+
         var userPublicId = httpContext.User?.FindFirst("sub")?.Value;
 
         var partitionKey = !string.IsNullOrEmpty(userPublicId)
             ? $"user:{userPublicId}"
             : $"ip:{httpContext.Connection.RemoteIpAddress}";
+
+        Console.WriteLine($"permitLimit={permitLimit} window={window.TotalSeconds}s");
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey,
@@ -87,6 +91,7 @@ public static class RateLimitSetup
                 Window = window,
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true,
             });
     }
 }

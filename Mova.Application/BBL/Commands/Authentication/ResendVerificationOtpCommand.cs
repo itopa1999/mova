@@ -33,20 +33,17 @@ public sealed class ResendVerificationOtpCommand
 
     public class Handler : IRequestHandler<Command, BaseResult<ResendVerificationOtpResponseDto>>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOtpService _otpService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             IOtpService otpService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _otpService = otpService;
             _notificationQueue = notificationQueue;
@@ -75,15 +72,17 @@ public sealed class ResendVerificationOtpCommand
                     "Email must be provided.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Email,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.Email == request.Email)
+                .Select(x => new { x.PhoneNumberConfirmed, x.EmailConfirmed, x.PublicId, x.Email, x.FirstName, x.PhoneNumber })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
                 op.Warning($"User not found for email: {request.Email}");
                 return new BaseResult<ResendVerificationOtpResponseDto>(
-                    HttpStatusCode.BadRequest,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
 
@@ -95,8 +94,7 @@ public sealed class ResendVerificationOtpCommand
 
             if (otpPurpose == OtpPurpose.AccountVerification)
             {
-                var isVerified = await _identityService.IsAccountVerifiedAsync(user.Id);
-                if (isVerified)
+                if (!user.EmailConfirmed || !user.PhoneNumberConfirmed)
                 {
                     op.Warning($"Account already verified for user {user.PublicId}.");
                     return new BaseResult<ResendVerificationOtpResponseDto>(

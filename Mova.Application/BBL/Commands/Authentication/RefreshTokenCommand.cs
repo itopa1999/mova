@@ -5,10 +5,11 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class RefreshTokenCommand
@@ -41,14 +42,6 @@ public sealed class RefreshTokenCommand
         private readonly IJwtTokenGenerator _jwtTokenGenerator;
         private readonly IRefreshTokenService _refreshTokenService;
         private readonly ILogger<Handler> _logger;
-
-        private static readonly HashSet<string> ValidPlatforms =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                Platforms.Web,
-                Platforms.Mobile,
-                Platforms.Swagger,
-            };
 
         public Handler(
             IIdentityService identityService,
@@ -107,9 +100,9 @@ public sealed class RefreshTokenCommand
             refreshToken.RevocationReason = "Token refreshed";
             _unitOfWork.Update(refreshToken);
 
-            var user = await _identityService.GetByIdentifierAsync(
-                refreshToken.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PublicId == refreshToken.UserPublicId, cancellationToken);
 
             if (user is null)
             {
@@ -120,7 +113,7 @@ public sealed class RefreshTokenCommand
                     "Session is no longer valid.");
             }
 
-            var roles = await _identityService.GetRolesAsync(user.Id);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             var accessToken = _jwtTokenGenerator.GenerateToken(
                 user.Id,

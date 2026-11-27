@@ -14,7 +14,6 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.AccountWalletTrustee;
@@ -53,7 +52,6 @@ public sealed class RequestReleaseCommand
     public sealed class Handler
         : IRequestHandler<Command, BaseResult<RequestReleaseResponseDto>>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
@@ -62,7 +60,6 @@ public sealed class RequestReleaseCommand
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
@@ -70,7 +67,6 @@ public sealed class RequestReleaseCommand
             IOptions<ExternalApiSettings> externalApiSettings,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;

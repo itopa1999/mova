@@ -5,12 +5,11 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Persistence;
-using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
+using Mova.Shared.Common;
 namespace Mova.Application.BBL.Queries.AccountWallet;
 
 public sealed class WalletDetails
@@ -146,16 +145,13 @@ public sealed class WalletDetails
     public sealed class Handler : IRequestHandler<Query, BaseResult<WalletDetailsResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly IMediator _mediator;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             IMediator mediator)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _mediator = mediator;
         }
 
@@ -175,17 +171,6 @@ public sealed class WalletDetails
                 return new BaseResult<WalletDetailsResponseDto>(
                     HttpStatusCode.BadRequest,
                     "Invalid wallet ID.");
-            }
-
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
-
-            if (user == null)
-            {
-                return new BaseResult<WalletDetailsResponseDto>(
-                    HttpStatusCode.NotFound,
-                    "User not found.");
             }
 
             try

@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Infrastructure.Identity;
 using Mova.Infrastructure.Persistence;
 namespace Mova.Infrastructure.Security;
 
@@ -89,7 +88,7 @@ public sealed class PinChallengeService : IPinChallenge
 
         var normalized = userPublicId.Trim();
 
-        return await _context.Users
+        return await _context.UserDetails
             .Where(u => u.PublicId == normalized && !u.IsDeleted)
             .Select(u => u.PublicId)
             .FirstOrDefaultAsync(cancellationToken);

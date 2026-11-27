@@ -10,7 +10,7 @@ using Mova.Infrastructure.Service;
 namespace Mova.Infrastructure.Persistence;
 
 public class ApplicationDbContext
-    : IdentityDbContext<User, IdentityRole<long>, long>
+    : IdentityDbContext<ApplicationUser, IdentityRole<long>, long>
 {
     private readonly ICurrentUserService? _currentUser;
 
@@ -23,6 +23,7 @@ public class ApplicationDbContext
     }
 
     public DbSet<Wallet> Wallets => Set<Wallet>();
+    public DbSet<User> UserDetails => Set<User>();
     public DbSet<WalletRule> WalletRules => Set<WalletRule>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<ScheduledRelease> ScheduledReleases => Set<ScheduledRelease>();

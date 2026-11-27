@@ -13,8 +13,8 @@ using static Mova.Application.BBL.Commands.Admin.ToggleFeatureFlag;
 using static Mova.Application.BBL.Queries.Admin.GetFeatureFlags;
 using Mova.Shared.Common.Results;
 using Asp.Versioning;
-using Mova.Application.BBL.Queries.Admin.User;
-using static Mova.Application.BBL.Queries.Admin.User.GetUsers;
+using Mova.Application.BBL.Queries.Admin.UserQuery;
+using static Mova.Application.BBL.Queries.Admin.UserQuery.GetUsers;
 using Microsoft.AspNetCore.Authorization;
 using Mova.Shared.Constants;
 using Mova.Api.Filters;
@@ -38,6 +38,55 @@ public class AdminController(
     [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> GetUsers(
         [FromQuery] GetUsers.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+
+    [HttpGet("users-details")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserDetails(
+        [FromQuery] GetUserDetails.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("users-wallets")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserWallets(
+        [FromQuery] GetUserWallets.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("users-bankaccounts")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserBankAccount(
+        [FromQuery] GetUserBankAccount.Query query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(query, cancellationToken);
+        return StatusCode((int)result.StatusCode, result);
+    }
+
+    [HttpGet("users-transactions")]
+    //[EnableRateLimiting(RateLimitPolicies.Read)]
+    [ProducesResponseType(typeof(BaseResult<UserDetailsDto>), (int)HttpStatusCode.OK)]
+    [ProducesResponseType(typeof(BaseResult), (int)HttpStatusCode.BadRequest)]
+    public async Task<IActionResult> GetUserTransactions(
+        [FromQuery] GetUserTransactions.Query query,
         CancellationToken cancellationToken = default)
     {
         var result = await _mediator.Send(query, cancellationToken);

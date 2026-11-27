@@ -104,9 +104,8 @@ public sealed class VerifyAccountCommand
                     "Email must be provided.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Email,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
 
             if (user is null)
             {
@@ -158,7 +157,7 @@ public sealed class VerifyAccountCommand
             }
 
             var (markSuccess, markError) = await _identityService
-                .MarkEmailAndPhoneAsVerifiedAsync(user.Id, cancellationToken);
+                .MarkEmailAndPhoneAsVerifiedAsync(user.UserId, cancellationToken);
 
             if (!markSuccess)
             {
@@ -168,6 +167,10 @@ public sealed class VerifyAccountCommand
                     HttpStatusCode.BadRequest,
                     markError);
             }
+
+            user.EmailConfirmed = true;
+            user.PhoneNumberConfirmed = true;
+            user.OnboardingStage = OnboardingStage.Verify;
 
             otpVerification.IsUsed = true;
             otpVerification.UsedAt = DateTimeOffset.UtcNow;
@@ -191,7 +194,7 @@ public sealed class VerifyAccountCommand
                 virtualAccount = existingVirtualAccount;
             }
 
-            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             var accessToken = _jwtTokenGenerator.GenerateToken(
                 user.Id,

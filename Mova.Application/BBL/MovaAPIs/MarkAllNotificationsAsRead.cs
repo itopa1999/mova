@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;

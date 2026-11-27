@@ -30,20 +30,17 @@ public sealed class ForgotPasswordCommand
 
     public class Handler : IRequestHandler<Command, BaseResult<ForgotPasswordResponseDto>>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOtpService _otpService;
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             IOtpService otpService,
             INotificationQueue notificationQueue,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _otpService = otpService;
             _notificationQueue = notificationQueue;
@@ -71,9 +68,11 @@ public sealed class ForgotPasswordCommand
                     "Email must be provided.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Email,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.Email == request.Email)
+                .Select(x => new { x.EmailConfirmed, x.PhoneNumberConfirmed, x.Email, x.PhoneNumber, x.PublicId })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
@@ -89,7 +88,7 @@ public sealed class ForgotPasswordCommand
                     });
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
+            if (!user.EmailConfirmed || !user.PhoneNumberConfirmed)
             {
                 op.Warning($"Account not verified: {user.PublicId}");
                 return new BaseResult<ForgotPasswordResponseDto>(

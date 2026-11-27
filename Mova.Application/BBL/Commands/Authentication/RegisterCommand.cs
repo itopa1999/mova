@@ -16,6 +16,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json.Serialization;
 using Mova.Shared.Common.Results;
+using Mova.Domain.ValueObjects;
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class RegisterCommand
@@ -66,6 +67,7 @@ public sealed class RegisterCommand
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOtpService _otpService;
         private readonly INotificationQueue _notificationQueue;
+        private readonly SensitiveIdentifierHasher _hasher;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
@@ -73,12 +75,14 @@ public sealed class RegisterCommand
             IUnitOfWork unitOfWork,
             IOtpService otpService,
             INotificationQueue notificationQueue,
+            SensitiveIdentifierHasher hasher,
             ILogger<Handler> logger)
         {
             _identityService = identityService;
             _unitOfWork = unitOfWork;
             _otpService = otpService;
             _notificationQueue = notificationQueue;
+            _hasher = hasher;
             _logger = logger;
         }
 
@@ -109,51 +113,44 @@ public sealed class RegisterCommand
                     "Please provide a valid Nigerian phone number.");
             }
 
-            var emailExists = await _identityService.EmailExistsAsync(
-                normalizedEmail,
-                cancellationToken: cancellationToken);
+            var bvnHash = _hasher.Hash(request.Bvn, SecuritySaltPurpose.BvnVerification.ToString());
 
-            if (emailExists)
+            var existing = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.Email == normalizedEmail
+                    || x.PhoneNumber == normalizedPhoneNumber
+                    || x.BvnHash == bvnHash)
+                .Select(x => new { x.Email, x.PhoneNumber, x.BvnHash })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (existing is not null)
             {
-                op.Warning($"Email already exists: {normalizedEmail}");
-                return new BaseResult<RegistrationResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Email is already in use.");
-            }
+                if (existing.Email == normalizedEmail)
+                {
+                    op.Warning($"Email already exists: {normalizedEmail}");
+                    return new BaseResult<RegistrationResponseDto>(
+                        HttpStatusCode.Conflict, "Email is already in use.");
+                }
 
-            var bvnExists = await _identityService.BvnExistsAsync(
-                request.Bvn,
-                cancellationToken: cancellationToken);
+                if (existing.PhoneNumber == normalizedPhoneNumber)
+                {
+                    op.Warning($"Phone already exists: {normalizedPhoneNumber}");
+                    return new BaseResult<RegistrationResponseDto>(
+                        HttpStatusCode.Conflict, "Phone number is already in use.");
+                }
 
-            if (bvnExists)
-            {
                 op.Warning("BVN already registered.");
                 return new BaseResult<RegistrationResponseDto>(
                     HttpStatusCode.BadRequest,
                     "This BVN is already registered to another account.");
             }
 
-            var phoneExists = await _identityService.PhoneExistsAsync(
-                normalizedPhoneNumber,
-                cancellationToken: cancellationToken);
-
-            if (phoneExists)
-            {
-                op.Warning($"Phone already exists: {normalizedPhoneNumber}");
-                return new BaseResult<RegistrationResponseDto>(
-                    HttpStatusCode.BadRequest,
-                    "Phone number is already in use.");
-            }
-
             await using var tx = await _unitOfWork.BeginAtomicAsync(cancellationToken);
 
-            var (success, errorMessage, createdPublicId, userId) =
+            var (success, errorMessage, userId) =
                 await _identityService.CreateUserAsync(
-                    firstName,
-                    lastName,
                     normalizedEmail,
                     normalizedPhoneNumber,
-                    request.Bvn,
                     request.Password,
                     cancellationToken: cancellationToken
                     );
@@ -179,11 +176,30 @@ public sealed class RegisterCommand
                     roleError);
             }
 
+            var publicId = userId.ToString("D4");
+
+            var user = new User
+            {
+                UserId = userId,
+                FirstName = firstName,
+                LastName = lastName,
+                Email = normalizedEmail,
+                PhoneNumber = normalizedPhoneNumber,
+                PublicId = publicId,
+                ProfilePicture = DefaultProfilePictures.PickRandom(),
+                Balance = Money.FromNaira(0),
+                AccountStatus = UserAccountStatus.Active,
+                OnboardingStage = OnboardingStage.Register,
+                BvnHash = bvnHash
+            };
+
+            await _unitOfWork.AddAsync(user, cancellationToken);
+
             var otpCode = _otpService.GenerateSaltedOtp(SecuritySaltPurpose.OTPVerification.ToString());
 
             var otp = new OtpVerification
             {
-                UserPublicId = createdPublicId,
+                UserPublicId = publicId,
                 OtpCode = otpCode.HashedOtp,
                 Purpose = OtpPurpose.AccountVerification,
                 ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
@@ -195,7 +211,7 @@ public sealed class RegisterCommand
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
 
-            op.Success($"User {createdPublicId} registered successfully. Stage: {OnboardingStage.Register}.");
+            op.Success($"User {publicId} registered successfully. Stage: {OnboardingStage.Register}.");
 
             _notificationQueue.QueueOtpDelivery(
                 firstName,
@@ -209,7 +225,7 @@ public sealed class RegisterCommand
                 "Account created successfully.",
                 new RegistrationResponseDto
                 {
-                    UserPublicId = createdPublicId,
+                    UserPublicId = publicId,
                     Email = normalizedEmail,
                     Phone = normalizedPhoneNumber,
                     FullName = $"{firstName} {lastName}",

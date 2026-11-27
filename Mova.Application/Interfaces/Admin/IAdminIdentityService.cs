@@ -12,7 +12,7 @@ public interface IAdminIdentityService
         CancellationToken cancellationToken = default);
 
 
-    // Task<AdminUserListDto?> GetByPublicIdAsync(
-    //     string publicId,
-    //     CancellationToken cancellationToken = default);
+    Task<UserDetailsDto?> GetByPublicIdAsync(
+        string publicId,
+        CancellationToken cancellationToken = default);
 }

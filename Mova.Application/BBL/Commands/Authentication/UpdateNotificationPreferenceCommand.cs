@@ -3,10 +3,11 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Interfaces.Identity;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Application.Interfaces.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Mova.Domain.Entities;
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class UpdateNotificationPreferenceCommand
@@ -41,14 +42,14 @@ public sealed class UpdateNotificationPreferenceCommand
                 "promotions",
             };
 
-        private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
+            IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -96,19 +97,40 @@ public sealed class UpdateNotificationPreferenceCommand
                     "Invalid notification key. Must be one of: login, release, updates, promotions.");
             }
 
-            var updated = await _identityService.UpdateNotificationPreferenceAsync(
-                request.UserPublicId,
-                key,
-                request.Enabled.Value,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (!updated)
+            if (user is null)
             {
                 op.Warning($"User not found: {request.UserPublicId}");
                 return new BaseResult<UpdateNotificationPreferenceResponseDto>(
-                    HttpStatusCode.NotFound,
+                    HttpStatusCode.Unauthorized,
                     "User not found.");
             }
+
+            switch (key)
+            {
+                case "login":
+                    user.NotifyLoginAlerts = request.Enabled.Value;
+                    break;
+
+                case "release":
+                    user.NotifyReleaseAlerts = request.Enabled.Value;
+                    break;
+
+                case "updates":
+                    user.NotifyProductUpdates = request.Enabled.Value;
+                    break;
+
+                case "promotions":
+                    user.NotifyPromotions = request.Enabled.Value;
+                    break;
+
+                default:
+                    break;
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             op.Success(
                 $"Notification preference '{key}' set to {request.Enabled.Value} " +

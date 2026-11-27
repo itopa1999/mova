@@ -20,6 +20,7 @@ using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 using static Mova.Application.Interfaces.Notification.INotificationQueue;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.SavingsCircles;
 
 public sealed class CreateCircleCommand
@@ -104,7 +105,6 @@ public sealed class CreateCircleCommand
     public sealed class Handler
         : IRequestHandler<Command, BaseResult<CreateCircleResponseDto>>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
         private readonly IPinChallenge _pinChallenge;
@@ -114,7 +114,6 @@ public sealed class CreateCircleCommand
         private readonly ExternalApiSettings _externalApiSettings;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger,
             IPinChallenge pinChallenge,
@@ -123,7 +122,6 @@ public sealed class CreateCircleCommand
             IOptions<CircleOptions> circleOptions,
             IOptions<ExternalApiSettings> externalApiSettings)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
             _pinChallenge = pinChallenge;
@@ -142,16 +140,13 @@ public sealed class CreateCircleCommand
                 "CreateSavingsCircle",
                 ("UserId", request.UserPublicId));
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId, cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return Bad(
-                    "We couldn't verify your account permissions right now. Please try again in a moment.",
-                    HttpStatusCode.InternalServerError);
-            }
+            if (user is null)
+                return Bad("User not found.", HttpStatusCode.Unauthorized);
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanCreateWallets)
             {
@@ -186,13 +181,6 @@ public sealed class CreateCircleCommand
 
             var depositAmount = request.DepositAmount ?? 0m;
             var totalUpfrontCharge = request.ContributionAmount + fees.TotalMovaCharges + depositAmount;
-
-            var user = await _identityService.GetByIdentifierAsync(request.UserPublicId, cancellationToken);
-            if (user is null)
-            {
-                op.Error("User not found.");
-                return Bad("User account not found.", HttpStatusCode.NotFound);
-            }
 
             var userBalance = user.Balance.ToDecimal();
             if (userBalance < totalUpfrontCharge)

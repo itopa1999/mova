@@ -72,9 +72,11 @@ public sealed class AdminForgotPasswordCommand
                     "Email must be provided.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Email,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.Email == request.Email)
+                .Select(x => new { x.UserId, x.PhoneNumberConfirmed, x.EmailConfirmed, x.PublicId, x.Email, x.PhoneNumber })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
@@ -90,7 +92,7 @@ public sealed class AdminForgotPasswordCommand
                     });
             }
 
-            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             if (!AdminAuthorization.HasAdminRole(roles))
             {
@@ -100,7 +102,7 @@ public sealed class AdminForgotPasswordCommand
                     "Access denied. You do not have administrator privileges.");
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
+            if (!user.EmailConfirmed || !user.PhoneNumberConfirmed)
             {
                 op.Warning($"Account not verified: {user.PublicId}");
                 return new BaseResult<ForgotPasswordResponseDto>(

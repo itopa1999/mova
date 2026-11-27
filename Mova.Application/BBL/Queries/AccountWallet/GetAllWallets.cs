@@ -4,11 +4,9 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Persistence;
-using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.AccountWallet;
 
@@ -61,14 +59,11 @@ public sealed class GetAllWallets
     public sealed class Handler : IRequestHandler<Query, BaseResult<GetAllWalletsResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
 
         public Handler(
-            IUnitOfWork unitOfWork,
-            IIdentityService identityService)
+            IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
         }
 
         public async Task<BaseResult<GetAllWalletsResponseDto>> Handle(
@@ -80,17 +75,6 @@ public sealed class GetAllWallets
                 return new BaseResult<GetAllWalletsResponseDto>(
                     HttpStatusCode.BadRequest,
                     "User public ID is required.");
-            }
-
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
-
-            if (user == null)
-            {
-                return new BaseResult<GetAllWalletsResponseDto>(
-                    HttpStatusCode.NotFound,
-                    "User not found.");
             }
 
             var page = request.Page < 1 ? 1 : request.Page;

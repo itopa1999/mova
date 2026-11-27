@@ -7,7 +7,6 @@ using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Queries.AccountWalletTrustee;
 
@@ -38,20 +37,19 @@ public sealed class GetReleaseRequestConsentQuery
         : IRequestHandler<Query, BaseResult<ReleaseRequestConsentDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
+        
 
         public Handler(
-            IUnitOfWork unitOfWork,
-            IIdentityService identityService)
+            IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
         }
 
         public async Task<BaseResult<ReleaseRequestConsentDto>> Handle(
             Query request,
             CancellationToken cancellationToken)
         {
+            Console.WriteLine($"i love {request.Token}");
             var tokenHash = TrusteeTokenHelper.Hash(request.Token);
 
             var releaseRequest = await _unitOfWork.Query<ReleaseRequest>()
@@ -106,9 +104,11 @@ public sealed class GetReleaseRequestConsentQuery
                         cancellationToken)
                 : null;
 
-            var owner = await _identityService.GetByIdentifierAsync(
-                releaseRequest.RequestedByUserPublicId,
-                cancellationToken);
+            var owner = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == releaseRequest.RequestedByUserPublicId)
+                .Select(x => new { x.FirstName })
+                .FirstOrDefaultAsync(cancellationToken);
 
             var maskedAccount = MaskAccount(bank?.AccountNumber);
 

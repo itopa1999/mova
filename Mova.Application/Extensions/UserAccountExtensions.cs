@@ -1,5 +1,6 @@
+using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-namespace Mova.Infrastructure.Identity.Extensions;
+namespace Mova.Application.Extensions;
 
 /// <summary>
 /// Account status transitions and feature-gating helpers for <see cref="User"/>.

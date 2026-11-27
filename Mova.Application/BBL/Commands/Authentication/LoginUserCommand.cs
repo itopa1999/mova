@@ -11,6 +11,9 @@ using Mova.Domain.Enums;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.Authentication;
 
 public sealed class LoginUserCommand
@@ -74,14 +77,6 @@ public sealed class LoginUserCommand
         private readonly INotificationQueue _notificationQueue;
         private readonly ILogger<Handler> _logger;
 
-        private static readonly HashSet<string> ValidPlatforms =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                Platforms.Web,
-                Platforms.Mobile,
-                Platforms.Swagger,
-            };
-
         public Handler(
             IIdentityService identityService,
             IUnitOfWork unitOfWork,
@@ -107,9 +102,11 @@ public sealed class LoginUserCommand
                 "LoginUser",
                 ("Identifier", request.Identifier));
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.Identifier,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .Where(x =>
+                    x.Email == request.Identifier ||
+                    x.PhoneNumber == request.Identifier)
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
@@ -119,17 +116,7 @@ public sealed class LoginUserCommand
                     "Invalid email or password.");
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                user.PublicId,
-                cancellationToken);
-
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {user.PublicId}.");
-                return new BaseResult<LoginResultDto>(
-                    HttpStatusCode.BadRequest,
-                    "Invalid email or password.");
-            }
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanLogin)
             {
@@ -147,10 +134,10 @@ public sealed class LoginUserCommand
                     });
             }
 
-            if (await _identityService.IsLockedOutAsync(user.Id, cancellationToken))
+            if (await _identityService.IsLockedOutAsync(user.UserId, cancellationToken))
             {
                 var lockoutEnd = await _identityService.GetLockoutEndAsync(
-                    user.Id, cancellationToken);
+                    user.UserId, cancellationToken);
 
                 op.Warning($"Account locked for user {user.PublicId}.");
 
@@ -163,7 +150,7 @@ public sealed class LoginUserCommand
                     });
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.Id) is false)
+            if (!user.EmailConfirmed || !user.PhoneNumberConfirmed)
             {
                 op.Warning($"Account not verified for user {user.PublicId}.");
                 return new BaseResult<LoginResultDto>(
@@ -171,17 +158,17 @@ public sealed class LoginUserCommand
                     "Please verify your account before logging in.");
             }
 
-            var passwordIsValid = await _identityService.CheckPasswordAsync(user.Id, request.Password, cancellationToken);
+            var passwordIsValid = await _identityService.CheckPasswordAsync(user.UserId, request.Password, cancellationToken);
 
             if (!passwordIsValid)
             {
                 await _identityService.RecordFailedAccessAsync(
-                    user.Id, cancellationToken);
+                    user.UserId, cancellationToken);
 
-                if (await _identityService.IsLockedOutAsync(user.Id, cancellationToken))
+                if (await _identityService.IsLockedOutAsync(user.UserId, cancellationToken))
                 {
                     var lockoutEnd = await _identityService.GetLockoutEndAsync(
-                        user.Id, cancellationToken);
+                        user.UserId, cancellationToken);
 
                     op.Warning(
                         $"Account locked after failed attempt for user {user.PublicId}.");
@@ -201,9 +188,9 @@ public sealed class LoginUserCommand
                     "Invalid email or password.");
             }
 
-            await _identityService.ResetFailedAccessAsync(user.Id, cancellationToken);
+            await _identityService.ResetFailedAccessAsync(user.UserId, cancellationToken);
 
-            var roles = await _identityService.GetRolesAsync(user.Id, cancellationToken);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             var accessToken = _jwtTokenGenerator.GenerateToken(
                 user.Id,
@@ -254,10 +241,11 @@ public sealed class LoginUserCommand
 
             if (hasIncomingDevice && previousDeviceId != incomingDeviceId)
             {
-                await _identityService.UpdateLastKnownDeviceAsync(
-                    user.PublicId,
-                    incomingDeviceId!,
-                    cancellationToken);
+                if (user.LastKnownDeviceId != incomingDeviceId)
+                {
+                    user.LastKnownDeviceId = incomingDeviceId;
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
             }
 
             return new BaseResult<LoginResultDto>(

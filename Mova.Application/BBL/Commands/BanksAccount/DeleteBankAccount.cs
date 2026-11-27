@@ -11,10 +11,10 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Application.Extensions;
 
 namespace Mova.Application.BBL.Commands.BanksAccount;
 
@@ -34,7 +34,6 @@ public sealed class DeleteBankAccount
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly INotificationQueue _notificationQueue;
-        private readonly IIdentityService _identityService;
         private readonly IPinChallenge _pinChallenge;
         private readonly ICacheService _cacheService;
         private readonly ILogger<Handler> _logger;
@@ -42,14 +41,12 @@ public sealed class DeleteBankAccount
         public Handler(
             IUnitOfWork unitOfWork,
             INotificationQueue notificationQueue,
-            IIdentityService identityService,
             IPinChallenge pinChallenge,
             ICacheService cacheService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
             _notificationQueue = notificationQueue;
-            _identityService = identityService;
             _pinChallenge = pinChallenge;
             _cacheService = cacheService;
             _logger = logger;
@@ -73,17 +70,13 @@ public sealed class DeleteBankAccount
                     "User identity is required.");
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return new BaseResult<object>(
-                    HttpStatusCode.InternalServerError,
-                    "We couldn't verify your account permissions right now. Please try again in a moment.");
-            }
+            if (user is null)
+                return new BaseResult<object>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanPerformSensitiveOperations)
             {

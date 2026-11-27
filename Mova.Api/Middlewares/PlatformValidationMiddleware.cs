@@ -27,7 +27,11 @@ public class PlatformValidationMiddleware
         "/health", 
         "/swagger", 
         "/hangfire",
-        "api/v1/auth/verify-account"
+        "api/v1/auth/verify-account",
+        "api/v1/trustee/wallets/accept/invitation",
+        "api/v1/trustee/wallets/decline/invitation/",
+        "api/v1/trustee/wallets/release/",
+        "api/v1/trustee/wallets/release/validation",
     };
 
     public PlatformValidationMiddleware(RequestDelegate next)

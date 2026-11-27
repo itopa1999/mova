@@ -2135,6 +2135,175 @@ namespace Mova.Infrastructure.Migrations
                     b.ToTable("transactions", (string)null);
                 });
 
+            modelBuilder.Entity("Mova.Domain.Entities.User", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AccountStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BvnHash")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastKnownDeviceId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("NotifyLoginAlerts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("NotifyProductUpdates")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("NotifyPromotions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("NotifyReleaseAlerts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("OnboardingStage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("OtherNames")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ProfilePicture")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("ReactivatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RestrictedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RestrictedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("RestrictionExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("RestrictionReason")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RestrictionReasonDetails")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("TransactionPinChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TransactionPinHash")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("TransactionPinResetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("TransactionPinSetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.ComplexProperty<Dictionary<string, object>>("Balance", "Mova.Domain.Entities.User.Balance#Money", b1 =>
+                        {
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("balance_currency");
+
+                            b1.Property<long>("MinorUnits")
+                                .HasColumnType("bigint")
+                                .HasColumnName("balance_minor_units");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BvnHash")
+                        .HasDatabaseName("ix_users_bvn_hash");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("PhoneNumber")
+                        .IsUnique();
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("users");
+                });
+
             modelBuilder.Entity("Mova.Domain.Entities.UserConsent", b =>
                 {
                     b.Property<long>("Id")
@@ -2820,7 +2989,7 @@ namespace Mova.Infrastructure.Migrations
                     b.ToTable("wallet_trustees", (string)null);
                 });
 
-            modelBuilder.Entity("Mova.Infrastructure.Identity.User", b =>
+            modelBuilder.Entity("Mova.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -2830,13 +2999,6 @@ namespace Mova.Infrastructure.Migrations
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
-
-                    b.Property<int>("AccountStatus")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("BvnHash")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -2863,22 +3025,8 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<string>("LastKnownDeviceId")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
@@ -2901,35 +3049,6 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<bool>("NotifyLoginAlerts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("NotifyProductUpdates")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("NotifyPromotions")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("NotifyReleaseAlerts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<int>("OnboardingStage")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
-
-                    b.Property<string>("OtherNames")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
@@ -2939,48 +3058,8 @@ namespace Mova.Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("ProfilePicture")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PublicId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTimeOffset?>("ReactivatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("RestrictedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RestrictedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTimeOffset?>("RestrictionExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("RestrictionReason")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RestrictionReasonDetails")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("TransactionPinChangedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TransactionPinHash")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("TransactionPinResetAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("TransactionPinSetAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
@@ -2989,26 +3068,7 @@ namespace Mova.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.ComplexProperty<Dictionary<string, object>>("Balance", "Mova.Infrastructure.Identity.User.Balance#Money", b1 =>
-                        {
-                            b1.Property<string>("Currency")
-                                .IsRequired()
-                                .HasMaxLength(3)
-                                .HasColumnType("character varying(3)")
-                                .HasColumnName("balance_currency");
-
-                            b1.Property<long>("MinorUnits")
-                                .HasColumnType("bigint")
-                                .HasColumnName("balance_minor_units");
-                        });
-
                     b.HasKey("Id");
-
-                    b.HasIndex("BvnHash")
-                        .HasDatabaseName("ix_users_bvn_hash");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -3016,12 +3076,6 @@ namespace Mova.Infrastructure.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
-
-                    b.HasIndex("PhoneNumber")
-                        .IsUnique();
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -3037,7 +3091,7 @@ namespace Mova.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<long>", b =>
                 {
-                    b.HasOne("Mova.Infrastructure.Identity.User", null)
+                    b.HasOne("Mova.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -3046,7 +3100,7 @@ namespace Mova.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<long>", b =>
                 {
-                    b.HasOne("Mova.Infrastructure.Identity.User", null)
+                    b.HasOne("Mova.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -3061,7 +3115,7 @@ namespace Mova.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Mova.Infrastructure.Identity.User", null)
+                    b.HasOne("Mova.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -3070,7 +3124,7 @@ namespace Mova.Infrastructure.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<long>", b =>
                 {
-                    b.HasOne("Mova.Infrastructure.Identity.User", null)
+                    b.HasOne("Mova.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)

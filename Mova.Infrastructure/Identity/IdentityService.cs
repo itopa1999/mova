@@ -1,63 +1,44 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
-using Mova.Application.Interfaces.Security;
-using Mova.Domain.Enums;
+using Mova.Domain.Entities;
 using Mova.Domain.ValueObjects;
-using Mova.Infrastructure.Identity.Extensions;
-using Mova.Infrastructure.Persistence;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Identity;
 
 public sealed class IdentityService : IIdentityService
 {
-    private readonly UserManager<User> _userManager;
-    private readonly ApplicationDbContext _context;
-    private readonly SensitiveIdentifierHasher _hasher;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ICacheService _cacheService;
-    private static readonly TimeSpan UserIdentityCacheDuration = TimeSpan.FromMinutes(5);
 
     public IdentityService(
-        UserManager<User> userManager,
-        ApplicationDbContext context,
-        SensitiveIdentifierHasher hasher,
+        UserManager<ApplicationUser> userManager,
         ICacheService cacheService)
     {
         _userManager = userManager;
-        _context = context;
-        _hasher = hasher;
         _cacheService = cacheService;
     }
 
     // ─────────────────────────────────────────────────────────────
     // WRITE PATH — user creation
     // ─────────────────────────────────────────────────────────────
-    public async Task<(bool Success, string ErrorMessage, string UserPublicId, long UserId)> CreateUserAsync(
-        string firstName,
-        string lastName,
+    public async Task<(bool Success, string ErrorMessage, long UserId)> CreateUserAsync(
         string email,
         string phoneNumber,
-        string BVN,
         string password,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var user = new User
+        var user = new ApplicationUser
         {
-            FirstName = firstName,
-            LastName = lastName,
             Email = email,
             UserName = email,
             PhoneNumber = phoneNumber,
-            PublicId = string.Empty,
-            ProfilePicture = DefaultProfilePictures.PickRandom(),
-            Balance = Money.FromNaira(0),
-            AccountStatus = UserAccountStatus.Active,
-            OnboardingStage = OnboardingStage.Register,
-            BvnHash = _hasher.Hash(BVN, SecuritySaltPurpose.BvnVerification.ToString())
+            PhoneNumberConfirmed = false,
+            EmailConfirmed = false,
+            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedBy = email
         };
 
         var result = await _userManager.CreateAsync(user, password);
@@ -65,20 +46,10 @@ public sealed class IdentityService : IIdentityService
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return (false, errors, string.Empty, 0);
+            return (false, errors, 0);
         }
 
-        user.PublicId = user.Id.ToString("D4");
-
-        var updateResult = await _userManager.UpdateAsync(user);
-
-        if (!updateResult.Succeeded)
-        {
-            var errors = string.Join(", ", updateResult.Errors.Select(x => x.Description));
-            return (false, errors, string.Empty, 0);
-        }
-
-        return (true, string.Empty, user.PublicId, user.Id);
+        return (true, string.Empty, user.Id);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -158,150 +129,6 @@ public sealed class IdentityService : IIdentityService
     }
 
     // ─────────────────────────────────────────────────────────────
-    // READ PATH — resolve identifier → userId, then load profile by id
-    // ─────────────────────────────────────────────────────────────
-    public async Task<UserIdentityDto?> GetByIdentifierAsync(
-        string identifier,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(identifier))
-        {
-            return null;
-        }
-
-        identifier = identifier.Trim();
-
-        var user = await FindUserByIdentifierAsync(identifier, cancellationToken);
-        if (user is null)
-        {
-            return null;
-        }
-
-        return await GetByIdAsync(user.Id, cancellationToken);
-    }
-
-    /// <summary>
-    /// Resolves an identifier (PublicId / email / phone) to the User entity.
-    /// </summary>
-    private async Task<User?> FindUserByIdentifierAsync(
-        string identifier,
-        CancellationToken cancellationToken)
-    {
-        var normalizedEmail = identifier.ToUpperInvariant();
-
-        return await _context.Users
-            .AsNoTracking()
-            .Where(x =>
-                x.PublicId == identifier ||
-                x.NormalizedEmail == normalizedEmail ||
-                x.PhoneNumber == identifier)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// Canonical profile read, by user id.
-    /// </summary>
-    private async Task<UserIdentityDto?> GetByIdAsync(
-        long userId,
-        CancellationToken cancellationToken)
-    {
-        var cacheKey = CacheKeys.UserIdentity(userId);
-
-        return await _cacheService.GetOrSetAsync<UserIdentityDto>(
-        cacheKey,
-        async ct => await GetByIdFromDbAsync(userId, ct),
-        timeout: UserIdentityCacheDuration,
-        cancellationToken: cancellationToken);
-
-    }
-    private async Task<UserIdentityDto?> GetByIdFromDbAsync(
-        long userId,
-        CancellationToken cancellationToken)
-    {
-        return await _context.Users
-        .AsNoTracking()
-        .Where(x => x.Id == userId)
-        .Select(x => new UserIdentityDto(
-            x.Id,
-            x.PublicId,
-            x.FirstName,
-            x.OtherNames,
-            x.LastName,
-            x.Email,
-            x.PhoneNumber,
-            x.ProfilePicture,
-            x.Balance,
-            x.OnboardingStage,
-            x.TransactionPinHash ?? string.Empty,
-            x.NotifyLoginAlerts,
-            x.NotifyReleaseAlerts,
-            x.NotifyProductUpdates,
-            x.NotifyPromotions,
-            x.LastKnownDeviceId ?? string.Empty,
-            x.CreatedAt ?? DateTimeOffset.UtcNow))
-        .FirstOrDefaultAsync(cancellationToken);
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // EXISTENCE CHECKS
-    // ─────────────────────────────────────────────────────────────
-    public async Task<bool> EmailExistsAsync(
-        string email,
-        long? excludeUserId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var normalizedEmail = email.Trim().ToUpperInvariant();
-
-        var query = _context.Users
-            .AsNoTracking()
-            .Where(x => x.NormalizedEmail == normalizedEmail);
-
-        if (excludeUserId.HasValue)
-        {
-            query = query.Where(x => x.Id != excludeUserId.Value);
-        }
-
-        return await query.AnyAsync(cancellationToken);
-    }
-
-    public async Task<bool> BvnExistsAsync(
-        string rawBvn,
-        long? excludeUserId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var bvnHash = _hasher.Hash(rawBvn, SecuritySaltPurpose.BvnVerification.ToString());
-        var query = _context.Users
-            .AsNoTracking()
-            .Where(x => x.BvnHash == bvnHash);
-
-        if (excludeUserId.HasValue)
-        {
-            query = query.Where(x => x.Id != excludeUserId.Value);
-        }
-
-        return await query.AnyAsync(cancellationToken);
-    }
-
-    public async Task<bool> PhoneExistsAsync(
-        string phoneNumber,
-        long? excludeUserId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var normalizedPhone = phoneNumber.Trim();
-
-        var query = _context.Users
-            .AsNoTracking()
-            .Where(x => x.PhoneNumber == normalizedPhone);
-
-        if (excludeUserId.HasValue)
-        {
-            query = query.Where(x => x.Id != excludeUserId.Value);
-        }
-
-        return await query.AnyAsync(cancellationToken);
-    }
-
-    // ─────────────────────────────────────────────────────────────
     // PASSWORD & VERIFICATION
     // ─────────────────────────────────────────────────────────────
     public async Task<bool> CheckPasswordAsync(
@@ -317,18 +144,6 @@ public sealed class IdentityService : IIdentityService
         return await _userManager.CheckPasswordAsync(existingUser, password);
     }
 
-    public async Task<bool> IsAccountVerifiedAsync(
-        long userId,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var existingUser = await _userManager.FindByIdAsync(userId.ToString());
-        if (existingUser is null) return false;
-
-        return existingUser.EmailConfirmed && existingUser.PhoneNumberConfirmed;
-    }
-
     public async Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(
         long userId,
         CancellationToken cancellationToken = default)
@@ -340,10 +155,6 @@ public sealed class IdentityService : IIdentityService
         {
             return (false, "User not Found");
         }
-
-        existingUser.EmailConfirmed = true;
-        existingUser.PhoneNumberConfirmed = true;
-        existingUser.OnboardingStage = OnboardingStage.Verify;
 
         await _cacheService.DeleteAsync(CacheKeys.UserIdentity(existingUser.Id), cancellationToken);
         
@@ -394,7 +205,6 @@ public sealed class IdentityService : IIdentityService
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null) return (false, "User not found.");
 
-        // ChangePasswordAsync already rotates the security stamp and saves.
         var result = await _userManager.ChangePasswordAsync(user, oldPassword, newPassword);
 
         if (!result.Succeeded)
@@ -410,139 +220,34 @@ public sealed class IdentityService : IIdentityService
     // BALANCE
     // ─────────────────────────────────────────────────────────────
     public async Task<bool> CreditBalanceAsync(
-        string userPublicId,
+        User user,
         decimal amount,
         CancellationToken cancellationToken)
     {
         if (amount <= 0)
             return false;
 
-        var user = await _context.Users
-            .FirstOrDefaultAsync(x => x.PublicId == userPublicId, cancellationToken);
-
-        if (user is null)
-            return false;
-
         user.Balance = Money.FromNaira(user.Balance.ToDecimal() + amount);
-
-        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
 
         return true;
     }
 
     public async Task<bool> DebitBalanceAsync(
-        string userPublicId,
+        User user,
         decimal amount,
         CancellationToken cancellationToken)
     {
         if (amount <= 0)
             return false;
 
-        var user = await _context.Users
-            .FirstOrDefaultAsync(x => x.PublicId == userPublicId, cancellationToken);
-
-        if (user is null || user.Balance.ToDecimal() < amount)
+        if (user.Balance.ToDecimal() < amount)
             return false;
 
         user.Balance = Money.FromNaira(user.Balance.ToDecimal() - amount);
-
-        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
-
+        
         return true;
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // PREFERENCES & DEVICE
-    // ─────────────────────────────────────────────────────────────
-    public async Task<bool> UpdateNotificationPreferenceAsync(
-        string identifier,
-        string key,
-        bool enabled,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(identifier))
-            return false;
-
-        identifier = identifier.Trim();
-        var normalizedEmail = identifier.ToUpperInvariant();
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(
-                x => x.PublicId == identifier ||
-                    x.NormalizedEmail == normalizedEmail ||
-                    x.PhoneNumber == identifier,
-                cancellationToken);
-
-        if (user is null)
-            return false;
-
-        switch (key)
-        {
-            case "login":
-                user.NotifyLoginAlerts = enabled;
-                break;
-
-            case "release":
-                user.NotifyReleaseAlerts = enabled;
-                break;
-
-            case "updates":
-                user.NotifyProductUpdates = enabled;
-                break;
-
-            case "promotions":
-                user.NotifyPromotions = enabled;
-                break;
-
-            default:
-                return false;
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
-
-        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
-
-        return true;
-    }
-
-    public async Task<bool> UpdateLastKnownDeviceAsync(
-        string identifier,
-        string deviceId,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(identifier) ||
-            string.IsNullOrWhiteSpace(deviceId))
-        {
-            return false;
-        }
-
-        identifier = identifier.Trim();
-        var normalizedEmail = identifier.ToUpperInvariant();
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(
-                x => x.PublicId == identifier ||
-                    x.NormalizedEmail == normalizedEmail ||
-                    x.PhoneNumber == identifier,
-                cancellationToken);
-
-        if (user is null)
-        {
-            return false;
-        }
-
-        if (user.LastKnownDeviceId == deviceId)
-        {
-            return true;
-        }
-
-        user.LastKnownDeviceId = deviceId;
-        await _context.SaveChangesAsync(cancellationToken);
-
-        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
-
-        return true;
-    }
 
     public async Task<bool> IsLockedOutAsync(
         long userId,
@@ -593,105 +298,4 @@ public sealed class IdentityService : IIdentityService
 
         await _userManager.SetLockoutEndDateAsync(user, null);
     }
-
-    public async Task<(bool Success, string Message)> UpdateOnboardingStageAsync(
-        string userPublicId,
-        OnboardingStage newStage,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (string.IsNullOrWhiteSpace(userPublicId))
-            return (false, "UserPublicId is required.");
-
-        var user = await _context.Users
-            .FirstOrDefaultAsync(x => x.PublicId == userPublicId, cancellationToken);
-
-        if (user is null)
-            return (false, "User not found.");
-
-        if (newStage <= user.OnboardingStage)
-        {
-            return (false,
-                $"Cannot move onboarding stage from {user.OnboardingStage} to {newStage}. " +
-                "Stage must always advance forward.");
-        }
-
-        var previousStage = user.OnboardingStage;
-        user.OnboardingStage = newStage;
-
-        await _cacheService.DeleteAsync(CacheKeys.UserIdentity(user.Id), cancellationToken);
-
-        return (true, string.Empty);
-    }
-
-
-    // ─────────────────────────────────────────────────────
-    // Permissions / feature gates
-    // ─────────────────────────────────────────────────────
-
-    public async Task<UserPermissionsDto?> GetPermissionsAsync(
-        string userPublicId,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var user = await FindUserEntityByPublicIdAsync(userPublicId, cancellationToken);
-        if (user is null) return null;
-
-        return BuildPermissions(user);
-    }
-
-    public async Task<bool> CloseAccountAsync(
-        string userPublicId,
-        AccountRestrictionReason reason,
-        string details,
-        string performedBy,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var user = await FindUserEntityByPublicIdAsync(userPublicId, cancellationToken);
-        if (user is null) return false;
-
-        user.ClosePermanently(reason, details, performedBy);
-
-        _context.Users.Update(user);
-
-        return await _context.SaveChangesAsync(cancellationToken) > 0;
-    }
-
-    // ─────────────────────────────────────────────────────
-    // Private helpers used by the two methods above
-    // ─────────────────────────────────────────────────────
-
-    private async Task<User?> FindUserEntityByPublicIdAsync(
-        string userPublicId,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(userPublicId)) return null;
-
-        var normalized = userPublicId.Trim();
-
-        return await _context.Users
-            .FirstOrDefaultAsync(
-                u => u.PublicId == normalized && !u.IsDeleted,
-                cancellationToken);
-    }
-
-    private static UserPermissionsDto BuildPermissions(User user) =>
-        new(
-            user.PublicId,
-            user.AccountStatus,
-            user.GetStatusLabel(),
-            user.GetStatusDescription(),
-            user.CanLogin(),
-            user.CanCreateWallets(),
-            user.CanPerformSensitiveOperations(),
-            user.CanReceivePayouts(),
-            user.CanTopUp(),
-            user.RestrictionReason?.ToString(),
-            user.RestrictionReasonDetails,
-            user.RestrictedAt,
-            user.RestrictionExpiresAt);
 }

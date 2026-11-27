@@ -22,7 +22,7 @@ public class AdminIdentityService : IAdminIdentityService
         int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var query = _context.Users.AsNoTracking().IgnoreQueryFilters();
+        var query = _context.UserDetails.AsNoTracking().IgnoreQueryFilters();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -33,7 +33,8 @@ public class AdminIdentityService : IAdminIdentityService
                 (u.LastName != null && u.LastName.Contains(term)) ||
                 (u.OtherNames != null && u.OtherNames.Contains(term)) ||
                 (u.Email != null && u.Email.Contains(term)) ||
-                (u.PhoneNumber != null && u.PhoneNumber.Contains(term))
+                (u.PhoneNumber != null && u.PhoneNumber.Contains(term)) ||
+                (u.PublicId != null && u.PublicId.Contains(term))
             );
         }
 
@@ -86,30 +87,88 @@ public class AdminIdentityService : IAdminIdentityService
         return (items, totalCount);
     }
 
-    // public async Task<AdminUserListDto?> GetByPublicIdAsync(
-    //     string publicId,
-    //     CancellationToken cancellationToken = default)
-    // {
-    //     var rawUser = await _context.Users
-    //         .AsNoTracking()
-    //         .Where(u => u.PublicId == publicId)
-    //         .Select(u => new
-    //         {
-    //             u.Id,
-    //             u.PublicId,
-    //             u.FirstName,
-    //             u.OtherNames,
-    //             u.LastName,
-    //             u.Email,
-    //             u.PhoneNumber,
-    //             u.AccountStatus,
-    //             u.OnboardingStage,
-    //             u.CreatedAt
-    //         })
-    //         .FirstOrDefaultAsync(cancellationToken);
+    public async Task<UserDetailsDto?> GetByPublicIdAsync(
+        string publicId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _context.UserDetails
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(u => u.PublicId == publicId)
+            .Select(u => new UserDetailsDto
+            {
+                Id = u.Id,
+                PublicId = u.PublicId,
 
-    //     if (rawUser == null)
-    //     {
-    //         return null;
-    //     }
+                FirstName = u.FirstName,
+                OtherNames = u.OtherNames,
+                LastName = u.LastName,
+                FullName = u.FullName,
+                ProfilePicture = u.ProfilePicture,
+
+                Email = u.Email ?? string.Empty,
+                PhoneNumber = u.PhoneNumber,
+
+                EmailConfirmed = u.EmailConfirmed,
+                PhoneNumberConfirmed = u.PhoneNumberConfirmed,
+                BvnVerified = !string.IsNullOrWhiteSpace(u.BvnHash),
+
+                AccountStatus = u.AccountStatus.ToString(),
+                OnboardingStage = u.OnboardingStage.ToString(),
+
+                Balance = u.Balance.ToDecimal(),
+                BalanceCurrency = u.Balance.Currency,
+
+                TransactionPinIsSet = !string.IsNullOrWhiteSpace(u.TransactionPinHash),
+                TransactionPinSetAt = u.TransactionPinSetAt,
+                TransactionPinChangedAt = u.TransactionPinChangedAt,
+                TransactionPinResetAt = u.TransactionPinResetAt,
+
+                LastKnownDeviceId = u.LastKnownDeviceId,
+
+                NotifyLoginAlerts = u.NotifyLoginAlerts,
+                NotifyReleaseAlerts = u.NotifyReleaseAlerts,
+                NotifyProductUpdates = u.NotifyProductUpdates,
+                NotifyPromotions = u.NotifyPromotions,
+
+                RestrictionReason = u.RestrictionReason.HasValue
+                    ? u.RestrictionReason.Value.ToString()
+                    : null,
+
+                RestrictionReasonDetails = u.RestrictionReasonDetails,
+                RestrictedAt = u.RestrictedAt,
+                RestrictedBy = u.RestrictedBy,
+                RestrictionExpiresAt = u.RestrictionExpiresAt,
+                ReactivatedAt = u.ReactivatedAt,
+
+                CreatedAt = u.CreatedAt,
+                CreatedBy = u.CreatedBy,
+                ModifiedAt = u.ModifiedAt,
+                ModifiedBy = u.ModifiedBy,
+                IsDeleted = u.IsDeleted,
+                DeletedAt = u.DeletedAt,
+                DeletedBy = u.DeletedBy
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (user == null)
+        {
+            return null;
+        }
+
+        var roles = await (
+            from userRole in _context.UserRoles.AsNoTracking()
+            join role in _context.Roles.AsNoTracking()
+                on userRole.RoleId equals role.Id
+            where userRole.UserId == user.Id
+            select new UserRoleDto
+            {
+                Id = role.Id.ToString(),
+                Name = role.Name ?? string.Empty,
+            }
+        ).ToListAsync(cancellationToken);
+
+        user.Roles = roles;
+        return user;
+    }
 }

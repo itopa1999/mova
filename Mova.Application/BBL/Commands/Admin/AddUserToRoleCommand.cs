@@ -3,10 +3,12 @@ using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Mova.Application.Interfaces.Identity;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
+using Mova.Domain.Entities;
+using Mova.Application.Interfaces.Persistence;
+using Microsoft.EntityFrameworkCore;
 namespace Mova.Application.BBL.Commands.Admin;
 
 public sealed class AddUserToRoleCommand
@@ -37,13 +39,16 @@ public sealed class AddUserToRoleCommand
             };
 
         private readonly IIdentityService _identityService;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IIdentityService identityService,
+            IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
             _identityService = identityService;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -81,9 +86,11 @@ public sealed class AddUserToRoleCommand
                     $"Unknown role. Allowed: {string.Join(", ", AssignableRoles)}.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
@@ -94,7 +101,7 @@ public sealed class AddUserToRoleCommand
             }
 
             var existingRoles = await _identityService.GetRolesAsync(
-                user.Id,
+                user.UserId,
                 cancellationToken);
 
             if (existingRoles.Any(r =>
@@ -112,7 +119,7 @@ public sealed class AddUserToRoleCommand
             }
 
             var (success, errorMessage) = await _identityService.AddToRoleAsync(
-                user.Id,
+                user.UserId,
                 request.Role,
                 cancellationToken);
 
@@ -125,7 +132,7 @@ public sealed class AddUserToRoleCommand
             }
 
             var updatedRoles = await _identityService.GetRolesAsync(
-                user.Id,
+                user.UserId,
                 cancellationToken);
 
             op.Success($"Role {request.Role} added to user {request.UserPublicId}.");

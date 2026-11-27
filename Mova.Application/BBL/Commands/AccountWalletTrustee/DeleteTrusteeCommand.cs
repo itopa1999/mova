@@ -11,7 +11,6 @@ using Mova.Application.Interfaces.Persistence;
 using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Constants;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
@@ -48,7 +47,6 @@ public sealed class DeleteTrusteeCommand
         : IRequestHandler<Command, BaseResult<DeleteTrusteeResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
         private readonly ILogger<Handler> _logger;
@@ -56,14 +54,12 @@ public sealed class DeleteTrusteeCommand
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             INotificationQueue notificationQueue,
             IPinChallenge pinChallenge,
             ILogger<Handler> logger,
             ICacheService cacheService)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
             _logger = logger;

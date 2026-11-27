@@ -11,10 +11,9 @@ using Mova.Application.Interfaces.Security;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
-using Mova.Application.Models;
+using Mova.Application.Extensions;
 namespace Mova.Application.BBL.Commands.AccountWallet;
 
 public sealed class CreateRenewalPolicyCommand
@@ -63,7 +62,6 @@ public sealed class CreateRenewalPolicyCommand
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
-        private readonly IIdentityService _identityService;
         private readonly INotificationQueue _notificationQueue;
         private readonly IPinChallenge _pinChallenge;
 
@@ -76,7 +74,6 @@ public sealed class CreateRenewalPolicyCommand
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
-            _identityService = identityService;
             _notificationQueue = notificationQueue;
             _pinChallenge = pinChallenge;
         }
@@ -99,17 +96,14 @@ public sealed class CreateRenewalPolicyCommand
                     "User identity is required.");
             }
 
-            var permissions = await _identityService.GetPermissionsAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
-            if (permissions is null)
-            {
-                op.Error($"Permissions unavailable for user {request.UserPublicId}.");
-                return new BaseResult<CreateRenewalPolicyResponseDto>(
-                    HttpStatusCode.InternalServerError,
-                    "We couldn't verify your account permissions right now. Please try again in a moment.");
-            }
+            if (user is null)
+                return new BaseResult<CreateRenewalPolicyResponseDto>(HttpStatusCode.Unauthorized, "User not found.");
+
+            var permissions = user.GetUserPermissions();
 
             if (!permissions.CanPerformSensitiveOperations)
             {

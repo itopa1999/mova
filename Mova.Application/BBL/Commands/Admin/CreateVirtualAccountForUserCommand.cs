@@ -3,12 +3,9 @@ using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Mova.Application.Interfaces.Identity;
-using Mova.Application.Interfaces.Notification;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
-using Mova.Shared.Common;
 using Mova.Shared.Logging;
 using Mova.Shared.Common.Results;
 namespace Mova.Application.BBL.Commands.Admin;
@@ -41,16 +38,13 @@ public sealed class CreateVirtualAccountForUserCommand
         : IRequestHandler<Command, BaseResult<CreateVirtualAccountForUserResponseDto>>
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IIdentityService _identityService;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
             IUnitOfWork unitOfWork,
-            IIdentityService identityService,
             ILogger<Handler> logger)
         {
             _unitOfWork = unitOfWork;
-            _identityService = identityService;
             _logger = logger;
         }
 
@@ -71,9 +65,11 @@ public sealed class CreateVirtualAccountForUserCommand
                     "UserPublicId is required.");
             }
 
-            var user = await _identityService.GetByIdentifierAsync(
-                request.UserPublicId,
-                cancellationToken);
+            var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId, x.Email, x.PublicId, x.FullName })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
