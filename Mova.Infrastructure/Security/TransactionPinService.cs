@@ -82,6 +82,7 @@ public class TransactionPinService : ITransactionPinService
         CancellationToken cancellationToken = default)
     {
         var user = await _context.UserDetails
+            .AsNoTracking()
             .FirstOrDefaultAsync(
                 x => x.PublicId == UserPublicId,
                 cancellationToken);

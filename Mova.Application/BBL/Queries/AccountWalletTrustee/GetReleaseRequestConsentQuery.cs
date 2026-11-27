@@ -49,6 +49,7 @@ public sealed class GetReleaseRequestConsentQuery
             Query request,
             CancellationToken cancellationToken)
         {
+            Console.WriteLine($"i love {request.Token}");
             var tokenHash = TrusteeTokenHelper.Hash(request.Token);
 
             var releaseRequest = await _unitOfWork.Query<ReleaseRequest>()
@@ -104,7 +105,10 @@ public sealed class GetReleaseRequestConsentQuery
                 : null;
 
             var owner = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == releaseRequest.RequestedByUserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == releaseRequest.RequestedByUserPublicId)
+                .Select(x => new { x.FirstName })
+                .FirstOrDefaultAsync(cancellationToken);
 
             var maskedAccount = MaskAccount(bank?.AccountNumber);
 

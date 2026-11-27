@@ -70,7 +70,10 @@ public sealed class ChangePasswordCommand
             }
 
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId, x.PublicId })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {

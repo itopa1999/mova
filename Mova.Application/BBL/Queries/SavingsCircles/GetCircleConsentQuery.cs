@@ -92,7 +92,10 @@ public sealed class GetCircleConsentQuery
             else op.Success("User can join via public link.");
 
             var organizer = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == circle.OrganizerUserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == circle.OrganizerUserPublicId)
+                .Select(x => new { x.FirstName, x.LastName })
+                .FirstOrDefaultAsync(cancellationToken);
 
             var organizerName = organizer is not null
                 ? $"{organizer.FirstName} {organizer.LastName}".Trim()

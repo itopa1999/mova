@@ -174,9 +174,11 @@ public sealed class ExpirePendingTrusteesJob
                 CancellationToken.None);
 
             var owner = await _context.UserDetails
-                    .FirstOrDefaultAsync(
-                    x => x.PublicId == ownerPublicId,
-                    cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == ownerPublicId)
+                .Select(x => new { x.Email, x.FirstName })
+                .FirstOrDefaultAsync(cancellationToken);
+
 
             if (!string.IsNullOrWhiteSpace(owner?.Email))
             {

@@ -65,6 +65,7 @@ public sealed class ToggleWalletStatusCommand
             }
 
             var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
 
             if (user is null)

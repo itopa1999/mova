@@ -101,6 +101,7 @@ public sealed class RefreshTokenCommand
             _unitOfWork.Update(refreshToken);
 
             var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.PublicId == refreshToken.UserPublicId, cancellationToken);
 
             if (user is null)
@@ -112,7 +113,7 @@ public sealed class RefreshTokenCommand
                     "Session is no longer valid.");
             }
 
-            var roles = await _identityService.GetRolesAsync(user.Id);
+            var roles = await _identityService.GetRolesAsync(user.UserId, cancellationToken);
 
             var accessToken = _jwtTokenGenerator.GenerateToken(
                 user.Id,

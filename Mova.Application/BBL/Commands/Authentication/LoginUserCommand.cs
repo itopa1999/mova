@@ -150,7 +150,7 @@ public sealed class LoginUserCommand
                     });
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.UserId) is false)
+            if (!user.EmailConfirmed || !user.PhoneNumberConfirmed)
             {
                 op.Warning($"Account not verified for user {user.PublicId}.");
                 return new BaseResult<LoginResultDto>(

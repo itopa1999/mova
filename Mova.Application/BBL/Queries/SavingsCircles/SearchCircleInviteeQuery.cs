@@ -81,10 +81,12 @@ public sealed class SearchCircleInviteeQuery
             }
 
             var user = await _unitOfWork.Query<User>()
+                .AsNoTracking()
                 .Where(x =>
                     x.Email == normalized ||
                     x.PhoneNumber == normalized ||
                     x.PublicId == normalized)
+                .Select(x=> new {x.Email, x.PublicId, x.FirstName, x.LastName, x.PhoneNumber} )
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)

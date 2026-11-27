@@ -135,7 +135,10 @@ public sealed class AcceptTrusteeConsentCommand
                 CancellationToken.None);
 
             var owner = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == trustee.OwnerPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == trustee.OwnerPublicId)
+                .Select(x => new { x.FirstName, x.Email })
+                .FirstOrDefaultAsync(cancellationToken);
 
 
             if (!string.IsNullOrWhiteSpace(owner?.Email))

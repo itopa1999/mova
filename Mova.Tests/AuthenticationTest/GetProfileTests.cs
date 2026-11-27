@@ -1,7 +1,6 @@
 using System.Net;
-using Moq;
+using Microsoft.EntityFrameworkCore;
 using Mova.Application.BBL.Queries.Profile;
-using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
 using Mova.Domain.Enums;
 using Mova.Domain.ValueObjects;
@@ -13,138 +12,113 @@ public sealed class GetProfileTests : BaseTest
     private const string UserPublicId = "user_profile_test";
     private const long UserId = 42;
     private const string UserEmail = "user@mova.app";
-    private const string UserFirstName = "Lucky";
-    private const string UserLastName = "Starboy";
-    private const string UserFullName = "Lucky Starboy";
     private const string UserPhone = "08050000000";
 
-    private readonly Mock<IIdentityService> _identityService = new();
-
-    // We no longer mock IUnitOfWork. We use the real UnitOfWork from BaseTest.
-    private GetProfile.Handler CreateHandler()
-    {
-        return new GetProfile.Handler(_identityService.Object, UnitOfWork);
-    }
-
-    private GetProfile.Query CreateQuery(string? userPublicId = null)
-    {
-        return new GetProfile.Query
-        {
-            UserPublicId = userPublicId ?? UserPublicId,
-        };
-    }
-
-    private void SetupUserExists(
-        decimal balanceNaira = 0m,
+    private async Task<User> SeedProfileUserAsync(
         string? publicId = null,
+        long? userId = null,
         string? email = null,
         string? firstName = null,
         string? lastName = null,
         string? otherNames = null,
-        string? fullName = null,
         string? phone = null,
         string? profilePicture = null,
+        decimal balanceNaira = 0m,
         string? transactionPinHash = null,
+        UserAccountStatus accountStatus = UserAccountStatus.Active,
+        AccountRestrictionReason restrictionReason = AccountRestrictionReason.None,
+        string? restrictionReasonDetails = null,
+        DateTimeOffset? restrictionExpiresAt = null,
         bool notifyLoginAlerts = true,
         bool notifyReleaseAlerts = true,
         bool notifyProductUpdates = true,
         bool notifyPromotions = false,
         DateTimeOffset? createdAt = null)
     {
-        _identityService
-            .Setup(x => x.GetByIdentifierAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UserIdentityDto(
-                UserId,
-                publicId ?? UserPublicId,
-                firstName ?? UserFirstName,
-                otherNames,
-                lastName ?? UserLastName,
-                email ?? UserEmail,
-                phone ?? UserPhone,
-                profilePicture,
-                Money.FromNaira(balanceNaira),
-                OnboardingStage.Completed,
-                transactionPinHash ?? string.Empty,
-                notifyLoginAlerts,
-                notifyReleaseAlerts,
-                notifyProductUpdates,
-                notifyPromotions,
-                fullName ?? UserFullName,
-                createdAt ?? DateTimeOffset.UtcNow));
+        var user = new User
+        {
+            UserId = userId ?? UserId,
+            PublicId = publicId ?? UserPublicId,
+            Email = email ?? UserEmail,
+            EmailConfirmed = true,
+            FirstName = firstName ?? "Lucky",
+            LastName = lastName ?? "Starboy",
+            OtherNames = otherNames,
+            PhoneNumber = phone ?? UserPhone,
+            PhoneNumberConfirmed = true,
+            ProfilePicture = profilePicture,
+            Balance = Money.FromNaira(balanceNaira),
+            TransactionPinHash = transactionPinHash,
+            AccountStatus = accountStatus,
+            RestrictionReason = restrictionReason,
+            RestrictionReasonDetails = restrictionReasonDetails,
+            RestrictionExpiresAt = restrictionExpiresAt,
+            NotifyLoginAlerts = notifyLoginAlerts,
+            NotifyReleaseAlerts = notifyReleaseAlerts,
+            NotifyProductUpdates = notifyProductUpdates,
+            NotifyPromotions = notifyPromotions,
+            OnboardingStage = OnboardingStage.Completed,
+            CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+            CreatedBy = "test",
+            IsDeleted = false,
+        };
+
+        await UnitOfWork.AddAsync(user);
+        await UnitOfWork.SaveChangesAsync();
+        UnitOfWork.ResetCounts();
+
+        return user;
     }
 
-    private void SetupUserNotFound()
+    private async Task<RequestProfileChange> SeedPendingChangeAsync(
+        string? userPublicId = null,
+        bool isApproved = false,
+        bool isRejected = false,
+        string requestReason = "Name change",
+        string? requestComment = "Marriage",
+        string? rejectionReason = null,
+        DateTimeOffset? rejectedAt = null,
+        DateTimeOffset? createdAt = null)
     {
-        _identityService
-            .Setup(x => x.GetByIdentifierAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((UserIdentityDto?)null);
+        var change = new RequestProfileChange
+        {
+            UserPublicId = userPublicId ?? UserPublicId,
+            IsApproved = isApproved,
+            IsRejected = isRejected,
+            RequestReason = requestReason,
+            RequestComment = requestComment,
+            RejectionReason = rejectionReason,
+            RejectedAt = rejectedAt,
+            CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+        };
+
+        await UnitOfWork.AddAsync(change);
+        await UnitOfWork.SaveChangesAsync();
+        UnitOfWork.ResetCounts();
+
+        return change;
     }
 
-    private static UserPermissionsDto BuildPermissions(
-        UserAccountStatus status = UserAccountStatus.Active,
-        string statusLabel = "Active",
-        string statusDescription = "Your account is in good standing and fully operational.",
-        bool canLogin = true,
-        bool canCreateWallets = true,
-        bool canPerformSensitiveOperations = true,
-        bool canReceivePayouts = true,
-        bool canTopUp = true,
-        string? restrictionReason = null,
-        string? restrictionReasonDetails = null,
-        DateTimeOffset? restrictionExpiresAt = null)
-        => new(
-            UserPublicId,
-            status,
-            statusLabel,
-            statusDescription,
-            canLogin,
-            canCreateWallets,
-            canPerformSensitiveOperations,
-            canReceivePayouts,
-            canTopUp,
-            restrictionReason,
-            restrictionReasonDetails,
-            null,
-            restrictionExpiresAt);
+    private GetProfile.Handler CreateHandler() => new(UnitOfWork);
 
-    private void SetupPermissions(UserPermissionsDto? permissions = null)
-    {
-        _identityService
-            .Setup(x => x.GetPermissionsAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(permissions ?? BuildPermissions());
-    }
-
-    private void SetupPermissionsReturnsNull()
-    {
-        _identityService
-            .Setup(x => x.GetPermissionsAsync(
-                It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((UserPermissionsDto?)null);
-    }
+    private static GetProfile.Query CreateQuery(string? userPublicId = null) =>
+        new() { UserPublicId = userPublicId ?? UserPublicId };
 
     [Fact]
     public async Task Handle_WithEmptyUserPublicId_ReturnsBadRequest()
     {
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(userPublicId: ""), default);
+        var result = await CreateHandler().Handle(CreateQuery(""), default);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal("User ID is required.", result.Message);
+        Assert.Null(result.Data);
     }
 
     [Fact]
     public async Task Handle_WithWhitespaceUserPublicId_ReturnsBadRequest()
     {
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(userPublicId: "   "), default);
+        var result = await CreateHandler().Handle(CreateQuery("   "), default);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
@@ -152,74 +126,66 @@ public sealed class GetProfileTests : BaseTest
     }
 
     [Fact]
-    public async Task Handle_WithEmptyUserPublicId_DoesNotLookupUser()
+    public async Task Handle_WithUnknownUser_ReturnsFailure()
     {
-        var handler = CreateHandler();
-        await handler.Handle(CreateQuery(userPublicId: ""), default);
-
-        _identityService.Verify(x => x.GetByIdentifierAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task Handle_WithEmptyUserPublicId_DoesNotCheckPermissions()
-    {
-        var handler = CreateHandler();
-        await handler.Handle(CreateQuery(userPublicId: ""), default);
-
-        _identityService.Verify(x => x.GetPermissionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task Handle_WithUnknownUser_ReturnsNotFound()
-    {
-        SetupUserNotFound();
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.NotFound, result.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, result.StatusCode);
         Assert.Equal("User not found.", result.Message);
+        Assert.Null(result.Data);
     }
 
     [Fact]
-    public async Task Handle_WithUnknownUser_DoesNotCheckPermissions()
+    public async Task Handle_WithSoftDeletedUser_StillReturnsProfile()
     {
-        SetupUserNotFound();
+        await SeedProfileUserAsync();
+        var user = await UnitOfWork.Query<User>().FirstAsync();
+        user.IsDeleted = true;
+        await UnitOfWork.SaveChangesAsync();
+        UnitOfWork.ResetCounts();
 
-        var handler = CreateHandler();
-        await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        _identityService.Verify(x => x.GetPermissionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.True(result.IsSuccess);
     }
 
     [Fact]
-    public async Task Handle_LooksUpUserExactlyOnce()
+    public async Task Handle_OnSuccess_ReturnsOk()
     {
-        SetupUserExists();
-        SetupPermissions();
+        await SeedProfileUserAsync();
 
-        var handler = CreateHandler();
-        await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        _identityService.Verify(x => x.GetByIdentifierAsync(UserPublicId, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        Assert.Equal("Profile retrieved successfully.", result.Message);
+    }
+
+    [Fact]
+    public async Task Handle_OnSuccess_ReturnsNonNullData()
+    {
+        await SeedProfileUserAsync();
+
+        var result = await CreateHandler().Handle(CreateQuery(), default);
+
+        Assert.NotNull(result.Data);
+        Assert.NotNull(result.Data!.Notifications);
+        Assert.NotNull(result.Data.AccountStatus);
     }
 
     [Fact]
     public async Task Handle_MapsAllPersonalFields()
     {
-        SetupUserExists(
+        await SeedProfileUserAsync(
             firstName: "Amaka",
             lastName: "Okafor",
             otherNames: "Chinwe",
-            fullName: "Amaka Chinwe Okafor",
             email: "amaka@mova.app",
             phone: "+2348012345678",
             profilePicture: "https://cdn.mova.app/amaka.png");
-        SetupPermissions();
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.True(result.IsSuccess);
         var dto = result.Data!;
@@ -235,11 +201,9 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WhenProfilePictureMissing_ReturnsNull()
     {
-        SetupUserExists(profilePicture: null);
-        SetupPermissions();
+        await SeedProfileUserAsync(profilePicture: null);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.Null(result.Data!.ProfilePicture);
     }
@@ -247,11 +211,9 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_ReturnsBalanceAsDecimal()
     {
-        SetupUserExists(balanceNaira: 25_750.50m);
-        SetupPermissions();
+        await SeedProfileUserAsync(balanceNaira: 25_750.50m);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.Equal(25_750.50m, result.Data!.Balance);
     }
@@ -260,12 +222,9 @@ public sealed class GetProfileTests : BaseTest
     public async Task Handle_ReturnsCreatedAt()
     {
         var createdAt = new DateTimeOffset(2024, 6, 15, 10, 30, 0, TimeSpan.Zero);
+        await SeedProfileUserAsync(createdAt: createdAt);
 
-        SetupUserExists(createdAt: createdAt);
-        SetupPermissions();
-
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.Equal(createdAt, result.Data!.CreatedAt);
     }
@@ -273,59 +232,63 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_MapsNotificationPreferences_AllEnabled()
     {
-        SetupUserExists(notifyLoginAlerts: true, notifyReleaseAlerts: true, notifyProductUpdates: true, notifyPromotions: true);
-        SetupPermissions();
+        await SeedProfileUserAsync(
+            notifyLoginAlerts: true,
+            notifyReleaseAlerts: true,
+            notifyProductUpdates: true,
+            notifyPromotions: true);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        var notifications = result.Data!.Notifications;
-        Assert.True(notifications.Login);
-        Assert.True(notifications.Release);
-        Assert.True(notifications.Updates);
-        Assert.True(notifications.Promotions);
+        var n = result.Data!.Notifications;
+        Assert.True(n.Login);
+        Assert.True(n.Release);
+        Assert.True(n.Updates);
+        Assert.True(n.Promotions);
     }
 
     [Fact]
     public async Task Handle_MapsNotificationPreferences_AllDisabled()
     {
-        SetupUserExists(notifyLoginAlerts: false, notifyReleaseAlerts: false, notifyProductUpdates: false, notifyPromotions: false);
-        SetupPermissions();
+        await SeedProfileUserAsync(
+            notifyLoginAlerts: false,
+            notifyReleaseAlerts: false,
+            notifyProductUpdates: false,
+            notifyPromotions: false);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        var notifications = result.Data!.Notifications;
-        Assert.False(notifications.Login);
-        Assert.False(notifications.Release);
-        Assert.False(notifications.Updates);
-        Assert.False(notifications.Promotions);
+        var n = result.Data!.Notifications;
+        Assert.False(n.Login);
+        Assert.False(n.Release);
+        Assert.False(n.Updates);
+        Assert.False(n.Promotions);
     }
 
     [Fact]
     public async Task Handle_MapsNotificationPreferences_MixedValues()
     {
-        SetupUserExists(notifyLoginAlerts: true, notifyReleaseAlerts: false, notifyProductUpdates: true, notifyPromotions: false);
-        SetupPermissions();
+        await SeedProfileUserAsync(
+            notifyLoginAlerts: true,
+            notifyReleaseAlerts: false,
+            notifyProductUpdates: true,
+            notifyPromotions: false);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        var notifications = result.Data!.Notifications;
-        Assert.True(notifications.Login);
-        Assert.False(notifications.Release);
-        Assert.True(notifications.Updates);
-        Assert.False(notifications.Promotions);
+        var n = result.Data!.Notifications;
+        Assert.True(n.Login);
+        Assert.False(n.Release);
+        Assert.True(n.Updates);
+        Assert.False(n.Promotions);
     }
 
     [Fact]
     public async Task Handle_WithPinHashSet_HasPinSetIsTrue()
     {
-        SetupUserExists(transactionPinHash: "hashed-pin-value");
-        SetupPermissions();
+        await SeedProfileUserAsync(transactionPinHash: "hashed-pin-value");
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.True(result.Data!.HasPinSet);
     }
@@ -333,11 +296,9 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WithEmptyPinHash_HasPinSetIsFalse()
     {
-        SetupUserExists(transactionPinHash: "");
-        SetupPermissions();
+        await SeedProfileUserAsync(transactionPinHash: "");
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.False(result.Data!.HasPinSet);
     }
@@ -345,11 +306,19 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WithWhitespacePinHash_HasPinSetIsFalse()
     {
-        SetupUserExists(transactionPinHash: "   ");
-        SetupPermissions();
+        await SeedProfileUserAsync(transactionPinHash: "   ");
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
+
+        Assert.False(result.Data!.HasPinSet);
+    }
+
+    [Fact]
+    public async Task Handle_WithNullPinHash_HasPinSetIsFalse()
+    {
+        await SeedProfileUserAsync(transactionPinHash: null);
+
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         Assert.False(result.Data!.HasPinSet);
     }
@@ -357,31 +326,27 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_AlwaysIncludesAccountStatus()
     {
-        SetupUserExists();
-        SetupPermissions();
+        await SeedProfileUserAsync();
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        Assert.NotNull(result.Data);
         Assert.NotNull(result.Data!.AccountStatus);
     }
 
     [Fact]
     public async Task Handle_WithActiveAccount_StatusIsHealthy()
     {
-        SetupUserExists();
-        SetupPermissions(BuildPermissions(status: UserAccountStatus.Active, statusLabel: "Active", statusDescription: "Your account is in good standing and fully operational.", restrictionExpiresAt: null));
+        await SeedProfileUserAsync(
+            accountStatus: UserAccountStatus.Active,
+            restrictionReason: AccountRestrictionReason.None,
+            restrictionExpiresAt: null);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         var status = result.Data!.AccountStatus;
         Assert.Equal("Active", status.Status);
-        Assert.Equal("Active", status.StatusLabel);
         Assert.True(status.IsHealthy);
         Assert.Null(status.RestrictionReason);
-        Assert.Null(status.RestrictionReasonDetails);
         Assert.Null(status.RestrictionExpiresAt);
     }
 
@@ -390,15 +355,16 @@ public sealed class GetProfileTests : BaseTest
     {
         var expiresAt = DateTimeOffset.UtcNow.AddDays(7);
 
-        SetupUserExists();
-        SetupPermissions(BuildPermissions(status: UserAccountStatus.Restricted, statusLabel: "Restricted", statusDescription: "Some features are temporarily limited.", canCreateWallets: false, canPerformSensitiveOperations: false, restrictionReason: "TermsViolation", restrictionReasonDetails: "Three warnings in 30 days.", restrictionExpiresAt: expiresAt));
+        await SeedProfileUserAsync(
+            accountStatus: UserAccountStatus.Restricted,
+            restrictionReason: AccountRestrictionReason.TermsViolation,
+            restrictionReasonDetails: "Three warnings in 30 days.",
+            restrictionExpiresAt: expiresAt);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         var status = result.Data!.AccountStatus;
         Assert.Equal("Restricted", status.Status);
-        Assert.Equal("Restricted", status.StatusLabel);
         Assert.False(status.IsHealthy);
         Assert.Equal("TermsViolation", status.RestrictionReason);
         Assert.Equal("Three warnings in 30 days.", status.RestrictionReasonDetails);
@@ -408,11 +374,12 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WithSuspendedAccount_IsNotHealthy()
     {
-        SetupUserExists();
-        SetupPermissions(BuildPermissions(status: UserAccountStatus.Suspended, statusLabel: "Suspended", statusDescription: "Your account is suspended.", canLogin: false, canCreateWallets: false, canPerformSensitiveOperations: false, canReceivePayouts: false, restrictionReason: "SuspectedFraud", restrictionReasonDetails: "Chargebacks from 4 cards."));
+        await SeedProfileUserAsync(
+            accountStatus: UserAccountStatus.Suspended,
+            restrictionReason: AccountRestrictionReason.SuspectedFraud,
+            restrictionReasonDetails: "Chargebacks from 4 cards.");
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         var status = result.Data!.AccountStatus;
         Assert.Equal("Suspended", status.Status);
@@ -423,11 +390,11 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WithClosedAccount_IsNotHealthy()
     {
-        SetupUserExists();
-        SetupPermissions(BuildPermissions(status: UserAccountStatus.Closed, statusLabel: "Closed", statusDescription: "Your account is permanently closed.", canLogin: false, canCreateWallets: false, canPerformSensitiveOperations: false, canReceivePayouts: false, restrictionReason: "UserRequestedDeactivation"));
+        await SeedProfileUserAsync(
+            accountStatus: UserAccountStatus.Closed,
+            restrictionReason: AccountRestrictionReason.UserRequestedDeactivation);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         var status = result.Data!.AccountStatus;
         Assert.Equal("Closed", status.Status);
@@ -437,11 +404,9 @@ public sealed class GetProfileTests : BaseTest
     [Fact]
     public async Task Handle_WithDeactivatedAccount_IsNotHealthy()
     {
-        SetupUserExists();
-        SetupPermissions(BuildPermissions(status: UserAccountStatus.Deactivated, statusLabel: "Deactivated", statusDescription: "Your account is deactivated.", canLogin: false, canCreateWallets: false, canPerformSensitiveOperations: false));
+        await SeedProfileUserAsync(accountStatus: UserAccountStatus.Deactivated);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         var status = result.Data!.AccountStatus;
         Assert.Equal("Deactivated", status.Status);
@@ -449,15 +414,15 @@ public sealed class GetProfileTests : BaseTest
     }
 
     [Fact]
-    public async Task Handle_WithActiveStatusButExpiredRestriction_IsNotHealthy()
+    public async Task Handle_WithActiveStatusAndExpiredRestriction_IsNotHealthy()
     {
         var expiredAt = DateTimeOffset.UtcNow.AddMinutes(-5);
 
-        SetupUserExists();
-        SetupPermissions(BuildPermissions(status: UserAccountStatus.Active, statusLabel: "Active", statusDescription: "Your account is in good standing.", restrictionExpiresAt: expiredAt));
+        await SeedProfileUserAsync(
+            accountStatus: UserAccountStatus.Active,
+            restrictionExpiresAt: expiredAt);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
         var status = result.Data!.AccountStatus;
         Assert.Equal("Active", status.Status);
@@ -465,86 +430,104 @@ public sealed class GetProfileTests : BaseTest
     }
 
     [Fact]
-    public async Task Handle_WhenPermissionsUnavailable_ReturnsUnavailableStatus()
+    public async Task Handle_WithActiveStatusAndFutureRestriction_IsNotHealthy()
     {
-        SetupUserExists();
-        SetupPermissionsReturnsNull();
+        var futureAt = DateTimeOffset.UtcNow.AddMinutes(5);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        await SeedProfileUserAsync(
+            accountStatus: UserAccountStatus.Active,
+            restrictionExpiresAt: futureAt);
 
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Data?.AccountStatus);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        var status = result.Data!.AccountStatus;
-        Assert.Equal("Unknown", status.Status);
-        Assert.Equal("Unavailable", status.StatusLabel);
-        Assert.False(status.IsHealthy);
+        Assert.False(result.Data!.AccountStatus.IsHealthy);
     }
 
     [Fact]
-    public async Task Handle_WhenPermissionsUnavailable_StillReturnsProfileData()
+    public async Task Handle_NoPendingChange_ReturnsNull()
     {
-        SetupUserExists(balanceNaira: 1_000m);
-        SetupPermissionsReturnsNull();
+        await SeedProfileUserAsync();
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        Assert.True(result.IsSuccess);
-        Assert.NotNull(result.Data);
-        Assert.Equal(1_000m, result.Data!.Balance);
-        Assert.False(result.Data.AccountStatus.IsHealthy);
+        Assert.Null(result.Data!.PendingProfileChange);
     }
 
     [Fact]
-    public async Task Handle_ChecksPermissionsExactlyOnce()
+    public async Task Handle_WithPendingChange_ReturnsIt()
     {
-        SetupUserExists();
-        SetupPermissions();
+        await SeedProfileUserAsync();
+        var submittedAt = DateTimeOffset.UtcNow.AddHours(-1);
 
-        var handler = CreateHandler();
-        await handler.Handle(CreateQuery(), default);
+        await SeedPendingChangeAsync(
+            requestReason: "Name change",
+            requestComment: "Marriage",
+            createdAt: submittedAt);
 
-        _identityService.Verify(x => x.GetPermissionsAsync(UserPublicId, It.IsAny<CancellationToken>()), Times.Once);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
+
+        var pending = result.Data!.PendingProfileChange;
+        Assert.NotNull(pending);
+        Assert.Equal("Name change", pending!.RequestReason);
+        Assert.Equal("Marriage", pending.RequestComment);
+        Assert.Equal(submittedAt, pending.SubmittedAt);
     }
 
     [Fact]
-    public async Task Handle_OnSuccess_ReturnsOk()
+    public async Task Handle_WithApprovedChange_ReturnsNull()
     {
-        SetupUserExists();
-        SetupPermissions();
+        await SeedProfileUserAsync();
+        await SeedPendingChangeAsync(isApproved: true);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        Assert.Null(result.Data!.PendingProfileChange);
     }
 
     [Fact]
-    public async Task Handle_OnSuccess_ReturnsSuccessMessage()
+    public async Task Handle_WithRejectedChange_ReturnsIt()
     {
-        SetupUserExists();
-        SetupPermissions();
+        await SeedProfileUserAsync();
+        var rejectedAt = DateTimeOffset.UtcNow.AddHours(-1);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        await SeedPendingChangeAsync(
+            isRejected: true,
+            rejectionReason: "Does not match legal ID",
+            rejectedAt: rejectedAt);
 
-        Assert.Equal("Profile retrieved successfully.", result.Message);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
+
+        var pending = result.Data!.PendingProfileChange;
+        Assert.NotNull(pending);
+        Assert.Equal("Does not match legal ID", pending!.RejectionReason);
+        Assert.Equal(rejectedAt, pending.RejectedAt);
     }
 
     [Fact]
-    public async Task Handle_OnSuccess_ReturnsNonNullData()
+    public async Task Handle_WhenMultiplePendingChanges_ReturnsMostRecent()
     {
-        SetupUserExists();
-        SetupPermissions();
+        await SeedProfileUserAsync();
+        var older = DateTimeOffset.UtcNow.AddDays(-2);
+        var newer = DateTimeOffset.UtcNow.AddHours(-1);
 
-        var handler = CreateHandler();
-        var result = await handler.Handle(CreateQuery(), default);
+        await SeedPendingChangeAsync(requestReason: "Older", createdAt: older);
+        await SeedPendingChangeAsync(requestReason: "Newer", createdAt: newer);
 
-        Assert.NotNull(result.Data);
-        Assert.NotNull(result.Data!.Notifications);
-        Assert.NotNull(result.Data.AccountStatus);
+        var result = await CreateHandler().Handle(CreateQuery(), default);
+
+        Assert.Equal("Newer", result.Data!.PendingProfileChange!.RequestReason);
+    }
+
+    [Fact]
+    public async Task Handle_PendingChangeBelongingToAnotherUser_IsIgnored()
+    {
+        await SeedProfileUserAsync();
+        await SeedPendingChangeAsync(
+            userPublicId: "someone-else",
+            requestReason: "Should not appear");
+
+        var result = await CreateHandler().Handle(CreateQuery(), default);
+
+        Assert.Null(result.Data!.PendingProfileChange);
     }
 }

@@ -32,8 +32,6 @@ public interface IIdentityService
 
     Task<bool> CheckPasswordAsync(long userId, string password, CancellationToken cancellationToken = default);
 
-    Task<bool> IsAccountVerifiedAsync(long userId, CancellationToken cancellationToken = default);
-
     Task<IList<string>> GetRolesAsync(long userId, CancellationToken cancellationToken = default);
 
     Task<bool> CreditBalanceAsync(User user, decimal Amount, CancellationToken cancellationToken);

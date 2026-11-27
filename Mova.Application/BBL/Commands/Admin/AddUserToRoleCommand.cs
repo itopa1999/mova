@@ -87,7 +87,10 @@ public sealed class AddUserToRoleCommand
             }
 
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {

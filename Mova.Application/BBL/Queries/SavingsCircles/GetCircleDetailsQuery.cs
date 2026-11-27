@@ -124,7 +124,11 @@ public sealed class GetCircleDetailsQuery
 
             // ── 6. Resolve organizer name ──────────────────────────────
             var organizer = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == circle.OrganizerUserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == circle.OrganizerUserPublicId)
+                .Select(x => new { x.FirstName, x.LastName })
+                .FirstOrDefaultAsync(cancellationToken);
+                
             var organizerName = organizer is not null
                 ? $"{organizer.FirstName} {organizer.LastName}".Trim()
                 : "Organizer";

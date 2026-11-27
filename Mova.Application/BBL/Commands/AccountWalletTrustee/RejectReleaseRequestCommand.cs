@@ -140,7 +140,10 @@ public sealed class RejectReleaseRequestCommand
                 CancellationToken.None);
 
             var owner = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == releaseRequest.RequestedByUserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == releaseRequest.RequestedByUserPublicId)
+                .Select(x => new { x.FirstName, x.Email })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (!string.IsNullOrWhiteSpace(owner?.Email))
             {

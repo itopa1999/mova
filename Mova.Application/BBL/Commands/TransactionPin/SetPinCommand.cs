@@ -96,7 +96,10 @@ public sealed class SetPinCommand
 
             // "Get me" — resolve the current user (includes OnboardingStage).
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId, x.OnboardingStage })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
                 return new BaseResult<SetPinResponseDto>(HttpStatusCode.Unauthorized, "User not found.");

@@ -75,16 +75,6 @@ public sealed class GetReleasesQuery
                     "User public ID is required.");
             }
 
-            var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
-
-            if (user == null)
-            {
-                return new BaseResult<GetReleasesQueryDto>(
-                    HttpStatusCode.Unauthorized,
-                    "User not found.");
-            }
-
             try
             {
                 var now = DateTimeOffset.UtcNow;

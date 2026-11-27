@@ -74,7 +74,10 @@ public sealed class AcceptCircleInvitationCommand
 
             // ── 2. Resolve user identity (same pattern as CreateCircle) ──
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.Email, x.PhoneNumber, x.Balance, x.FirstName, x.LastName })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {

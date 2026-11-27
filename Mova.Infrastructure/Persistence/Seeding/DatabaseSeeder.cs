@@ -279,11 +279,13 @@ public sealed class DatabaseSeeder
         var firstName = _configuration["Seed:SuperAdmin:FirstName"];
         var lastName  = _configuration["Seed:SuperAdmin:LastName"];
         var password  = _configuration["Seed:SuperAdmin:Password"];
+        var phone     = _configuration["Seed:SuperAdmin:PhoneNumber"];
 
         if (string.IsNullOrWhiteSpace(email)
             || string.IsNullOrWhiteSpace(password)
             || string.IsNullOrWhiteSpace(firstName)
-            || string.IsNullOrWhiteSpace(lastName))
+            || string.IsNullOrWhiteSpace(lastName)
+            || string.IsNullOrWhiteSpace(phone))
         {
             if (_environment.IsProduction())
             {
@@ -310,11 +312,12 @@ public sealed class DatabaseSeeder
 
         var adminUser = new ApplicationUser
         {
-            UserName            = normalizedEmail,
-            Email               = normalizedEmail,
-            EmailConfirmed      = true,
+            UserName = normalizedEmail,
+            PhoneNumber = phone,
+            Email = normalizedEmail,
+            EmailConfirmed = true,
             PhoneNumberConfirmed = true,
-            LockoutEnabled      = true,
+            LockoutEnabled = true,
         };
 
         await using var tx = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -339,7 +342,7 @@ public sealed class DatabaseSeeder
             UserId              = adminUser.Id,
             Email               = normalizedEmail,
             EmailConfirmed      = true,
-            PhoneNumber         = null,
+            PhoneNumber         = phone,
             PhoneNumberConfirmed = true,
 
             PublicId            = "AD000001",

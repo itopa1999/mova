@@ -25,16 +25,13 @@ public sealed class RequestProfileChangeCommand
 
     public class Handler : IRequestHandler<Command, BaseResult>
     {
-        private readonly IIdentityService _identityService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<Handler> _logger;
 
         public Handler(
-            IIdentityService identityService,
             IUnitOfWork unitOfWork,
             ILogger<Handler> logger)
         {
-            _identityService = identityService;
             _unitOfWork = unitOfWork;
             _logger = logger;
         }
@@ -61,7 +58,10 @@ public sealed class RequestProfileChangeCommand
             }
 
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.PublicId })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {

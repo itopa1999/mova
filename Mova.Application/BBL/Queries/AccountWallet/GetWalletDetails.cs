@@ -173,16 +173,6 @@ public sealed class WalletDetails
                     "Invalid wallet ID.");
             }
 
-            var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
-
-            if (user == null)
-            {
-                return new BaseResult<WalletDetailsResponseDto>(
-                    HttpStatusCode.Unauthorized,
-                    "User not found.");
-            }
-
             try
             {
                 var wallet = await _unitOfWork.Query<Wallet>()

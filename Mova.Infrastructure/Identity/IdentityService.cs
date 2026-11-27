@@ -1,10 +1,8 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Mova.Application.Interfaces.Caching;
 using Mova.Application.Interfaces.Identity;
 using Mova.Domain.Entities;
 using Mova.Domain.ValueObjects;
-using Mova.Infrastructure.Persistence;
 using Mova.Shared.Constants;
 
 namespace Mova.Infrastructure.Identity;
@@ -12,16 +10,13 @@ namespace Mova.Infrastructure.Identity;
 public sealed class IdentityService : IIdentityService
 {
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ApplicationDbContext _context;
     private readonly ICacheService _cacheService;
 
     public IdentityService(
         UserManager<ApplicationUser> userManager,
-        ApplicationDbContext context,
         ICacheService cacheService)
     {
         _userManager = userManager;
-        _context = context;
         _cacheService = cacheService;
     }
 
@@ -147,18 +142,6 @@ public sealed class IdentityService : IIdentityService
         if (existingUser is null) return false;
 
         return await _userManager.CheckPasswordAsync(existingUser, password);
-    }
-
-    public async Task<bool> IsAccountVerifiedAsync(
-        long userId,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var existingUser = await _userManager.FindByIdAsync(userId.ToString());
-        if (existingUser is null) return false;
-
-        return existingUser.EmailConfirmed && existingUser.PhoneNumberConfirmed;
     }
 
     public async Task<(bool Success, string ErrorMessage)> MarkEmailAndPhoneAsVerifiedAsync(

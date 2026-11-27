@@ -3,7 +3,6 @@ using System.Net;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Mova.Application.Helpers;
-using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common.Results;
@@ -79,7 +78,10 @@ public sealed class GetTrusteeConsentQuery
             }
 
             var owner = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == trustee.OwnerPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == trustee.OwnerPublicId)
+                .Select(x => new { x.FirstName, x.Email })
+                .FirstOrDefaultAsync(cancellationToken);
 
             var ownerFirstName = string.IsNullOrWhiteSpace(owner?.FirstName)
                 ? "The wallet owner"

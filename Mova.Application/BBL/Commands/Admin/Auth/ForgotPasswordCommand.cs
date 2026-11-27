@@ -73,7 +73,10 @@ public sealed class AdminForgotPasswordCommand
             }
 
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.Email == request.Email, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.Email == request.Email)
+                .Select(x => new { x.UserId, x.PhoneNumberConfirmed, x.EmailConfirmed, x.PublicId, x.Email, x.PhoneNumber })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {
@@ -99,7 +102,7 @@ public sealed class AdminForgotPasswordCommand
                     "Access denied. You do not have administrator privileges.");
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.UserId, cancellationToken) is false)
+            if (!user.EmailConfirmed || !user.PhoneNumberConfirmed)
             {
                 op.Warning($"Account not verified: {user.PublicId}");
                 return new BaseResult<ForgotPasswordResponseDto>(

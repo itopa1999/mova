@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json.Serialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Mova.Application.Interfaces.Identity;
 using Mova.Application.Interfaces.Persistence;
 using Mova.Domain.Entities;
 using Mova.Shared.Common.Results;
@@ -43,7 +42,10 @@ public sealed class GetIfPinIsSetQuery
             }
 
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.TransactionPinHash})
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user == null)
             {

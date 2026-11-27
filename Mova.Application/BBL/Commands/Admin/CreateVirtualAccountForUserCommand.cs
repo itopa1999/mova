@@ -66,7 +66,10 @@ public sealed class CreateVirtualAccountForUserCommand
             }
 
             var user = await _unitOfWork.Query<User>()
-                .FirstOrDefaultAsync(x => x.PublicId == request.UserPublicId, cancellationToken);
+                .AsNoTracking()
+                .Where(x => x.PublicId == request.UserPublicId)
+                .Select(x => new { x.UserId, x.Email, x.PublicId, x.FullName })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (user is null)
             {

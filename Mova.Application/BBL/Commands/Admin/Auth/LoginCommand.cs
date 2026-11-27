@@ -79,7 +79,7 @@ public sealed class AdminLoginCommand
                     "Invalid email or password.");
             }
 
-            if (await _identityService.IsAccountVerifiedAsync(user.UserId, cancellationToken) is false)
+            if (!user.EmailConfirmed || !user.PhoneNumberConfirmed)
             {
                 op.Warning($"Account not verified for user {user.PublicId}.");
                 return new BaseResult<LoginResponseDto>(
